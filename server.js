@@ -4,7 +4,6 @@ const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const mongoose = require('mongoose');
 const session = require('express-session');
-const bcrypt = require('bcrypt');
 require('dotenv').config();
 
 const app = express();
@@ -17,8 +16,8 @@ mongoose.connect(process.env.MONGODB_URI)
 
 // Define schemas
 const UploadCountSchema = new mongoose.Schema({
-  identifier: String, // IP address or username
-  date: String, // YYYY-MM-DD
+  identifier: String,
+  date: String,
   count: Number
 });
 const UploadCount = mongoose.model('UploadCount', UploadCountSchema);
@@ -59,22 +58,20 @@ app.use(session({
   secret: 'your-secret-key-here-change-this',
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false } // set to true if using HTTPS
+  cookie: { secure: false }
 }));
 
-// Check if user is admin
 app.use((req, res, next) => {
   res.locals.isAdmin = req.session.isAdmin || false;
   next();
 });
 
-// Admin login
-app.post('/api/login', async (req, res) => {
+// Admin login (simple plain text check for now)
+app.post('/api/login', (req, res) => {
   const { password } = req.body;
   const adminPassword = process.env.ADMIN_PASSWORD;
   
-  const isMatch = await bcrypt.compare(password, adminPassword);
-  if (isMatch) {
+  if (password === adminPassword) {
     req.session.isAdmin = true;
     res.json({ success: true, isAdmin: true });
   } else {
@@ -82,13 +79,11 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Admin logout
 app.post('/api/logout', (req, res) => {
   req.session.isAdmin = false;
   res.json({ success: true });
 });
 
-// Check admin status
 app.get('/api/admin', (req, res) => {
   res.json({ isAdmin: req.session.isAdmin || false });
 });
@@ -98,19 +93,15 @@ app.post('/upload', upload.array('files', 1000), async (req, res) => {
   try {
     const identifier = req.ip || req.connection.remoteAddress;
     const today = new Date().toISOString().split('T')[0];
-    
-    // Check if admin (unlimited)
     const isAdmin = req.session.isAdmin || false;
     
     if (!isAdmin) {
-      // Get or create upload count
       let uploadCount = await UploadCount.findOne({ identifier, date: today });
       
       if (!uploadCount) {
         uploadCount = new UploadCount({ identifier, date: today, count: 0 });
       }
       
-      // Check limit (5 per day for non-admin)
       if (uploadCount.count >= 5) {
         return res.status(403).json({ 
           success: false, 
@@ -138,7 +129,6 @@ app.post('/upload', upload.array('files', 1000), async (req, res) => {
   }
 });
 
-// List all media
 app.get('/media', async (req, res) => {
   try {
     const result = await cloudinary.search
@@ -163,7 +153,6 @@ app.get('/media', async (req, res) => {
   }
 });
 
-// Delete all (admin only)
 app.post('/delete-all', async (req, res) => {
   if (!req.session.isAdmin) {
     return res.status(403).json({ success: false, error: 'Admin only' });
@@ -187,7 +176,6 @@ app.post('/delete-all', async (req, res) => {
   }
 });
 
-// Chat endpoints
 app.post('/api/chat', async (req, res) => {
   const { name, message } = req.body;
   if (!name || !message) {
