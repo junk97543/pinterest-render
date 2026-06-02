@@ -1,398 +1,296 @@
-const fileInput = document.getElementById("file-input");
-const gallery = document.getElementById("gallery");
-const deleteAllBtn = document.getElementById("delete-all-btn");
-const loginBtn = document.getElementById("login-btn");
-const themeToggle = document.getElementById("theme-toggle");
-const lightbox = document.getElementById("lightbox");
-const lightboxClose = document.getElementById("lightbox-close");
-const lightboxImg = document.getElementById("lightbox-img");
-const lightboxVideo = document.getElementById("lightbox-video");
-const sortNewestBtn = document.getElementById("sort-newest");
-const sortPopularBtn = document.getElementById("sort-popular");
+const express = require('express');
+const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const mongoose = require('mongoose');
+const session = require('express-session');
+require('dotenv').config();
 
-// Chat elements
-const chatMessages = document.getElementById("chat-messages");
-const chatName = document.getElementById("chat-name");
-const chatMessage = document.getElementById("chat-message");
-const sendChat = document.getElementById("send-chat");
-const chatToggleBtn = document.getElementById("chat-toggle-btn");
-const chatCloseBtn = document.getElementById("chat-close-btn");
-const chatSection = document.getElementById("chat-section");
-const backToTopBtn = document.getElementById("back-to-top");
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-let items = [];
-let zoom = 1, x = 0, y = 0, dragging = false, startX = 0, startY = 0;
-let isAdmin = false;
-let currentSort = 'newest';
+// Connect to MongoDB
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log('Connected to MongoDB'))
+  .catch(err => console.error('MongoDB connection error:', err));
 
-// Check admin status
-checkAdmin();
-
-// Initialize
-(async () => {
-  await loadMedia();
-  loadChat();
-  setInterval(loadChat, 3000);
-})();
-
-async function checkAdmin() {
-  const res = await fetch("/api/admin");
-  const data = await res.json();
-  isAdmin = data.isAdmin;
-  updateAdminUI();
-}
-
-function updateAdminUI() {
-  deleteAllBtn.style.display = isAdmin ? "inline-block" : "none";
-  loginBtn.style.display = isAdmin ? "none" : "inline-block";
-  loginBtn.textContent = isAdmin ? "Logged in as Admin" : "Login (Admin)";
-}
-
-// Theme
-const theme = localStorage.getItem("theme") || "light";
-document.body.className = theme;
-updateThemeBtn(theme);
-themeToggle.addEventListener("click", () => {
-  const newTheme = document.body.classList.contains("dark") ? "light" : "dark";
-  document.body.className = newTheme;
-  localStorage.setItem("theme", newTheme);
-  updateThemeBtn(newTheme);
+// Define schemas
+const UploadCountSchema = new mongoose.Schema({
+  identifier: String,
+  date: String,
+  count: Number
 });
-function updateThemeBtn(t) {
-  themeToggle.textContent = t === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
-}
+const UploadCount = mongoose.model('UploadCount', UploadCountSchema);
+
+const ChatMessageSchema = new mongoose.Schema({
+  name: String,
+  message: String,
+  timestamp: { type: Date, default: Date.now }
+});
+const ChatMessage = mongoose.model('ChatMessage', ChatMessageSchema);
+
+const LikeSchema = new mongoose.Schema({
+  public_id: String,
+  count: { type: Number, default: 0 }
+});
+const Like = mongoose.model('Like', LikeSchema);
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'pinterest-photos',
+    resource_type: 'auto',
+    allowed_formats: ['jpg','jpeg','png','gif','webp','bmp','svg','mp4','webm','mov','avi','mkv']
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 100 * 1024 * 1024, files: 1000 }
+});
+
+// Middleware
+app.use(express.json({ limit: '200mb' }));
+app.use(express.urlencoded({ limit: '200mb', extended: true }));
+app.use(express.static('public'));
+app.use(session({
+  secret: 'your-secret-key-here-change-this-12345',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { 
+    secure: false,
+    maxAge: 24 * 60 * 60 * 1000
+  }
+}));
+
+app.use((req, res, next) => {
+  res.locals.isAdmin = req.session.isAdmin || false;
+  next();
+});
 
 // Admin login
-loginBtn.addEventListener("click", async () => {
-  if (isAdmin) {
-    await fetch("/api/logout", { method: "POST" });
-    isAdmin = false;
-    updateAdminUI();
-    return;
-  }
+app.post('/api/login', (req, res) => {
+  const { password } = req.body;
+  const adminPassword = process.env.ADMIN_PASSWORD;
   
-  const password = prompt("Enter admin password:");
-  if (!password) return;
-  
-  const res = await fetch("/api/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password })
-  });
-  
-  const data = await res.json();
-  if (data.success) {
-    isAdmin = true;
-    updateAdminUI();
-    alert("Logged in as admin!");
+  if (password === adminPassword) {
+    req.session.isAdmin = true;
+    res.json({ success: true, isAdmin: true });
   } else {
-    alert("Wrong password!");
+    res.json({ success: false, isAdmin: false });
   }
 });
 
-// Sort buttons
-sortNewestBtn.addEventListener("click", async () => {
-  currentSort = 'newest';
-  sortNewestBtn.classList.add('active');
-  sortPopularBtn.classList.remove('active');
-  await loadMedia();
+app.post('/api/logout', (req, res) => {
+  req.session.isAdmin = false;
+  res.json({ success: true });
 });
 
-sortPopularBtn.addEventListener("click", async () => {
-  currentSort = 'popular';
-  sortPopularBtn.classList.add('active');
-  sortNewestBtn.classList.remove('active');
-  await loadMedia();
+app.get('/api/admin', (req, res) => {
+  res.json({ isAdmin: req.session.isAdmin || false });
 });
 
-// Load media
-async function loadMedia() {
-  const res = await fetch(`/media?sort=${currentSort}`);
-  items = await res.json();
-  render();
-}
-
-function render() {
-  gallery.innerHTML = "";
-  if (!items.length) {
-    gallery.innerHTML = "<p>No images yet. Upload some photos or videos.</p>";
-    return;
-  }
-  
-  // Simply use items as-is (server already sorted them)
-  items.forEach((item, index) => {
-    const div = document.createElement("div");
-    div.className = "masonry-item";
-    const url = item.url;
+// Upload endpoint
+app.post('/upload', upload.array('files', 1000), async (req, res) => {
+  try {
+    const identifier = req.ip || req.connection.remoteAddress;
+    const today = new Date().toISOString().split('T')[0];
+    const isAdmin = req.session.isAdmin || false;
     
-    if (item.type === "image") {
-      const img = document.createElement("img");
-      img.src = url;
-      img.alt = "Uploaded image";
-      div.appendChild(img);
-    } else {
-      const vid = document.createElement("video");
-      vid.src = url;
-      vid.controls = true;
-      vid.loop = true;
-      vid.muted = true;
-      div.appendChild(vid);
-    }
-    
-    // Like button
-    const likeDiv = document.createElement("div");
-    likeDiv.className = "like-container";
-    likeDiv.innerHTML = `
-      <button class="like-btn" data-public-id="${item.public_id}">
-        ❤️ <span class="like-count">${item.likes || 0}</span>
-      </button>
-    `;
-    div.appendChild(likeDiv);
-    
-    // Like button click
-    const likeBtn = likeDiv.querySelector('.like-btn');
-    likeBtn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const countSpan = likeBtn.querySelector('.like-count');
-      try {
-        const res = await fetch("/api/like", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ public_id: item.public_id })
-        });
-        const data = await res.json();
-        if (data.success) {
-          countSpan.textContent = data.likes;
-        }
-      } catch (err) {
-        console.error("Like error:", err);
+    if (!isAdmin) {
+      let uploadCount = await UploadCount.findOne({ identifier, date: today });
+      
+      if (!uploadCount) {
+        uploadCount = new UploadCount({ identifier, date: today, count: 0 });
       }
+      
+      if (uploadCount.count >= 5) {
+        return res.status(403).json({ 
+          success: false, 
+          error: 'Daily upload limit reached (5 images per day). Come back tomorrow!' 
+        });
+      }
+      
+      uploadCount.count += req.files.length;
+      await uploadCount.save();
+    }
+    
+    const files = req.files || [];
+    const result = files.map(f => ({
+      public_id: f.path.split('/').pop(),
+      url: f.path,
+      type: f.mimetype.startsWith('video/') ? 'video' : 'image',
+      mimetype: f.mimetype,
+      size: f.size
+    }));
+    
+    res.json({ success: true, files: result, isAdmin });
+  } catch (err) {
+    console.error('Upload error:', err);
+    res.status(500).json({ success: false, error: 'Upload failed' });
+  }
+});
+
+// Get media with likes
+app.get('/media', async (req, res) => {
+  try {
+    const sortBy = req.query.sort || 'newest';
+    
+    const searchResult = await cloudinary.search
+      .expression('folder:pinterest-photos')
+      .sort_by('created_at', 'desc')
+      .max_results(500)
+      .execute();
+    
+    const media = searchResult.resources.map(r => ({
+      public_id: r.public_id,
+      url: r.secure_url,
+      type: r.resource_type === 'video' ? 'video' : 'image',
+      mimetype: r.format ? (r.resource_type === 'video' ? 'video/mp4' : `image/${r.format}`) : 'image/jpeg',
+      size: r.bytes,
+      createdAt: r.created_at
+    }));
+    
+    const likes = await Like.find();
+    const likeMap = {};
+    likes.forEach(l => {
+      likeMap[l.public_id] = l.count;
     });
     
-    div.addEventListener("click", () => openLightbox(index));
-    gallery.appendChild(div);
-  });
-}
-
-// Chat toggle button
-chatToggleBtn.addEventListener("click", () => {
-  chatSection.style.display = "block";
-  chatToggleBtn.style.display = "none";
-  chatCloseBtn.style.display = "inline-block";
-  setTimeout(() => {
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-  }, 100);
-});
-
-chatCloseBtn.addEventListener("click", () => {
-  chatSection.style.display = "none";
-  chatToggleBtn.style.display = "inline-block";
-  chatCloseBtn.style.display = "none";
-});
-
-// Back to top button
-backToTopBtn.addEventListener("click", () => {
-  window.scrollTo({ top: 0, behavior: "smooth" });
-});
-
-window.addEventListener("scroll", () => {
-  if (window.scrollY > 300) {
-    backToTopBtn.style.display = "inline-block";
-  } else {
-    backToTopBtn.style.display = "none";
-  }
-});
-
-// Chat
-async function loadChat() {
-  try {
-    const res = await fetch("/api/chat");
-    const messages = await res.json();
-    renderChat(messages);
+    media.forEach(m => {
+      m.likes = likeMap[m.public_id] || 0;
+    });
+    
+    if (sortBy === 'popular') {
+      media.sort((a, b) => b.likes - a.likes);
+    } else {
+      media.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+    
+    res.json(media);
   } catch (err) {
-    console.error("Chat load error:", err);
+    console.error('Media list error:', err);
+    res.status(500).json([]);
   }
-}
+});
 
-function renderChat(messages) {
-  chatMessages.innerHTML = "";
-  messages.forEach(msg => {
-    const div = document.createElement("div");
-    div.className = "chat-message";
-    const time = new Date(msg.timestamp).toLocaleTimeString();
-    div.innerHTML = `<strong>${escapeHtml(msg.name)}</strong> <small>(${time})</small>: ${escapeHtml(msg.message)}`;
-    chatMessages.appendChild(div);
-  });
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-}
+// Like an image
+app.post('/api/like', async (req, res) => {
+  const { public_id } = req.body;
+  
+  try {
+    let like = await Like.findOne({ public_id });
+    
+    if (!like) {
+      like = new Like({ public_id, count: 1 });
+    } else {
+      like.count += 1;
+    }
+    
+    await like.save();
+    
+    res.json({ success: true, likes: like.count });
+  } catch (err) {
+    console.error('Like error:', err);
+    res.status(500).json({ success: false, error: 'Like failed' });
+  }
+});
 
-sendChat.addEventListener("click", async () => {
-  const name = chatName.value.trim();
-  const message = chatMessage.value.trim();
+// Delete all (admin only) - SIMPLIFIED VERSION
+app.post('/delete-all', async (req, res) => {
+  if (!req.session.isAdmin) {
+    console.log('Delete failed: not admin');
+    return res.status(403).json({ success: false, error: 'Admin only' });
+  }
+  
+  try {
+    console.log('=== DELETE ALL STARTED ===');
+    
+    // Search for all resources
+    const searchResult = await cloudinary.search
+      .expression('folder:pinterest-photos')
+      .max_results(500)
+      .execute();
+    
+    console.log(`Found ${searchResult.resources.length} resources`);
+    
+    if (searchResult.resources.length === 0) {
+      console.log('No resources to delete');
+      return res.json({ 
+        success: true, 
+        message: 'No images to delete',
+        deletedCount: 0
+      });
+    }
+    
+    const publicIds = searchResult.resources.map(r => r.public_id);
+    console.log('Public IDs to delete:', publicIds.slice(0, 5), '...');
+    
+    // Delete each resource individually (more reliable)
+    let deletedCount = 0;
+    for (const publicId of publicIds) {
+      try {
+        await cloudinary.uploader.destroy(publicId, { resource_type: 'auto' });
+        deletedCount++;
+        console.log(`Deleted: ${publicId}`);
+      } catch (deleteErr) {
+        console.error(`Failed to delete ${publicId}:`, deleteErr.message);
+      }
+    }
+    
+    // Delete all likes from MongoDB
+    await Like.deleteMany({});
+    console.log('Deleted all likes from MongoDB');
+    
+    console.log(`=== DELETE ALL COMPLETE: ${deletedCount} resources deleted ===`);
+    
+    res.json({ 
+      success: true, 
+      message: `Deleted ${deletedCount} images from Cloudinary`,
+      deletedCount: deletedCount
+    });
+    
+  } catch (err) {
+    console.error('=== DELETE ALL ERROR ===');
+    console.error(err);
+    console.error('========================');
+    
+    res.status(500).json({ 
+      success: false, 
+      error: 'Delete failed: ' + err.message,
+      details: err.toString()
+    });
+  }
+});
+
+// Chat endpoints
+app.post('/api/chat', async (req, res) => {
+  const { name, message } = req.body;
   if (!name || !message) {
-    alert("Please enter your name and a message");
-    return;
+    return res.status(400).json({ success: false, error: 'Name and message required' });
   }
   
-  try {
-    await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, message })
-    });
-    chatMessage.value = "";
-    loadChat();
-  } catch (err) {
-    alert("Error sending message");
-  }
-});
-
-chatMessage.addEventListener("keypress", (e) => {
-  if (e.key === "Enter") sendChat.click();
-});
-
-function escapeHtml(text) {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-// Upload
-fileInput.addEventListener("change", async (e) => {
-  const files = Array.from(e.target.files || []);
-  if (!files.length) return;
-  const fd = new FormData();
-  files.forEach(f => fd.append("files", f));
-
-  const btn = document.querySelector(".upload-btn");
-  btn.textContent = "Uploading...";
-  btn.disabled = true;
-
-  try {
-    const res = await fetch("/upload", { method: "POST", body: fd });
-    const data = await res.json();
-    
-    if (data.success) {
-      await loadMedia();
-      isAdmin = data.isAdmin || isAdmin;
-      updateAdminUI();
-    } else {
-      alert(data.error || "Upload failed");
-    }
-  } catch (err) {
-    alert("Upload error");
-  } finally {
-    btn.textContent = "Upload Photos & Videos";
-    btn.disabled = false;
-    fileInput.value = "";
-  }
-});
-
-// Delete all (admin only)
-deleteAllBtn.addEventListener("click", async () => {
-  if (!isAdmin) {
-    alert("Admin only!");
-    return;
-  }
-  if (!confirm("Delete ALL photos and videos from Cloudinary (cloud)? This CANNOT be undone!")) return;
+  const chatMessage = new ChatMessage({ name, message });
+  await chatMessage.save();
   
-  try {
-    const res = await fetch("/delete-all", { method: "POST" });
-    const data = await res.json();
-    
-    console.log("Delete response:", data);
-    
-    if (data.success) {
-      alert(data.message || "All images deleted from Cloudinary!");
-      await loadMedia();
-      closeLightbox();
-    } else {
-      alert("Delete failed: " + (data.error || "Unknown error"));
-    }
-  } catch (err) {
-    alert("Error deleting all media: " + err.message);
-  }
+  res.json({ success: true });
 });
 
-// Lightbox
-function openLightbox(index) {
-  const item = items[index];
-  if (!item) return;
-  const url = item.url;
-  lightbox.classList.add("active");
-  zoom = 1; x = 0; y = 0;
-  updateTransform();
-
-  if (item.type === "image") {
-    lightboxImg.src = url;
-    lightboxImg.style.display = "block";
-    lightboxVideo.style.display = "none";
-    lightboxVideo.pause();
-    lightboxVideo.removeAttribute("src");
-  } else {
-    lightboxVideo.src = url;
-    lightboxVideo.style.display = "block";
-    lightboxImg.style.display = "none";
-    lightboxImg.src = "";
-    lightboxVideo.play();
-  }
-}
-
-function closeLightbox() {
-  lightbox.classList.remove("active");
-  lightboxImg.src = "";
-  lightboxVideo.src = "";
-  lightboxVideo.pause();
-}
-
-lightboxClose.addEventListener("click", closeLightbox);
-lightbox.addEventListener("click", e => {
-  if (e.target === lightbox || e.target.classList.contains("lightbox-content")) {
-    closeLightbox();
-  }
-});
-window.addEventListener("keydown", e => {
-  if (e.key === "Escape" && lightbox.classList.contains("active")) {
-    closeLightbox();
-  }
+app.get('/api/chat', async (req, res) => {
+  const messages = await ChatMessage.find()
+    .sort({ timestamp: -1 })
+    .limit(100);
+  
+  res.json(messages.reverse());
 });
 
-// Zoom & drag for image
-lightboxImg.addEventListener("mousedown", e => {
-  if (e.button !== 0) return;
-  dragging = true;
-  startX = e.clientX - x;
-  startY = e.clientY - y;
-  lightboxImg.style.cursor = "grabbing";
+app.listen(PORT, '0.0.0.0', () => {
+  console.log('Server running on port ' + PORT);
 });
-window.addEventListener("mousemove", e => {
-  if (!dragging) return;
-  e.preventDefault();
-  x = e.clientX - startX;
-  y = e.clientY - startY;
-  updateTransform();
-});
-window.addEventListener("mouseup", () => {
-  dragging = false;
-  lightboxImg.style.cursor = "zoom-in";
-});
-
-lightboxImg.addEventListener("wheel", e => {
-  e.preventDefault();
-  const delta = -e.deltaY;
-  const oldZoom = zoom;
-  if (delta > 0) zoom *= 1.1;
-  else zoom /= 1.1;
-  zoom = Math.max(1, Math.min(zoom, 5));
-  const rect = lightboxImg.getBoundingClientRect();
-  const mx = e.clientX - rect.left;
-  const my = e.clientY - rect.top;
-  const ratio = zoom / oldZoom;
-  x -= (mx - rect.width / 2) * (ratio - 1);
-  y -= (my - rect.height / 2) * (ratio - 1);
-  updateTransform();
-});
-
-function updateTransform() {
-  lightboxImg.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
-}
