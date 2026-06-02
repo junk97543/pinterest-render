@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>My Pinterest (Simple)</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="light">
+  <header>
+    <h1>My Pinterest (Simple)</h1>
+    <label for="file-input" class="upload-btn">Upload Photos & Videos</label>
+    <input id="file-input" type="file" accept="image/*,video/*" multiple />
+    <button id="theme-toggle" class="theme-toggle">🌙 Dark Mode</button>
+    <button id="delete-all-btn" class="delete-btn">Delete All</button>
+  </header>
+
+  <main id="gallery" class="masonry"></main>
+
+  <div id="lightbox" class="lightbox">
+    <button id="lightbox-close" class="lightbox-close" title="Close (Esc)">✕</button>
+    <div class="lightbox-content">
+      <img id="lightbox-img" alt="" />
+      <video id="lightbox-video" controls></video>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
