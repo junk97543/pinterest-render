@@ -119,10 +119,8 @@ function render() {
     return;
   }
   
-  // Sort items left-to-right, row by row (for masonry)
-  const sortedItems = items;
-  
-  sortedItems.forEach((item, idx) => {
+  // Simply use items as-is (server already sorted them)
+  items.forEach((item, index) => {
     const div = document.createElement("div");
     div.className = "masonry-item";
     const url = item.url;
@@ -171,10 +169,9 @@ function render() {
       }
     });
     
-    div.addEventListener("click", () => openLightbox(idx));
+    div.addEventListener("click", () => openLightbox(index));
     gallery.appendChild(div);
   });
-
 }
 
 // Chat toggle button
@@ -303,8 +300,10 @@ deleteAllBtn.addEventListener("click", async () => {
     const res = await fetch("/delete-all", { method: "POST" });
     const data = await res.json();
     
+    console.log("Delete response:", data);
+    
     if (data.success) {
-      alert("All images deleted from Cloudinary!");
+      alert(data.message || "All images deleted from Cloudinary!");
       await loadMedia();
       closeLightbox();
     } else {
