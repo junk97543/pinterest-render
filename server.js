@@ -29,6 +29,12 @@ const ChatMessageSchema = new mongoose.Schema({
 });
 const ChatMessage = mongoose.model('ChatMessage', ChatMessageSchema);
 
+const LikeSchema = new mongoose.Schema({
+  public_id: String,
+  count: { type: Number, default: 0 }
+});
+const Like = mongoose.model('Like', LikeSchema);
+
 // Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -66,7 +72,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Admin login (simple plain text check for now)
+// Admin login
 app.post('/api/login', (req, res) => {
   const { password } = req.body;
   const adminPassword = process.env.ADMIN_PASSWORD;
@@ -88,7 +94,7 @@ app.get('/api/admin', (req, res) => {
   res.json({ isAdmin: req.session.isAdmin || false });
 });
 
-// Upload endpoint with limit
+// Upload endpoint
 app.post('/upload', upload.array('files', 1000), async (req, res) => {
   try {
     const identifier = req.ip || req.connection.remoteAddress;
@@ -129,13 +135,27 @@ app.post('/upload', upload.array('files', 1000), async (req, res) => {
   }
 });
 
+// Get media with likes
 app.get('/media', async (req, res) => {
   try {
-    const result = await cloudinary.search
-      .expression('folder:pinterest-photos')
-      .sort_by('created_at', 'desc')
-      .max_results(500)
-      .execute();
+    const sortBy = req.query.sort || 'newest';
+    let result;
+    
+    if (sortBy === 'popular') {
+      // Get all images, then sort by likes on client side
+      result = await cloudinary.search
+        .expression('folder:pinterest-photos')
+        .sort_by('created_at', 'desc')
+        .max_results(500)
+        .execute();
+    } else {
+      // Default: newest first
+      result = await cloudinary.search
+        .expression('folder:pinterest-photos')
+        .sort_by('created_at', 'desc')
+        .max_results(500)
+        .execute();
+    }
     
     const media = result.resources.map(r => ({
       public_id: r.public_id,
@@ -146,6 +166,23 @@ app.get('/media', async (req, res) => {
       createdAt: r.created_at
     }));
     
+    // Get all likes
+    const likes = await Like.find();
+    const likeMap = {};
+    likes.forEach(l => {
+      likeMap[l.public_id] = l.count;
+    });
+    
+    // Add like count to each media item
+    media.forEach(m => {
+      m.likes = likeMap[m.public_id] || 0;
+    });
+    
+    // Sort by likes if requested
+    if (sortBy === 'popular') {
+      media.sort((a, b) => b.likes - a.likes);
+    }
+    
     res.json(media);
   } catch (err) {
     console.error('Media list error:', err);
@@ -153,6 +190,29 @@ app.get('/media', async (req, res) => {
   }
 });
 
+// Like an image
+app.post('/api/like', async (req, res) => {
+  const { public_id } = req.body;
+  
+  try {
+    let like = await Like.findOne({ public_id });
+    
+    if (!like) {
+      like = new Like({ public_id, count: 1 });
+    } else {
+      like.count += 1;
+    }
+    
+    await like.save();
+    
+    res.json({ success: true, likes: like.count });
+  } catch (err) {
+    console.error('Like error:', err);
+    res.status(500).json({ success: false, error: 'Like failed' });
+  }
+});
+
+// Delete all (admin only)
 app.post('/delete-all', async (req, res) => {
   if (!req.session.isAdmin) {
     return res.status(403).json({ success: false, error: 'Admin only' });
@@ -169,6 +229,9 @@ app.post('/delete-all', async (req, res) => {
       await cloudinary.api.delete_resources(publicIds, { resource_type: 'auto' });
     }
     
+    // Also delete all likes
+    await Like.deleteMany({});
+    
     res.json({ success: true });
   } catch (err) {
     console.error('Delete all error:', err);
@@ -176,6 +239,7 @@ app.post('/delete-all', async (req, res) => {
   }
 });
 
+// Chat endpoints
 app.post('/api/chat', async (req, res) => {
   const { name, message } = req.body;
   if (!name || !message) {

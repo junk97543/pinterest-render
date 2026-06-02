@@ -11,14 +11,20 @@
     <label for="file-input" class="upload-btn">Upload Photos & Videos</label>
     <input id="file-input" type="file" accept="image/*,video/*" multiple />
     <button id="login-btn" class="login-btn">Login (Admin)</button>
+    <button id="chat-toggle-btn" class="chat-toggle-btn">💬 Chat</button>
     <button id="theme-toggle" class="theme-toggle">🌙 Dark Mode</button>
     <button id="delete-all-btn" class="delete-btn" style="display:none;">Delete All</button>
+    <button id="back-to-top" class="back-to-top-btn" style="display:none;">↑ Top</button>
   </header>
+  
+  <div class="sort-buttons">
+    <button id="sort-newest" class="sort-btn active">🕐 Newest</button>
+    <button id="sort-popular" class="sort-btn">❤️ Most Liked</button>
+  </div>
 
   <main id="gallery" class="masonry"></main>
 
-  <!-- Chat Section -->
-  <section class="chat-section">
+  <section id="chat-section" class="chat-section" style="display:none;">
     <h2>Live Chat</h2>
     <div id="chat-messages" class="chat-messages"></div>
     <div class="chat-input">
@@ -26,9 +32,9 @@
       <input id="chat-message" type="text" placeholder="Type a message..." />
       <button id="send-chat">Send</button>
     </div>
+    <button id="chat-close-btn" class="chat-close-btn">Close Chat</button>
   </section>
 
-  <!-- Lightbox -->
   <div id="lightbox" class="lightbox">
     <button id="lightbox-close" class="lightbox-close" title="Close (Esc)">✕</button>
     <div class="lightbox-content">
