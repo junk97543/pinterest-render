@@ -1,149 +1,73 @@
-:root {
-  --bg: #fafafa;
-  --text: #333;
-  --header: #fff;
-  --card: #fff;
-  --shadow: rgba(0,0,0,0.08);
-  --upload: #e60023;
-  --upload-hover: #c4001e;
-  --delete: #333;
-  --delete-hover: #000;
-  --theme: #555;
-  --theme-hover: #777;
-  --lightbox-bg: rgba(0,0,0,0.9);
-  --close-bg: rgba(255,255,255,0.9);
+/* Chat Section */
+.chat-section {
+  max-width: 600px;
+  margin: 20px auto;
+  padding: 20px;
+  background: var(--card);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px var(--shadow);
 }
 
-body.dark {
-  --bg: #121212;
-  --text: #e0e0e0;
-  --header: #1e1e1e;
-  --card: #1e1e1e;
-  --shadow: rgba(255,255,255,0.08);
-  --upload: #e60023;
-  --upload-hover: #c4001e;
-  --delete: #555;
-  --delete-hover: #777;
-  --theme: #777;
-  --theme-hover: #999;
-  --lightbox-bg: rgba(0,0,0,0.95);
-  --close-bg: rgba(255,255,255,0.9);
+.chat-section h2 {
+  margin-bottom: 15px;
+  font-size: 20px;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-  font-family: Arial, sans-serif;
+.chat-messages {
+  height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--shadow);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 15px;
   background: var(--bg);
-  color: var(--text);
-  transition: background 0.2s, color 0.2s;
 }
 
-header {
-  position: sticky;
-  top: 0;
+.chat-message {
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
   background: var(--header);
-  padding: 14px 20px;
-  box-shadow: 0 2px 6px var(--shadow);
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-  z-index: 10;
 }
 
-header h1 { font-size: 20px; flex: 1; }
+.chat-message strong {
+  color: var(--upload);
+}
 
-.upload-btn, .delete-btn, .theme-toggle {
+.chat-input {
+  display: flex;
+  gap: 10px;
+}
+
+.chat-input input {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid var(--shadow);
+  border-radius: 8px;
+  background: var(--header);
+  color: var(--text);
+}
+
+.chat-input button {
+  padding: 10px 20px;
+  background: var(--upload);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.login-btn {
   padding: 8px 14px;
   border-radius: 20px;
   border: none;
   font-weight: bold;
   cursor: pointer;
   color: #fff;
+  background: #6f42c1;
 }
 
-.upload-btn { background: var(--upload); }
-.upload-btn:hover { background: var(--upload-hover); }
-
-.delete-btn { background: var(--delete); }
-.delete-btn:hover { background: var(--delete-hover); }
-
-.theme-toggle { background: var(--theme); }
-.theme-toggle:hover { background: var(--theme-hover); }
-
-#file-input { display: none; }
-
-.masonry {
-  column-count: 5;
-  column-gap: 14px;
-  padding: 14px;
-  max-width: 1600px;
-  margin: 0 auto;
-}
-@media (max-width:1400px){.masonry{column-count:4}}
-@media (max-width:1100px){.masonry{column-count:3}}
-@media (max-width:800px){.masonry{column-count:2}}
-@media (max-width:500px){.masonry{column-count:1}}
-
-.masonry-item {
-  break-inside: avoid;
-  margin-bottom: 14px;
-  background: var(--card);
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px var(--shadow);
-  cursor: pointer;
-}
-
-.masonry-item img, .masonry-item video {
-  width: 100%;
-  height: auto;
-  display: block;
-  object-fit: cover;
-  min-height: 100px;
-  max-height: 600px;
-}
-
-.lightbox {
-  position: fixed;
-  inset: 0;
-  background: var(--lightbox-bg);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-.lightbox.active { display: flex; }
-
-.lightbox-close {
-  position: absolute;
-  top: 16px;
-  right: 20px;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  border: none;
-  background: var(--close-bg);
-  color: #000;
-  font-size: 24px;
-  font-weight: bold;
-  cursor: pointer;
-  z-index: 1001;
-}
-
-.lightbox-content {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-#lightbox-img, #lightbox-video {
-  max-width: 90vw;
-  max-height: 90vh;
-  object-fit: contain;
-  transform-origin: center;
-  transition: transform 0.05s linear;
+.login-btn:hover {
+  background: #5a32a3;
 }

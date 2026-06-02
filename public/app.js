@@ -1,14 +1,38 @@
 const fileInput = document.getElementById("file-input");
 const gallery = document.getElementById("gallery");
 const deleteAllBtn = document.getElementById("delete-all-btn");
+const loginBtn = document.getElementById("login-btn");
 const themeToggle = document.getElementById("theme-toggle");
 const lightbox = document.getElementById("lightbox");
 const lightboxClose = document.getElementById("lightbox-close");
 const lightboxImg = document.getElementById("lightbox-img");
 const lightboxVideo = document.getElementById("lightbox-video");
 
+// Chat elements
+const chatMessages = document.getElementById("chat-messages");
+const chatName = document.getElementById("chat-name");
+const chatMessage = document.getElementById("chat-message");
+const sendChat = document.getElementById("send-chat");
+
 let items = [];
 let zoom = 1, x = 0, y = 0, dragging = false, startX = 0, startY = 0;
+let isAdmin = false;
+
+// Check admin status
+checkAdmin();
+
+async function checkAdmin() {
+  const res = await fetch("/api/admin");
+  const data = await res.json();
+  isAdmin = data.isAdmin;
+  updateAdminUI();
+}
+
+function updateAdminUI() {
+  deleteAllBtn.style.display = isAdmin ? "inline-block" : "none";
+  loginBtn.style.display = isAdmin ? "none" : "inline-block";
+  loginBtn.textContent = isAdmin ? "Logged in as Admin" : "Login (Admin)";
+}
 
 // Theme
 const theme = localStorage.getItem("theme") || "light";
@@ -23,6 +47,35 @@ themeToggle.addEventListener("click", () => {
 function updateThemeBtn(t) {
   themeToggle.textContent = t === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
 }
+
+// Admin login
+loginBtn.addEventListener("click", async () => {
+  if (isAdmin) {
+    // Logout
+    await fetch("/api/logout", { method: "POST" });
+    isAdmin = false;
+    updateAdminUI();
+    return;
+  }
+  
+  const password = prompt("Enter admin password:");
+  if (!password) return;
+  
+  const res = await fetch("/api/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password })
+  });
+  
+  const data = await res.json();
+  if (data.success) {
+    isAdmin = true;
+    updateAdminUI();
+    alert("Logged in as admin!");
+  } else {
+    alert("Wrong password!");
+  }
+});
 
 // Load media on start
 (async () => {
@@ -76,8 +129,14 @@ fileInput.addEventListener("change", async (e) => {
   try {
     const res = await fetch("/upload", { method: "POST", body: fd });
     const data = await res.json();
-    if (data.success) await loadMedia();
-    else alert("Upload failed");
+    
+    if (data.success) {
+      await loadMedia();
+      isAdmin = data.isAdmin || isAdmin;
+      updateAdminUI();
+    } else {
+      alert(data.error || "Upload failed");
+    }
   } catch (err) {
     alert("Upload error");
   } finally {
@@ -87,8 +146,12 @@ fileInput.addEventListener("change", async (e) => {
   }
 });
 
-// Delete all
+// Delete all (admin only)
 deleteAllBtn.addEventListener("click", async () => {
+  if (!isAdmin) {
+    alert("Admin only!");
+    return;
+  }
   if (!confirm("Delete ALL photos and videos from the cloud?")) return;
   try {
     await fetch("/delete-all", { method: "POST" });
@@ -98,6 +161,67 @@ deleteAllBtn.addEventListener("click", async () => {
     alert("Error deleting all media");
   }
 });
+
+// Chat
+let chatPollInterval;
+
+async function loadChat() {
+  try {
+    const res = await fetch("/api/chat");
+    const messages = await res.json();
+    renderChat(messages);
+  } catch (err) {
+    console.error("Chat load error:", err);
+  }
+}
+
+function renderChat(messages) {
+  chatMessages.innerHTML = "";
+  messages.forEach(msg => {
+    const div = document.createElement("div");
+    div.className = "chat-message";
+    const time = new Date(msg.timestamp).toLocaleTimeString();
+    div.innerHTML = `<strong>${escapeHtml(msg.name)}</strong> <small>(${time})</small>: ${escapeHtml(msg.message)}`;
+    chatMessages.appendChild(div);
+  });
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+sendChat.addEventListener("click", async () => {
+  const name = chatName.value.trim();
+  const message = chatMessage.value.trim();
+  if (!name || !message) {
+    alert("Please enter your name and a message");
+    return;
+  }
+  
+  try {
+    await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, message })
+    });
+    chatMessage.value = "";
+    loadChat();
+  } catch (err) {
+    alert("Error sending message");
+  }
+});
+
+// Allow Enter key to send
+chatMessage.addEventListener("keypress", (e) => {
+  if (e.key === "Enter") sendChat.click();
+});
+
+// Poll chat every 3 seconds
+loadChat();
+chatPollInterval = setInterval(loadChat, 3000);
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
 
 // Lightbox
 function openLightbox(index) {
