@@ -126,7 +126,7 @@ header h1 {
   max-height: 500px;
 }
 
-/* Chat Section */
+/* Chat Section - Fixed at top */
 .chat-section {
   max-width: 600px;
   margin: 20px auto 40px auto;
@@ -134,6 +134,12 @@ header h1 {
   background: var(--chat-bg);
   border-radius: 12px;
   box-shadow: 0 2px 8px var(--shadow);
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  z-index: 999;
+  max-height: 80vh;
+  display: none;
 }
 
 .chat-section h2 {
@@ -186,6 +192,22 @@ header h1 {
   border-radius: 8px;
   cursor: pointer;
   font-weight: bold;
+}
+
+.chat-close-btn {
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: none;
+  font-weight: bold;
+  cursor: pointer;
+  background: #dc3545;
+  color: #fff;
+  margin-top: 15px;
+  display: none;
+}
+
+.chat-close-btn:hover {
+  background: #c82333;
 }
 
 /* Lightbox */

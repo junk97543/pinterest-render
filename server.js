@@ -61,10 +61,13 @@ app.use(express.json({ limit: '200mb' }));
 app.use(express.urlencoded({ limit: '200mb', extended: true }));
 app.use(express.static('public'));
 app.use(session({
-  secret: 'your-secret-key-here-change-this',
+  secret: 'your-secret-key-here-change-this-12345',
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false }
+  cookie: { 
+    secure: false,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
 }));
 
 app.use((req, res, next) => {
@@ -139,25 +142,15 @@ app.post('/upload', upload.array('files', 1000), async (req, res) => {
 app.get('/media', async (req, res) => {
   try {
     const sortBy = req.query.sort || 'newest';
-    let result;
     
-    if (sortBy === 'popular') {
-      // Get all images, then sort by likes on client side
-      result = await cloudinary.search
-        .expression('folder:pinterest-photos')
-        .sort_by('created_at', 'desc')
-        .max_results(500)
-        .execute();
-    } else {
-      // Default: newest first
-      result = await cloudinary.search
-        .expression('folder:pinterest-photos')
-        .sort_by('created_at', 'desc')
-        .max_results(500)
-        .execute();
-    }
+    // Search Cloudinary
+    const searchResult = await cloudinary.search
+      .expression('folder:pinterest-photos')
+      .sort_by('created_at', 'desc')
+      .max_results(500)
+      .execute();
     
-    const media = result.resources.map(r => ({
+    const media = searchResult.resources.map(r => ({
       public_id: r.public_id,
       url: r.secure_url,
       type: r.resource_type === 'video' ? 'video' : 'image',
@@ -178,9 +171,11 @@ app.get('/media', async (req, res) => {
       m.likes = likeMap[m.public_id] || 0;
     });
     
-    // Sort by likes if requested
+    // Sort on server side
     if (sortBy === 'popular') {
       media.sort((a, b) => b.likes - a.likes);
+    } else {
+      media.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     }
     
     res.json(media);
@@ -212,30 +207,55 @@ app.post('/api/like', async (req, res) => {
   }
 });
 
-// Delete all (admin only)
+// Delete all (admin only) - FIXED
 app.post('/delete-all', async (req, res) => {
   if (!req.session.isAdmin) {
     return res.status(403).json({ success: false, error: 'Admin only' });
   }
   
   try {
-    const result = await cloudinary.search
+    console.log('Starting delete all...');
+    
+    // Search for all resources in the folder
+    const searchResult = await cloudinary.search
       .expression('folder:pinterest-photos')
       .max_results(500)
       .execute();
     
-    const publicIds = result.resources.map(r => r.public_id);
-    if (publicIds.length > 0) {
-      await cloudinary.api.delete_resources(publicIds, { resource_type: 'auto' });
+    console.log(`Found ${searchResult.resources.length} resources to delete`);
+    
+    if (searchResult.resources.length === 0) {
+      console.log('No resources found to delete');
+      return res.json({ success: true, message: 'No resources to delete' });
     }
     
-    // Also delete all likes
-    await Like.deleteMany({});
+    const publicIds = searchResult.resources.map(r => r.public_id);
+    console.log('Deleting public IDs:', publicIds);
     
-    res.json({ success: true });
+    // Delete resources
+    const deleteResult = await cloudinary.api.delete_resources(publicIds, { 
+      resource_type: 'auto',
+      type: 'upload'
+    });
+    
+    console.log('Delete result:', deleteResult);
+    
+    // Also delete all likes from MongoDB
+    await Like.deleteMany({});
+    console.log('Deleted all likes from MongoDB');
+    
+    res.json({ 
+      success: true, 
+      message: `Deleted ${publicIds.length} resources from Cloudinary`,
+      deletedCount: publicIds.length
+    });
   } catch (err) {
     console.error('Delete all error:', err);
-    res.status(500).json({ success: false, error: 'Delete failed' });
+    res.status(500).json({ 
+      success: false, 
+      error: 'Delete failed: ' + err.message,
+      details: err.toString()
+    });
   }
 });
 

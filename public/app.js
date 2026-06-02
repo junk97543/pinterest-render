@@ -120,7 +120,7 @@ function render() {
   }
   
   // Sort items left-to-right, row by row (for masonry)
-  const sortedItems = rankByMasonryOrder(items);
+  const sortedItems = items;
   
   sortedItems.forEach((item, idx) => {
     const div = document.createElement("div");
@@ -174,19 +174,7 @@ function render() {
     div.addEventListener("click", () => openLightbox(idx));
     gallery.appendChild(div);
   });
-}
 
-// Sort items to appear left-to-right, row by row
-function rankByMasonryOrder(items) {
-  const columns = 5;
-  const indexed = items.map((item, i) => ({ item, index: i }));
-  indexed.sort((a, b) => {
-    const colA = a.index % columns;
-    const colB = b.index % columns;
-    if (colA !== colB) return colA - colB;
-    return a.index - b.index;
-  });
-  return indexed.map(x => x.item);
 }
 
 // Chat toggle button
