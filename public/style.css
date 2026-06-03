@@ -12,6 +12,8 @@
   --theme-hover: #777;
   --login: #6f42c1;
   --login-hover: #5a32a3;
+  --ai: #17a2b8;
+  --ai-hover: #138496;
   --lightbox-bg: rgba(0,0,0,0.9);
   --close-bg: rgba(255,255,255,0.9);
   --chat-bg: #fff;
@@ -32,6 +34,8 @@ body.dark {
   --theme-hover: #999;
   --login: #8a6dcf;
   --login-hover: #9d84d6;
+  --ai: #1aa6c4;
+  --ai-hover: #1592ac;
   --lightbox-bg: rgba(0,0,0,0.95);
   --close-bg: rgba(255,255,255,0.9);
   --chat-bg: #1e1e1e;
@@ -84,7 +88,7 @@ header h1 {
   font-size: 20px;
 }
 
-.upload-btn, .delete-btn, .login-btn, .theme-toggle, .chat-toggle-btn, .back-to-top-btn {
+.upload-btn, .delete-btn, .login-btn, .theme-toggle, .chat-toggle-btn, .back-to-top-btn, .ai-btn {
   padding: 8px 14px;
   border-radius: 20px;
   border: none;
@@ -111,6 +115,9 @@ header h1 {
 
 .back-to-top-btn { background: #007bff; }
 .back-to-top-btn:hover { background: #0056b3; }
+
+.ai-btn { background: var(--ai); }
+.ai-btn:hover { background: var(--ai-hover); }
 
 #file-input { display: none; }
 
@@ -329,4 +336,52 @@ header h1 {
   object-fit: contain;
   transform-origin: center;
   transition: transform 0.05s linear;
+}
+
+.ai-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 2000;
+  padding: 20px;
+}
+
+.ai-modal.active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-modal-card {
+  width: min(1200px, 96vw);
+  height: min(850px, 90vh);
+  background: var(--header);
+  border-radius: 14px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+}
+
+.ai-modal-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  font-size: 22px;
+  font-weight: bold;
+  cursor: pointer;
+  background: var(--close-bg);
+  color: #000;
+}
+
+#ai-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
 }

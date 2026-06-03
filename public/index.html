@@ -18,6 +18,7 @@
     <button id="login-btn" class="login-btn">Login (Admin)</button>
     <button id="chat-toggle-btn" class="chat-toggle-btn">💬 Chat</button>
     <button id="theme-toggle" class="theme-toggle">🌙 Dark Mode</button>
+    <button id="ai-generator-btn" class="ai-btn">AI Generator</button>
     <button id="delete-all-btn" class="delete-btn" style="display:none;">Delete All</button>
     <button id="back-to-top" class="back-to-top-btn" style="display:none;">↑ Top</button>
   </header>
@@ -46,6 +47,18 @@
     <div class="lightbox-content">
       <img id="lightbox-img" alt="" />
       <video id="lightbox-video" controls></video>
+    </div>
+  </div>
+
+  <div id="ai-modal" class="ai-modal">
+    <div class="ai-modal-card">
+      <button id="ai-modal-close" class="ai-modal-close">✕</button>
+      <iframe
+        id="ai-frame"
+        src="https://perchance.org/t83fgph56x"
+        title="Perchance AI Generator"
+        sandbox="allow-scripts allow-forms allow-popups allow-same-origin"
+      ></iframe>
     </div>
   </div>
 

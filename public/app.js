@@ -20,6 +20,9 @@ const chatSection = document.getElementById("chat-section");
 const backToTopBtn = document.getElementById("back-to-top");
 const topLogo = document.getElementById("top-logo");
 const favicon = document.getElementById("favicon");
+const aiGeneratorBtn = document.getElementById("ai-generator-btn");
+const aiModal = document.getElementById("ai-modal");
+const aiModalClose = document.getElementById("ai-modal-close");
 
 let items = [];
 let zoom = 1, x = 0, y = 0, dragging = false, startX = 0, startY = 0;
@@ -308,6 +311,18 @@ deleteAllBtn.addEventListener("click", async () => {
   }
 });
 
+aiGeneratorBtn.addEventListener("click", () => {
+  aiModal.classList.add("active");
+});
+
+aiModalClose.addEventListener("click", () => {
+  aiModal.classList.remove("active");
+});
+
+aiModal.addEventListener("click", (e) => {
+  if (e.target === aiModal) aiModal.classList.remove("active");
+});
+
 function openLightbox(index) {
   const item = items[index];
   if (!item) return;
@@ -345,7 +360,10 @@ lightbox.addEventListener("click", e => {
 });
 
 window.addEventListener("keydown", e => {
-  if (e.key === "Escape" && lightbox.classList.contains("active")) closeLightbox();
+  if (e.key === "Escape") {
+    if (lightbox.classList.contains("active")) closeLightbox();
+    if (aiModal.classList.contains("active")) aiModal.classList.remove("active");
+  }
 });
 
 lightboxImg.addEventListener("mousedown", e => {
@@ -390,17 +408,18 @@ function updateTransform() {
 }
 
 function updateLogoRotation() {
-  if (items.length) {
-    logoIndex = (logoIndex + 1) % items.length;
-    const url = items[logoIndex].url;
+  const onlyImages = items.filter(item => item.type === "image");
+  if (onlyImages.length) {
+    logoIndex = (logoIndex + 1) % onlyImages.length;
+    const url = onlyImages[logoIndex].url;
     topLogo.src = url;
     favicon.href = url;
   }
   if (logoTimer) clearInterval(logoTimer);
-  if (items.length) {
+  if (onlyImages.length) {
     logoTimer = setInterval(() => {
-      logoIndex = (logoIndex + 1) % items.length;
-      const url = items[logoIndex].url;
+      logoIndex = (logoIndex + 1) % onlyImages.length;
+      const url = onlyImages[logoIndex].url;
       topLogo.src = url;
       favicon.href = url;
     }, 5000);
