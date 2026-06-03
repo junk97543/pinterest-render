@@ -24,6 +24,8 @@ const videoFeedBtn = document.getElementById("video-feed-btn");
 const feedModal = document.getElementById("feed-modal");
 const feedClose = document.getElementById("feed-close");
 const feedScroller = document.getElementById("feed-scroller");
+const feedPhoneBtn = document.getElementById("feed-phone-btn");
+const feedDesktopBtn = document.getElementById("feed-desktop-btn");
 
 let items = [];
 let zoom = 1, x = 0, y = 0, dragging = false, startX = 0, startY = 0;
@@ -34,6 +36,7 @@ let logoIndex = 0;
 let logoTimer = null;
 let feedObserver = null;
 let feedVideos = [];
+let feedMode = 'phone';
 
 checkAdmin();
 
@@ -142,8 +145,6 @@ async function loadMedia() {
   updateLogoRotation();
 }
 
-// ... (all your existing code at the top remains the same)
-
 function render() {
   gallery.innerHTML = "";
   if (!items.length) {
@@ -164,29 +165,7 @@ function render() {
       img.src = item.url;
       img.alt = "Uploaded image";
       div.appendChild(img);
-
-      // Tribute Container
-      const actions = document.createElement("div");
-      actions.className = "actions-container";
-      actions.innerHTML = `
-        <button class="like-btn" data-public-id="${item.public_id}">
-          ❤️ <span class="like-count">${item.likes || 0}</span>
-        </button>
-        <button class="tribute-btn" data-public-id="${item.public_id}">
-          💦 Tribute
-        </button>
-      `;
-      div.appendChild(actions);
-
-      // Add tribute functionality
-      const tributeBtn = actions.querySelector(".tribute-btn");
-      tributeBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        createTributeAnimation(img, item.public_id);
-      });
-
     } else {
-      // Video (unchanged)
       const vid = document.createElement("video");
       vid.src = item.url;
       vid.controls = true;
@@ -194,31 +173,29 @@ function render() {
       vid.muted = true;
       vid.playsInline = true;
       div.appendChild(vid);
-
-      const likeDiv = document.createElement("div");
-      likeDiv.className = "like-container";
-      likeDiv.innerHTML = `
-        <button class="like-btn" data-public-id="${item.public_id}">
-          ❤️ <span class="like-count">${item.likes || 0}</span>
-        </button>
-      `;
-      div.appendChild(likeDiv);
     }
 
-    const likeBtn = div.querySelector(".like-btn");
-    if (likeBtn) {
-      likeBtn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const countSpan = likeBtn.querySelector(".like-count");
-        const res = await fetch("/api/like", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ public_id: item.public_id })
-        });
-        const data = await res.json();
-        if (data.success) countSpan.textContent = data.likes;
+    const likeDiv = document.createElement("div");
+    likeDiv.className = "like-container";
+    likeDiv.innerHTML = `
+      <button class="like-btn" data-public-id="${item.public_id}">
+        ❤️ <span class="like-count">${item.likes || 0}</span>
+      </button>
+    `;
+    div.appendChild(likeDiv);
+
+    const likeBtn = likeDiv.querySelector(".like-btn");
+    likeBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const countSpan = likeBtn.querySelector(".like-count");
+      const res = await fetch("/api/like", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ public_id: item.public_id })
       });
-    }
+      const data = await res.json();
+      if (data.success) countSpan.textContent = data.likes;
+    });
 
     div.addEventListener("click", () => {
       const index = Number(div.dataset.index);
@@ -229,85 +206,6 @@ function render() {
   });
 }
 
-// ==================== NEW: CUM TRIBUTE ANIMATION ====================
-
-function createTributeAnimation(imageElement, publicId) {
-  const rect = imageElement.getBoundingClientRect();
-  const canvas = document.createElement("canvas");
-  
-  canvas.width = rect.width;
-  canvas.height = rect.height;
-  canvas.style.position = "absolute";
-  canvas.style.top = `${rect.top + window.scrollY}px`;
-  canvas.style.left = `${rect.left + window.scrollX}px`;
-  canvas.style.zIndex = "100";
-  canvas.style.pointerEvents = "none";
-  canvas.style.borderRadius = "10px";
-  document.body.appendChild(canvas);
-
-  const ctx = canvas.getContext("2d");
-  let particles = [];
-  let time = 0;
-  let animationFrame;
-
-  class CumParticle {
-    constructor(x, y) {
-      this.x = x;
-      this.y = y;
-      this.size = Math.random() * 9 + 5;
-      this.speedY = Math.random() * 4.5 + 2.5;
-      this.speedX = Math.random() * 1.5 - 0.75;
-      this.opacity = 1;
-      this.gravity = 0.12;
-    }
-    update() {
-      this.speedY += this.gravity;
-      this.x += this.speedX;
-      this.y += this.speedY;
-      this.opacity -= 0.009;
-    }
-    draw() {
-      ctx.fillStyle = `rgba(255, 240, 180, ${this.opacity})`;
-      ctx.beginPath();
-      ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  function animate() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    time++;
-
-    // Spawn cum from top
-    if (time < 55 && time % 2 === 0) {
-      const startX = canvas.width * (0.45 + Math.random() * 0.3);
-      particles.push(new CumParticle(startX, 40));
-    }
-
-    for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i];
-      p.update();
-      p.draw();
-      if (p.opacity <= 0) particles.splice(i, 1);
-    }
-
-    if (time < 140 || particles.length > 0) {
-      animationFrame = requestAnimationFrame(animate);
-    } else {
-      canvas.remove();
-    }
-  }
-
-  animate();
-
-  // Optional: Auto remove after 8 seconds
-  setTimeout(() => {
-    if (canvas.parentNode) canvas.remove();
-    cancelAnimationFrame(animationFrame);
-  }, 8000);
-}
-
-// ... rest of your app.js code remains unchanged
 chatToggleBtn.addEventListener("click", () => {
   chatSection.style.display = "block";
   chatToggleBtn.style.display = "none";
@@ -428,6 +326,7 @@ deleteAllBtn.addEventListener("click", async () => {
 
 videoFeedBtn.addEventListener("click", async () => {
   feedModal.classList.add("active");
+  setFeedMode(feedMode);
   await buildFeed();
   setupFeedObserver();
 });
@@ -439,6 +338,24 @@ feedClose.addEventListener("click", () => {
 feedModal.addEventListener("click", (e) => {
   if (e.target === feedModal) closeFeed();
 });
+
+feedPhoneBtn.addEventListener("click", async () => {
+  setFeedMode('phone');
+  await buildFeed();
+  setupFeedObserver();
+});
+
+feedDesktopBtn.addEventListener("click", async () => {
+  setFeedMode('desktop');
+  await buildFeed();
+  setupFeedObserver();
+});
+
+function setFeedMode(mode) {
+  feedMode = mode;
+  feedPhoneBtn.classList.toggle("active", mode === "phone");
+  feedDesktopBtn.classList.toggle("active", mode === "desktop");
+}
 
 function closeFeed() {
   if (feedObserver) {
@@ -467,7 +384,7 @@ async function buildFeed() {
     const card = document.createElement("section");
     card.className = "feed-item";
     card.innerHTML = `
-      <div class="feed-video-shell">
+      <div class="feed-video-shell ${feedMode}">
         <video class="feed-video" playsinline muted preload="metadata" loop src="${item.url}"></video>
         <div class="feed-overlay">
           <div class="feed-caption">${escapeHtml(item.caption || "Untitled video")}</div>

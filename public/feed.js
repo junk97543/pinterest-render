@@ -1,12 +1,33 @@
 const feedScroller = document.getElementById("feed-scroller");
 const feedClose = document.getElementById("feed-close");
+const feedPhoneBtn = document.getElementById("feed-phone-btn");
+const feedDesktopBtn = document.getElementById("feed-desktop-btn");
 
 let feedObserver = null;
 let feedVideos = [];
+let feedMode = "phone";
 
 feedClose.addEventListener("click", () => {
   window.close();
 });
+
+feedPhoneBtn.addEventListener("click", async () => {
+  setFeedMode("phone");
+  await buildFeed();
+  setupFeedObserver();
+});
+
+feedDesktopBtn.addEventListener("click", async () => {
+  setFeedMode("desktop");
+  await buildFeed();
+  setupFeedObserver();
+});
+
+function setFeedMode(mode) {
+  feedMode = mode;
+  feedPhoneBtn.classList.toggle("active", mode === "phone");
+  feedDesktopBtn.classList.toggle("active", mode === "desktop");
+}
 
 async function buildFeed() {
   const res = await fetch("/media?sort=newest");
@@ -23,7 +44,7 @@ async function buildFeed() {
     const card = document.createElement("section");
     card.className = "feed-item";
     card.innerHTML = `
-      <div class="feed-video-shell">
+      <div class="feed-video-shell ${feedMode}">
         <video class="feed-video" playsinline muted preload="metadata" loop src="${item.url}"></video>
         <div class="feed-overlay">
           <div class="feed-caption">${escapeHtml(item.caption || "Untitled video")}</div>
