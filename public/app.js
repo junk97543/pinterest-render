@@ -20,7 +20,7 @@ const chatSection = document.getElementById("chat-section");
 const backToTopBtn = document.getElementById("back-to-top");
 const topLogo = document.getElementById("top-logo");
 const favicon = document.getElementById("favicon");
-const aiGeneratorBtn = document.getElementById("ai-generator-btn");
+const videoFeedBtn = document.getElementById("video-feed-btn");
 
 let items = [];
 let zoom = 1, x = 0, y = 0, dragging = false, startX = 0, startY = 0;
@@ -29,7 +29,6 @@ let currentSort = 'random';
 let currentLayout = 'masonry';
 let logoIndex = 0;
 let logoTimer = null;
-let displayItems = [];
 
 checkAdmin();
 
@@ -142,17 +141,16 @@ function render() {
   gallery.innerHTML = "";
   if (!items.length) {
     gallery.innerHTML = "<p>No images yet. Upload some photos or videos.</p>";
-    displayItems = [];
     return;
   }
 
-  displayItems = currentSort === 'random' ? shuffleArray(items) : [...items];
+  const displayItems = currentSort === 'random' ? shuffleArray(items) : [...items];
 
-  displayItems.forEach((item, displayIndex) => {
+  displayItems.forEach((item) => {
     const originalIndex = items.findIndex(i => i.public_id === item.public_id);
     const div = document.createElement("div");
     div.className = "masonry-item";
-    div.dataset.index = originalIndex >= 0 ? originalIndex : displayIndex;
+    div.dataset.index = originalIndex >= 0 ? originalIndex : "0";
 
     if (item.type === "image") {
       const img = document.createElement("img");
@@ -317,8 +315,8 @@ deleteAllBtn.addEventListener("click", async () => {
   }
 });
 
-aiGeneratorBtn.addEventListener("click", () => {
-  window.open("/t83fgph56x.html", "_blank", "noopener,noreferrer");
+videoFeedBtn.addEventListener("click", () => {
+  window.location.href = "/feed.html";
 });
 
 function openLightbox(index) {
