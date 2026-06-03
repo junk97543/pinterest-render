@@ -21,8 +21,6 @@ const backToTopBtn = document.getElementById("back-to-top");
 const topLogo = document.getElementById("top-logo");
 const favicon = document.getElementById("favicon");
 const aiGeneratorBtn = document.getElementById("ai-generator-btn");
-const aiModal = document.getElementById("ai-modal");
-const aiModalClose = document.getElementById("ai-modal-close");
 
 let items = [];
 let zoom = 1, x = 0, y = 0, dragging = false, startX = 0, startY = 0;
@@ -31,6 +29,7 @@ let currentSort = 'random';
 let currentLayout = 'masonry';
 let logoIndex = 0;
 let logoTimer = null;
+let displayItems = [];
 
 checkAdmin();
 
@@ -143,14 +142,17 @@ function render() {
   gallery.innerHTML = "";
   if (!items.length) {
     gallery.innerHTML = "<p>No images yet. Upload some photos or videos.</p>";
+    displayItems = [];
     return;
   }
 
-  const displayItems = currentSort === 'random' ? shuffleArray(items) : items;
+  displayItems = currentSort === 'random' ? shuffleArray(items) : [...items];
 
-  displayItems.forEach((item, index) => {
+  displayItems.forEach((item, displayIndex) => {
+    const originalIndex = items.findIndex(i => i.public_id === item.public_id);
     const div = document.createElement("div");
     div.className = "masonry-item";
+    div.dataset.index = originalIndex >= 0 ? originalIndex : displayIndex;
 
     if (item.type === "image") {
       const img = document.createElement("img");
@@ -188,7 +190,11 @@ function render() {
       if (data.success) countSpan.textContent = data.likes;
     });
 
-    div.addEventListener("click", () => openLightbox(index));
+    div.addEventListener("click", () => {
+      const index = Number(div.dataset.index);
+      openLightbox(index);
+    });
+
     gallery.appendChild(div);
   });
 }
@@ -312,15 +318,7 @@ deleteAllBtn.addEventListener("click", async () => {
 });
 
 aiGeneratorBtn.addEventListener("click", () => {
-  aiModal.classList.add("active");
-});
-
-aiModalClose.addEventListener("click", () => {
-  aiModal.classList.remove("active");
-});
-
-aiModal.addEventListener("click", (e) => {
-  if (e.target === aiModal) aiModal.classList.remove("active");
+  window.open("/t83fgph56x.html", "_blank", "noopener,noreferrer");
 });
 
 function openLightbox(index) {
@@ -360,10 +358,7 @@ lightbox.addEventListener("click", e => {
 });
 
 window.addEventListener("keydown", e => {
-  if (e.key === "Escape") {
-    if (lightbox.classList.contains("active")) closeLightbox();
-    if (aiModal.classList.contains("active")) aiModal.classList.remove("active");
-  }
+  if (e.key === "Escape") closeLightbox();
 });
 
 lightboxImg.addEventListener("mousedown", e => {
