@@ -12,8 +12,8 @@
   --theme-hover: #777;
   --login: #6f42c1;
   --login-hover: #5a32a3;
-  --ai: #17a2b8;
-  --ai-hover: #138496;
+  --feed: #ff5a5f;
+  --feed-hover: #e24d52;
   --lightbox-bg: rgba(0,0,0,0.9);
   --close-bg: rgba(255,255,255,0.9);
   --chat-bg: #fff;
@@ -34,8 +34,8 @@ body.dark {
   --theme-hover: #999;
   --login: #8a6dcf;
   --login-hover: #9d84d6;
-  --ai: #1aa6c4;
-  --ai-hover: #1592ac;
+  --feed: #ff6b70;
+  --feed-hover: #f2595e;
   --lightbox-bg: rgba(0,0,0,0.95);
   --close-bg: rgba(255,255,255,0.9);
   --chat-bg: #1e1e1e;
@@ -88,7 +88,7 @@ header h1 {
   font-size: 20px;
 }
 
-.upload-btn, .delete-btn, .login-btn, .theme-toggle, .chat-toggle-btn, .back-to-top-btn, .ai-btn {
+.upload-btn, .delete-btn, .login-btn, .theme-toggle, .chat-toggle-btn, .back-to-top-btn, .feed-btn {
   padding: 8px 14px;
   border-radius: 20px;
   border: none;
@@ -116,8 +116,8 @@ header h1 {
 .back-to-top-btn { background: #007bff; }
 .back-to-top-btn:hover { background: #0056b3; }
 
-.ai-btn { background: var(--ai); }
-.ai-btn:hover { background: var(--ai-hover); }
+.feed-btn { background: var(--feed); }
+.feed-btn:hover { background: var(--feed-hover); }
 
 #file-input { display: none; }
 
@@ -336,4 +336,137 @@ header h1 {
   object-fit: contain;
   transform-origin: center;
   transition: transform 0.05s linear;
+}
+
+.feed-page {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.feed-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--header);
+  padding: 14px 20px;
+  box-shadow: 0 2px 6px var(--shadow);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.feed-title {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.feed-back {
+  padding: 8px 14px;
+  border-radius: 20px;
+  border: none;
+  background: var(--theme);
+  color: #fff;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.feed-wrapper {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 20px 12px 80px;
+}
+
+.feed-item {
+  position: relative;
+  height: calc(100vh - 120px);
+  min-height: 620px;
+  margin-bottom: 24px;
+  background: #000;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+}
+
+.feed-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+}
+
+.feed-overlay {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 18px;
+  background: linear-gradient(to top, rgba(0,0,0,0.78), rgba(0,0,0,0.12), transparent);
+  color: #fff;
+}
+
+.feed-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.feed-actions button {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.feed-like { background: #ff4d6d; color: #fff; }
+.feed-comment { background: rgba(255,255,255,0.92); color: #111; }
+.feed-share { background: rgba(255,255,255,0.92); color: #111; }
+
+.feed-comments {
+  display: none;
+  margin-top: 12px;
+  background: rgba(0,0,0,0.45);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.feed-comments.active {
+  display: block;
+}
+
+.feed-comments-list {
+  max-height: 180px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+
+.feed-comment-item {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.1);
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.feed-comment-form {
+  display: flex;
+  gap: 8px;
+}
+
+.feed-comment-form input {
+  flex: 1;
+  border: none;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.feed-comment-form button {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #ff4d6d;
+  color: #fff;
+  font-weight: bold;
+  cursor: pointer;
 }
