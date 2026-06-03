@@ -168,6 +168,7 @@ function render() {
       vid.controls = true;
       vid.loop = true;
       vid.muted = true;
+      vid.playsInline = true;
       div.appendChild(vid);
     }
 
@@ -320,9 +321,9 @@ deleteAllBtn.addEventListener("click", async () => {
   }
 });
 
-videoFeedBtn.addEventListener("click", () => {
+videoFeedBtn.addEventListener("click", async () => {
   feedModal.classList.add("active");
-  buildFeed();
+  await buildFeed();
   setupFeedObserver();
 });
 
@@ -353,7 +354,7 @@ async function buildFeed() {
   feedScroller.innerHTML = "";
 
   if (!videos.length) {
-    feedScroller.innerHTML = "<p style='text-align:center;padding:40px;'>No videos uploaded yet.</p>";
+    feedScroller.innerHTML = "<p style='text-align:center;padding:40px;color:#fff;'>No videos uploaded yet.</p>";
     return;
   }
 
@@ -390,6 +391,11 @@ async function buildFeed() {
     const commentInput = card.querySelector(".feed-comment-form input");
     const postBtn = card.querySelector(".feed-comment-form button");
     const likeCount = card.querySelector(".like-count");
+
+    video.muted = true;
+    video.playsInline = true;
+    video.autoplay = true;
+    video.loop = true;
 
     likeBtn.addEventListener("click", async () => {
       const res = await fetch("/api/like", {
@@ -434,6 +440,12 @@ async function buildFeed() {
     v.pause();
     v.currentTime = 0;
   });
+
+  if (feedVideos[0]) {
+    try {
+      await feedVideos[0].play();
+    } catch {}
+  }
 }
 
 function setupFeedObserver() {
@@ -453,16 +465,11 @@ function setupFeedObserver() {
     });
   }, {
     root: feedScroller,
-    rootMargin: "-35% 0px -35% 0px",
-    threshold: 0.6
+    rootMargin: "-30% 0px -30% 0px",
+    threshold: 0.35
   });
 
   feedVideos.forEach(video => feedObserver.observe(video));
-
-  if (feedVideos[0]) {
-    feedVideos[0].muted = true;
-    feedVideos[0].play().catch(() => {});
-  }
 }
 
 function openLightbox(index) {

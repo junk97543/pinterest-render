@@ -1,56 +1,49 @@
-const feedWrapper = document.getElementById("feed-wrapper");
-const backHome = document.getElementById("back-home");
-const seenComments = JSON.parse(localStorage.getItem("feed-comments") || "{}");
-const seenLikes = JSON.parse(localStorage.getItem("feed-likes") || "{}");
+const feedScroller = document.getElementById("feed-scroller");
+const feedClose = document.getElementById("feed-close");
 
-backHome.addEventListener("click", () => {
-  window.location.href = "/";
+let feedObserver = null;
+let feedVideos = [];
+
+feedClose.addEventListener("click", () => {
+  window.close();
 });
 
-let videos = [];
-
-async function loadVideos() {
+async function buildFeed() {
   const res = await fetch("/media?sort=newest");
-  const items = await res.json();
-  videos = items.filter(item => item.type === "video");
-  renderFeed();
-  observeVideos();
-}
+  const all = await res.json();
+  const videos = all.filter(item => item.type === "video");
+  feedScroller.innerHTML = "";
 
-function renderFeed() {
-  feedWrapper.innerHTML = "";
   if (!videos.length) {
-    feedWrapper.innerHTML = "<p style='text-align:center;padding:40px;'>No videos uploaded yet.</p>";
+    feedScroller.innerHTML = "<p style='text-align:center;padding:40px;color:#fff;'>No videos uploaded yet.</p>";
     return;
   }
 
-  videos.forEach((item, index) => {
+  videos.forEach(item => {
     const card = document.createElement("section");
     card.className = "feed-item";
-    card.dataset.publicId = item.public_id;
-
     card.innerHTML = `
-      <video class="feed-video" playsinline muted loop preload="metadata" src="${item.url}"></video>
-      <div class="feed-overlay">
-        <div class="feed-caption">${escapeHtml(item.caption || "Untitled video")}</div>
-        <div class="feed-actions">
-          <button class="feed-like">❤️ <span class="like-count">${seenLikes[item.public_id] || item.likes || 0}</span></button>
-          <button class="feed-comment">💬 Comment</button>
-          <button class="feed-share">↗ Share</button>
-        </div>
-        <div class="feed-comments" id="comments-${item.public_id}">
-          <div class="feed-comments-list" id="list-${item.public_id}">
-            ${(seenComments[item.public_id] || []).map(c => `<div class="feed-comment-item">${escapeHtml(c)}</div>`).join("")}
+      <div class="feed-video-shell">
+        <video class="feed-video" playsinline muted preload="metadata" loop src="${item.url}"></video>
+        <div class="feed-overlay">
+          <div class="feed-caption">${escapeHtml(item.caption || "Untitled video")}</div>
+          <div class="feed-actions">
+            <button class="feed-like">❤️ <span class="like-count">${item.likes || 0}</span></button>
+            <button class="feed-comment">💬 Comment</button>
+            <button class="feed-share">↗ Share</button>
           </div>
-          <div class="feed-comment-form">
-            <input type="text" placeholder="Write a comment..." />
-            <button type="button">Post</button>
+          <div class="feed-comments">
+            <div class="feed-comments-list"></div>
+            <div class="feed-comment-form">
+              <input type="text" placeholder="Write a comment..." />
+              <button type="button">Post</button>
+            </div>
           </div>
         </div>
       </div>
     `;
 
-    const video = card.querySelector("video");
+    const video = card.querySelector(".feed-video");
     const likeBtn = card.querySelector(".feed-like");
     const commentBtn = card.querySelector(".feed-comment");
     const shareBtn = card.querySelector(".feed-share");
@@ -60,6 +53,11 @@ function renderFeed() {
     const postBtn = card.querySelector(".feed-comment-form button");
     const likeCount = card.querySelector(".like-count");
 
+    video.muted = true;
+    video.playsInline = true;
+    video.autoplay = true;
+    video.loop = true;
+
     likeBtn.addEventListener("click", async () => {
       const res = await fetch("/api/like", {
         method: "POST",
@@ -67,11 +65,7 @@ function renderFeed() {
         body: JSON.stringify({ public_id: item.public_id })
       });
       const data = await res.json();
-      if (data.success) {
-        likeCount.textContent = data.likes;
-        seenLikes[item.public_id] = data.likes;
-        localStorage.setItem("feed-likes", JSON.stringify(seenLikes));
-      }
+      if (data.success) likeCount.textContent = data.likes;
     });
 
     commentBtn.addEventListener("click", () => {
@@ -81,10 +75,6 @@ function renderFeed() {
     postBtn.addEventListener("click", () => {
       const text = commentInput.value.trim();
       if (!text) return;
-      const list = seenComments[item.public_id] || [];
-      list.push(text);
-      seenComments[item.public_id] = list;
-      localStorage.setItem("feed-comments", JSON.stringify(seenComments));
       const div = document.createElement("div");
       div.className = "feed-comment-item";
       div.textContent = text;
@@ -93,41 +83,54 @@ function renderFeed() {
     });
 
     shareBtn.addEventListener("click", async () => {
-      const url = item.url;
       if (navigator.share) {
         try {
-          await navigator.share({ title: "Video", url });
+          await navigator.share({ title: "Video", url: item.url });
         } catch {}
       } else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(url);
+        await navigator.clipboard.writeText(item.url);
         alert("Video link copied!");
       }
     });
 
-    feedWrapper.appendChild(card);
+    feedScroller.appendChild(card);
   });
+
+  feedVideos = Array.from(document.querySelectorAll(".feed-video"));
+  feedVideos.forEach(v => {
+    v.pause();
+    v.currentTime = 0;
+  });
+
+  if (feedVideos[0]) {
+    try {
+      await feedVideos[0].play();
+    } catch {}
+  }
 }
 
-function observeVideos() {
-  const videosEls = document.querySelectorAll(".feed-video");
-  const options = {
-    root: null,
-    rootMargin: "-35% 0px -35% 0px",
-    threshold: 0.5
-  };
+function setupFeedObserver() {
+  if (feedObserver) feedObserver.disconnect();
 
-  const observer = new IntersectionObserver((entries) => {
+  feedObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       const video = entry.target;
       if (entry.isIntersecting) {
-        video.play().catch(() => {});
+        video.muted = true;
+        video.playsInline = true;
+        const playPromise = video.play();
+        if (playPromise && playPromise.catch) playPromise.catch(() => {});
       } else {
         video.pause();
       }
     });
-  }, options);
+  }, {
+    root: feedScroller,
+    rootMargin: "-30% 0px -30% 0px",
+    threshold: 0.35
+  });
 
-  videosEls.forEach(video => observer.observe(video));
+  feedVideos.forEach(video => feedObserver.observe(video));
 }
 
 function escapeHtml(text) {
@@ -136,4 +139,4 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-loadVideos();
+buildFeed().then(setupFeedObserver);
