@@ -317,7 +317,7 @@ header h1 { font-size: 20px; }
 .feed-modal {
   position: fixed;
   inset: 0;
-  background: var(--bg);
+  background: linear-gradient(180deg, #0f0f12 0%, #141418 100%);
   z-index: 3000;
   display: none;
   flex-direction: column;
@@ -328,14 +328,16 @@ header h1 { font-size: 20px; }
 }
 
 .feed-modal-bar {
-  height: 60px;
+  height: 62px;
   padding: 0 16px;
-  background: var(--header);
-  box-shadow: 0 2px 6px var(--shadow);
+  background: rgba(255,255,255,0.06);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex: 0 0 auto;
+  color: #fff;
 }
 
 .feed-modal-title {
@@ -348,7 +350,7 @@ header h1 { font-size: 20px; }
   height: 40px;
   border: none;
   border-radius: 50%;
-  background: var(--close-bg);
+  background: rgba(255,255,255,0.9);
   cursor: pointer;
   font-size: 22px;
   font-weight: bold;
@@ -358,36 +360,37 @@ header h1 { font-size: 20px; }
   flex: 1;
   overflow-y: auto;
   scroll-snap-type: y mandatory;
-  padding: 16px 0 24px;
+  padding: 14px 0 20px;
 }
 
 .feed-item {
-  height: calc(100vh - 92px);
+  height: calc(100vh - 82px);
   min-height: 520px;
   scroll-snap-align: center;
   position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 12px;
+  padding: 10px 12px;
 }
 
 .feed-video-shell {
   position: relative;
-  width: min(100%, 720px);
+  width: min(100%, 760px);
   height: 100%;
-  background: #000;
-  border-radius: 18px;
+  border-radius: 22px;
   overflow: hidden;
-  box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+  box-shadow: 0 18px 40px rgba(0,0,0,0.45);
+  background: transparent;
 }
 
 .feed-video {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  background: #000;
+  object-fit: cover;
+  background: transparent;
   display: block;
+  border-radius: 22px;
 }
 
 .feed-overlay {
@@ -396,7 +399,7 @@ header h1 { font-size: 20px; }
   right: 0;
   bottom: 0;
   padding: 18px;
-  background: linear-gradient(to top, rgba(0,0,0,0.78), rgba(0,0,0,0.12), transparent);
+  background: linear-gradient(to top, rgba(0,0,0,0.82), rgba(0,0,0,0.18), transparent);
   color: #fff;
 }
 
