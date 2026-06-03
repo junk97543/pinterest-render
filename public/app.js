@@ -25,6 +25,7 @@ let items = [];
 let zoom = 1, x = 0, y = 0, dragging = false, startX = 0, startY = 0;
 let isAdmin = false;
 let currentSort = 'random';
+let currentLayout = 'masonry';
 let logoIndex = 0;
 let logoTimer = null;
 
@@ -93,6 +94,7 @@ loginBtn.addEventListener("click", async () => {
 
 sortNewestBtn.addEventListener("click", async () => {
   currentSort = 'newest';
+  currentLayout = 'grid';
   sortNewestBtn.classList.add('active');
   sortRandomBtn.classList.remove('active');
   sortPopularBtn.classList.remove('active');
@@ -101,6 +103,7 @@ sortNewestBtn.addEventListener("click", async () => {
 
 sortRandomBtn.addEventListener("click", async () => {
   currentSort = 'random';
+  currentLayout = 'masonry';
   sortRandomBtn.classList.add('active');
   sortNewestBtn.classList.remove('active');
   sortPopularBtn.classList.remove('active');
@@ -109,15 +112,26 @@ sortRandomBtn.addEventListener("click", async () => {
 
 sortPopularBtn.addEventListener("click", async () => {
   currentSort = 'popular';
+  currentLayout = 'grid';
   sortPopularBtn.classList.add('active');
   sortNewestBtn.classList.remove('active');
   sortRandomBtn.classList.remove('active');
   await loadMedia();
 });
 
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 async function loadMedia() {
   const res = await fetch(`/media?sort=${currentSort}`);
   items = await res.json();
+  gallery.className = currentLayout === 'grid' ? 'grid-gallery' : 'masonry';
   render();
   updateLogoRotation();
 }
@@ -129,7 +143,9 @@ function render() {
     return;
   }
 
-  items.forEach((item, index) => {
+  const displayItems = currentSort === 'random' ? shuffleArray(items) : items;
+
+  displayItems.forEach((item, index) => {
     const div = document.createElement("div");
     div.className = "masonry-item";
 
