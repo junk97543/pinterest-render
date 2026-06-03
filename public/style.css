@@ -64,10 +64,24 @@ header {
   z-index: 10;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 250px;
+  flex: 1;
+}
+
+.top-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #ddd;
+}
+
 header h1 {
   font-size: 20px;
-  flex: 1;
-  min-width: 150px;
 }
 
 .upload-btn, .delete-btn, .login-btn, .theme-toggle, .chat-toggle-btn, .back-to-top-btn {
@@ -128,31 +142,36 @@ header h1 {
   background: var(--upload);
 }
 
-.grid-gallery {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 14px;
+.masonry {
+  column-count: 5;
+  column-gap: 14px;
   padding: 14px;
   max-width: 1600px;
   margin: 0 auto;
 }
 
+@media (max-width:1400px){ .masonry{ column-count:4 } }
+@media (max-width:1100px){ .masonry{ column-count:3 } }
+@media (max-width:800px){ .masonry{ column-count:2 } }
+@media (max-width:500px){ .masonry{ column-count:1 } }
+
 .masonry-item {
+  break-inside: avoid;
+  margin-bottom: 14px;
   background: var(--card);
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 2px 8px var(--shadow);
-  display: flex;
-  flex-direction: column;
+  cursor: pointer;
 }
 
-.masonry-item img,
-.masonry-item video {
+.masonry-item img, .masonry-item video {
   width: 100%;
-  height: 240px;
-  object-fit: cover;
+  height: auto;
   display: block;
-  background: #000;
+  object-fit: cover;
+  min-height: 100px;
+  max-height: 500px;
 }
 
 .like-container {

@@ -2,12 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>My Pinterest (Simple)</title>
+  <title>junk97543's gallery</title>
+  <link id="favicon" rel="icon" type="image/png" href="" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body class="light">
   <header>
-    <h1>My Pinterest (Simple)</h1>
+    <div class="brand">
+      <img id="top-logo" class="top-logo" src="" alt="logo" />
+      <h1>junk97543's gallery</h1>
+    </div>
+
     <label for="file-input" class="upload-btn">Upload Photos & Videos</label>
     <input id="file-input" type="file" accept="image/*,video/*" multiple />
     <button id="login-btn" class="login-btn">Login (Admin)</button>
@@ -18,11 +23,12 @@
   </header>
 
   <div class="sort-buttons">
-    <button id="sort-newest" class="sort-btn active">🕐 Newest</button>
+    <button id="sort-newest" class="sort-btn">🕐 Newest</button>
+    <button id="sort-random" class="sort-btn active">🔀 Random</button>
     <button id="sort-popular" class="sort-btn">❤️ Most Liked</button>
   </div>
 
-  <main id="gallery" class="grid-gallery"></main>
+  <main id="gallery" class="masonry"></main>
 
   <section id="chat-section" class="chat-section" style="display:none;">
     <h2>Live Chat</h2>

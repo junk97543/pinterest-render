@@ -8,6 +8,7 @@ const lightboxClose = document.getElementById("lightbox-close");
 const lightboxImg = document.getElementById("lightbox-img");
 const lightboxVideo = document.getElementById("lightbox-video");
 const sortNewestBtn = document.getElementById("sort-newest");
+const sortRandomBtn = document.getElementById("sort-random");
 const sortPopularBtn = document.getElementById("sort-popular");
 const chatMessages = document.getElementById("chat-messages");
 const chatName = document.getElementById("chat-name");
@@ -17,11 +18,15 @@ const chatToggleBtn = document.getElementById("chat-toggle-btn");
 const chatCloseBtn = document.getElementById("chat-close-btn");
 const chatSection = document.getElementById("chat-section");
 const backToTopBtn = document.getElementById("back-to-top");
+const topLogo = document.getElementById("top-logo");
+const favicon = document.getElementById("favicon");
 
 let items = [];
 let zoom = 1, x = 0, y = 0, dragging = false, startX = 0, startY = 0;
 let isAdmin = false;
-let currentSort = 'newest';
+let currentSort = 'random';
+let logoIndex = 0;
+let logoTimer = null;
 
 checkAdmin();
 
@@ -89,6 +94,15 @@ loginBtn.addEventListener("click", async () => {
 sortNewestBtn.addEventListener("click", async () => {
   currentSort = 'newest';
   sortNewestBtn.classList.add('active');
+  sortRandomBtn.classList.remove('active');
+  sortPopularBtn.classList.remove('active');
+  await loadMedia();
+});
+
+sortRandomBtn.addEventListener("click", async () => {
+  currentSort = 'random';
+  sortRandomBtn.classList.add('active');
+  sortNewestBtn.classList.remove('active');
   sortPopularBtn.classList.remove('active');
   await loadMedia();
 });
@@ -97,6 +111,7 @@ sortPopularBtn.addEventListener("click", async () => {
   currentSort = 'popular';
   sortPopularBtn.classList.add('active');
   sortNewestBtn.classList.remove('active');
+  sortRandomBtn.classList.remove('active');
   await loadMedia();
 });
 
@@ -104,6 +119,7 @@ async function loadMedia() {
   const res = await fetch(`/media?sort=${currentSort}`);
   items = await res.json();
   render();
+  updateLogoRotation();
 }
 
 function render() {
@@ -355,4 +371,22 @@ lightboxImg.addEventListener("wheel", e => {
 
 function updateTransform() {
   lightboxImg.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
+}
+
+function updateLogoRotation() {
+  if (items.length) {
+    logoIndex = (logoIndex + 1) % items.length;
+    const url = items[logoIndex].url;
+    topLogo.src = url;
+    favicon.href = url;
+  }
+  if (logoTimer) clearInterval(logoTimer);
+  if (items.length) {
+    logoTimer = setInterval(() => {
+      logoIndex = (logoIndex + 1) % items.length;
+      const url = items[logoIndex].url;
+      topLogo.src = url;
+      favicon.href = url;
+    }, 5000);
+  }
 }
