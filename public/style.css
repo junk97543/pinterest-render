@@ -70,7 +70,7 @@ header h1 {
   min-width: 150px;
 }
 
-.upload-btn, .delete-btn, .login-btn, .theme-toggle {
+.upload-btn, .delete-btn, .login-btn, .theme-toggle, .chat-toggle-btn, .back-to-top-btn {
   padding: 8px 14px;
   border-radius: 20px;
   border: none;
@@ -92,41 +92,84 @@ header h1 {
 .theme-toggle { background: var(--theme); }
 .theme-toggle:hover { background: var(--theme-hover); }
 
+.chat-toggle-btn { background: #28a745; }
+.chat-toggle-btn:hover { background: #218838; }
+
+.back-to-top-btn { background: #007bff; }
+.back-to-top-btn:hover { background: #0056b3; }
+
 #file-input { display: none; }
 
-.masonry {
-  column-count: 5;
-  column-gap: 14px;
+.sort-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 15px;
+  background: var(--header);
+  box-shadow: 0 1px 4px var(--shadow);
+}
+
+.sort-btn {
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: none;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 14px;
+  background: var(--theme);
+  color: #fff;
+}
+
+.sort-btn:hover {
+  background: var(--theme-hover);
+}
+
+.sort-btn.active {
+  background: var(--upload);
+}
+
+.grid-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
   padding: 14px;
   max-width: 1600px;
   margin: 0 auto;
 }
 
-@media (max-width:1400px){ .masonry{ column-count:4 } }
-@media (max-width:1100px){ .masonry{ column-count:3 } }
-@media (max-width:800px){ .masonry{ column-count:2 } }
-@media (max-width:500px){ .masonry{ column-count:1 } }
-
 .masonry-item {
-  break-inside: avoid;
-  margin-bottom: 14px;
   background: var(--card);
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 2px 8px var(--shadow);
-  cursor: pointer;
+  display: flex;
+  flex-direction: column;
 }
 
-.masonry-item img, .masonry-item video {
+.masonry-item img,
+.masonry-item video {
   width: 100%;
-  height: auto;
-  display: block;
+  height: 240px;
   object-fit: cover;
-  min-height: 100px;
-  max-height: 500px;
+  display: block;
+  background: #000;
 }
 
-/* Chat Section - Fixed at top */
+.like-container {
+  padding: 10px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.like-btn {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 14px;
+}
+
 .chat-section {
   max-width: 600px;
   margin: 20px auto 40px auto;
@@ -140,6 +183,7 @@ header h1 {
   z-index: 999;
   max-height: 80vh;
   display: none;
+  width: min(600px, calc(100vw - 40px));
 }
 
 .chat-section h2 {
@@ -210,7 +254,6 @@ header h1 {
   background: #c82333;
 }
 
-/* Lightbox */
 .lightbox {
   position: fixed;
   inset: 0;
@@ -253,32 +296,4 @@ header h1 {
   object-fit: contain;
   transform-origin: center;
   transition: transform 0.05s linear;
-}
-/* Sort Buttons */
-.sort-buttons {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  padding: 15px;
-  background: var(--header);
-  box-shadow: 0 1px 4px var(--shadow);
-}
-
-.sort-btn {
-  padding: 8px 16px;
-  border-radius: 20px;
-  border: none;
-  font-weight: bold;
-  cursor: pointer;
-  font-size: 14px;
-  background: var(--theme);
-  color: #fff;
-}
-
-.sort-btn:hover {
-  background: var(--theme-hover);
-}
-
-.sort-btn.active {
-  background: var(--upload);
 }

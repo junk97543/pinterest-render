@@ -8,13 +8,12 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const CLOUD_TAG = 'pinterest-gallery';
 
-// Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
 
-// Define schemas
 const UploadCountSchema = new mongoose.Schema({
   identifier: String,
   date: String,
@@ -35,7 +34,6 @@ const LikeSchema = new mongoose.Schema({
 });
 const Like = mongoose.model('Like', LikeSchema);
 
-// Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -43,9 +41,10 @@ cloudinary.config({
 });
 
 const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
+  cloudinary,
   params: {
     folder: 'pinterest-photos',
+    tags: [CLOUD_TAG],
     resource_type: 'auto',
     allowed_formats: ['jpg','jpeg','png','gif','webp','bmp','svg','mp4','webm','mov','avi','mkv']
   }
@@ -56,18 +55,14 @@ const upload = multer({
   limits: { fileSize: 100 * 1024 * 1024, files: 1000 }
 });
 
-// Middleware
 app.use(express.json({ limit: '200mb' }));
 app.use(express.urlencoded({ limit: '200mb', extended: true }));
 app.use(express.static('public'));
 app.use(session({
-  secret: 'your-secret-key-here-change-this-12345',
+  secret: 'change-this-secret-please-12345',
   resave: false,
   saveUninitialized: false,
-  cookie: { 
-    secure: false,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  }
+  cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }
 }));
 
 app.use((req, res, next) => {
@@ -75,17 +70,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// Admin login
 app.post('/api/login', (req, res) => {
   const { password } = req.body;
-  const adminPassword = process.env.ADMIN_PASSWORD;
-  
-  if (password === adminPassword) {
+  if (password === process.env.ADMIN_PASSWORD) {
     req.session.isAdmin = true;
-    res.json({ success: true, isAdmin: true });
-  } else {
-    res.json({ success: false, isAdmin: false });
+    return res.json({ success: true, isAdmin: true });
   }
+  res.json({ success: false, isAdmin: false });
 });
 
 app.post('/api/logout', (req, res) => {
@@ -97,31 +88,27 @@ app.get('/api/admin', (req, res) => {
   res.json({ isAdmin: req.session.isAdmin || false });
 });
 
-// Upload endpoint
 app.post('/upload', upload.array('files', 1000), async (req, res) => {
   try {
     const identifier = req.ip || req.connection.remoteAddress;
     const today = new Date().toISOString().split('T')[0];
     const isAdmin = req.session.isAdmin || false;
-    
+
     if (!isAdmin) {
       let uploadCount = await UploadCount.findOne({ identifier, date: today });
-      
-      if (!uploadCount) {
-        uploadCount = new UploadCount({ identifier, date: today, count: 0 });
-      }
-      
+      if (!uploadCount) uploadCount = new UploadCount({ identifier, date: today, count: 0 });
+
       if (uploadCount.count >= 5) {
-        return res.status(403).json({ 
-          success: false, 
-          error: 'Daily upload limit reached (5 images per day). Come back tomorrow!' 
+        return res.status(403).json({
+          success: false,
+          error: 'Daily upload limit reached (5 images per day). Come back tomorrow!'
         });
       }
-      
+
       uploadCount.count += req.files.length;
       await uploadCount.save();
     }
-    
+
     const files = req.files || [];
     const result = files.map(f => ({
       public_id: f.path.split('/').pop(),
@@ -130,7 +117,7 @@ app.post('/upload', upload.array('files', 1000), async (req, res) => {
       mimetype: f.mimetype,
       size: f.size
     }));
-    
+
     res.json({ success: true, files: result, isAdmin });
   } catch (err) {
     console.error('Upload error:', err);
@@ -138,18 +125,16 @@ app.post('/upload', upload.array('files', 1000), async (req, res) => {
   }
 });
 
-// Get media with likes
 app.get('/media', async (req, res) => {
   try {
     const sortBy = req.query.sort || 'newest';
-    
-    // Search Cloudinary
+
     const searchResult = await cloudinary.search
-      .expression('folder:pinterest-photos')
+      .expression(`tags=${CLOUD_TAG}`)
       .sort_by('created_at', 'desc')
       .max_results(500)
       .execute();
-    
+
     const media = searchResult.resources.map(r => ({
       public_id: r.public_id,
       url: r.secure_url,
@@ -158,26 +143,23 @@ app.get('/media', async (req, res) => {
       size: r.bytes,
       createdAt: r.created_at
     }));
-    
-    // Get all likes
+
     const likes = await Like.find();
     const likeMap = {};
     likes.forEach(l => {
       likeMap[l.public_id] = l.count;
     });
-    
-    // Add like count to each media item
+
     media.forEach(m => {
       m.likes = likeMap[m.public_id] || 0;
     });
-    
-    // Sort on server side
+
     if (sortBy === 'popular') {
       media.sort((a, b) => b.likes - a.likes);
     } else {
       media.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     }
-    
+
     res.json(media);
   } catch (err) {
     console.error('Media list error:', err);
@@ -185,21 +167,13 @@ app.get('/media', async (req, res) => {
   }
 });
 
-// Like an image
 app.post('/api/like', async (req, res) => {
   const { public_id } = req.body;
-  
   try {
     let like = await Like.findOne({ public_id });
-    
-    if (!like) {
-      like = new Like({ public_id, count: 1 });
-    } else {
-      like.count += 1;
-    }
-    
+    if (!like) like = new Like({ public_id, count: 1 });
+    else like.count += 1;
     await like.save();
-    
     res.json({ success: true, likes: like.count });
   } catch (err) {
     console.error('Like error:', err);
@@ -207,76 +181,58 @@ app.post('/api/like', async (req, res) => {
   }
 });
 
-// Delete all (admin only) - FIXED
 app.post('/delete-all', async (req, res) => {
   if (!req.session.isAdmin) {
     return res.status(403).json({ success: false, error: 'Admin only' });
   }
-  
+
   try {
-    console.log('Starting delete all...');
-    
-    // Search for all resources in the folder
-    const searchResult = await cloudinary.search
-      .expression('folder:pinterest-photos')
-      .max_results(500)
-      .execute();
-    
-    console.log(`Found ${searchResult.resources.length} resources to delete`);
-    
-    if (searchResult.resources.length === 0) {
-      console.log('No resources found to delete');
-      return res.json({ success: true, message: 'No resources to delete' });
-    }
-    
-    const publicIds = searchResult.resources.map(r => r.public_id);
-    console.log('Deleting public IDs:', publicIds);
-    
-    // Delete resources
-    const deleteResult = await cloudinary.api.delete_resources(publicIds, { 
-      resource_type: 'auto',
-      type: 'upload'
+    console.log('Delete by tag started');
+
+    const deleteResult = await cloudinary.api.delete_resources_by_tag(CLOUD_TAG, {
+      resource_type: 'image'
     });
-    
-    console.log('Delete result:', deleteResult);
-    
-    // Also delete all likes from MongoDB
+
+    const deleteVideoResult = await cloudinary.api.delete_resources_by_tag(CLOUD_TAG, {
+      resource_type: 'video'
+    });
+
+    const deleteRawResult = await cloudinary.api.delete_resources_by_tag(CLOUD_TAG, {
+      resource_type: 'raw'
+    });
+
     await Like.deleteMany({});
-    console.log('Deleted all likes from MongoDB');
-    
-    res.json({ 
-      success: true, 
-      message: `Deleted ${publicIds.length} resources from Cloudinary`,
-      deletedCount: publicIds.length
+    await ChatMessage.deleteMany({});
+    await UploadCount.deleteMany({});
+
+    res.json({
+      success: true,
+      message: 'Deleted all tagged assets',
+      imageResult: deleteResult,
+      videoResult: deleteVideoResult,
+      rawResult: deleteRawResult
     });
   } catch (err) {
     console.error('Delete all error:', err);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Delete failed: ' + err.message,
-      details: err.toString()
+    res.status(500).json({
+      success: false,
+      error: 'Delete failed: ' + err.message
     });
   }
 });
 
-// Chat endpoints
 app.post('/api/chat', async (req, res) => {
   const { name, message } = req.body;
   if (!name || !message) {
     return res.status(400).json({ success: false, error: 'Name and message required' });
   }
-  
   const chatMessage = new ChatMessage({ name, message });
   await chatMessage.save();
-  
   res.json({ success: true });
 });
 
 app.get('/api/chat', async (req, res) => {
-  const messages = await ChatMessage.find()
-    .sort({ timestamp: -1 })
-    .limit(100);
-  
+  const messages = await ChatMessage.find().sort({ timestamp: -1 }).limit(100);
   res.json(messages.reverse());
 });
 
