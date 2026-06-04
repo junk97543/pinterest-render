@@ -12,7 +12,6 @@ const gallery = document.getElementById("gallery");
 const deleteAllBtn = document.getElementById("delete-all-btn");
 const adminLoginBtn = document.getElementById("admin-login-btn");
 const adminLogoutBtn = document.getElementById("admin-logout-btn");
-const familyGalleryBtn = document.getElementById("family-gallery-btn");
 const privateGalleryBtn = document.getElementById("private-gallery-btn");
 const logoutFamilyBtn = document.getElementById("logout-family-btn");
 const themeToggle = document.getElementById("theme-toggle");
@@ -52,15 +51,12 @@ let familyAccess = false;
 let currentSort = "random";
 let currentLayout = "masonry";
 let currentGallery = "family";
-let logoIndex = 0;
-let logoTimer = null;
+let activeTagFilter = "";
 let feedObserver = null;
 let feedVideos = [];
 let feedMode = "phone";
-let activeTagFilter = "";
 
 initTheme();
-initGate();
 initHandlers();
 refreshStatus();
 
@@ -76,14 +72,12 @@ function initTheme() {
   });
 }
 
-function initGate() {
+function initHandlers() {
   familyCodeBtn.addEventListener("click", unlockFamily);
   familyCodeInput.addEventListener("keydown", e => {
     if (e.key === "Enter") unlockFamily();
   });
-}
 
-function initHandlers() {
   sortNewestBtn.addEventListener("click", async () => {
     currentSort = "newest";
     currentLayout = "grid";
@@ -132,18 +126,6 @@ function initHandlers() {
     await loadMedia();
   });
 
-  familyGalleryBtn.addEventListener("click", async () => {
-    if (!familyAccess && !isAdmin) return;
-    currentGallery = "family";
-    await fetch("/api/switch-gallery", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ gallery: "family" })
-    }).catch(() => {});
-    await refreshStatus();
-    await loadMedia();
-  });
-
   privateGalleryBtn.addEventListener("click", async () => {
     if (!isAdmin) return;
     currentGallery = "private";
@@ -186,7 +168,7 @@ function initHandlers() {
 
   chatCloseBtn.addEventListener("click", () => {
     chatSection.style.display = "none";
-    chatToggleBtn.style.display = "none";
+    chatToggleBtn.style.display = "inline-block";
     chatCloseBtn.style.display = "none";
   });
 
@@ -208,11 +190,13 @@ function initHandlers() {
   videoFeedBtn.addEventListener("click", openFeed);
   feedClose.addEventListener("click", closeFeed);
   feedModal.addEventListener("click", e => { if (e.target === feedModal) closeFeed(); });
+
   feedPhoneBtn.addEventListener("click", async () => {
     setFeedMode("phone");
     await buildFeed();
     setupFeedObserver();
   });
+
   feedDesktopBtn.addEventListener("click", async () => {
     setFeedMode("desktop");
     await buildFeed();
@@ -250,7 +234,9 @@ function initHandlers() {
     updateTransform();
   });
 
-  window.addEventListener("mouseup", () => { dragging = false; });
+  window.addEventListener("mouseup", () => {
+    dragging = false;
+  });
 
   lightboxImg.addEventListener("wheel", e => {
     e.preventDefault();
@@ -318,31 +304,28 @@ async function refreshStatus() {
   deleteAllBtn.style.display = isAdmin ? "inline-block" : "none";
   privateGalleryBtn.style.display = isAdmin ? "inline-block" : "none";
   chatToggleBtn.style.display = isAdmin && currentGallery === "private" ? "inline-block" : "none";
-  chatSection.style.display = "none";
-  chatCloseBtn.style.display = "none";
 
   galleryTitle.textContent = currentGallery === "private" ? "Private Gallery" : "Family Gallery";
   galleryBadge.textContent = currentGallery === "private" ? "Private" : "Family";
 
-  if (!familyAccess && !isAdmin) {
-    gateScreen.style.display = "flex";
-  }
+  if (!familyAccess && !isAdmin) gateScreen.style.display = "flex";
 }
 
 async function loadMedia() {
   if (!familyAccess && !isAdmin) return;
 
   const res = await fetch(`/media?sort=${currentSort}&gallery=${currentGallery}`);
+  const text = await res.text();
   if (!res.ok) {
-    const text = await res.text();
     console.error(text);
+    alert("Could not load media");
     return;
   }
-  items = await res.json();
+
+  items = JSON.parse(text);
   gallery.className = currentLayout === "grid" ? "grid-gallery" : "masonry";
   render();
   renderTags();
-  updateLogoRotation();
 }
 
 function getFilteredItems() {
@@ -422,7 +405,7 @@ function render() {
     const likeDiv = document.createElement("div");
     likeDiv.className = "like-container";
     likeDiv.innerHTML = `
-      <button class="like-btn" data-public-id="${item.public_id}">
+      <button class="like-btn">
         ❤️ <span class="like-count">${item.likes || 0}</span>
       </button>
     `;
@@ -447,6 +430,7 @@ function render() {
 async function addTagToItem(publicId) {
   const tag = prompt("Enter a tag for this item:");
   if (!tag) return;
+
   const clean = tag.trim().replace(/^#/, "").replace(/\s+/g, " ");
   if (!clean) return;
 
@@ -456,12 +440,16 @@ async function addTagToItem(publicId) {
     body: JSON.stringify({ public_id: publicId, tag: clean, gallery: currentGallery })
   });
 
-  const data = await res.json();
-  if (data.success) {
-    await loadMedia();
-  } else {
-    alert(data.error || "Could not add tag");
+  const text = await res.text();
+  if (!res.ok) {
+    console.error(text);
+    alert("Tag save failed");
+    return;
   }
+
+  const data = JSON.parse(text);
+  if (data.success) await loadMedia();
+  else alert(data.error || "Could not add tag");
 }
 
 function renderTags() {
@@ -515,14 +503,22 @@ async function uploadFiles() {
 
   try {
     const res = await fetch("/upload", { method: "POST", body: fd });
-    const data = await res.json();
-    if (data.success) {
+    const text = await res.text();
+    let data = {};
+    try { data = JSON.parse(text); } catch {}
+
+    if (res.ok && data.success) {
       await loadMedia();
+      if (data.errors && data.errors.length) {
+        alert(`Uploaded ${data.count || 0} files. Some files failed:\n${data.errors.join("\n")}`);
+      }
     } else {
+      console.error(text);
       alert(data.error || "Upload failed");
     }
-  } catch {
-    alert("Upload error");
+  } catch (err) {
+    console.error(err);
+    alert("Upload failed");
   } finally {
     btn.textContent = "Upload Photos & Videos";
     btn.disabled = false;
@@ -743,33 +739,3 @@ function setupFeedObserver() {
 
   feedVideos.forEach(video => feedObserver.observe(video));
 }
-
-async function refreshStatus() {
-  const res = await fetch("/api/status");
-  const data = await res.json();
-
-  isAdmin = data.isAdmin;
-  familyAccess = data.familyAccess;
-  currentGallery = data.currentView || (isAdmin ? "private" : "family");
-
-  gateScreen.style.display = familyAccess || isAdmin ? "none" : "flex";
-  mainHeader.style.display = familyAccess || isAdmin ? "flex" : "none";
-  sortButtons.style.display = familyAccess || isAdmin ? "flex" : "none";
-  adminBar.style.display = isAdmin ? "flex" : "none";
-
-  deleteAllBtn.style.display = isAdmin ? "inline-block" : "none";
-  privateGalleryBtn.style.display = isAdmin ? "inline-block" : "none";
-  chatToggleBtn.style.display = isAdmin && currentGallery === "private" ? "inline-block" : "none";
-
-  galleryTitle.textContent = currentGallery === "private" ? "Private Gallery" : "Family Gallery";
-  galleryBadge.textContent = currentGallery === "private" ? "Private" : "Family";
-
-  if (currentGallery === "private") {
-    chatSection.style.display = "none";
-    chatCloseBtn.style.display = "none";
-  }
-
-  if (!familyAccess && !isAdmin) gateScreen.style.display = "flex";
-}
-
-refreshStatus();
