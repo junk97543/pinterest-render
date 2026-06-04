@@ -121,12 +121,8 @@ header h1 { font-size: 20px; }
   color: #111;
 }
 
-.tag-clear-btn {
-  background: var(--theme);
-}
-.tag-clear-btn:hover {
-  background: var(--theme-hover);
-}
+.tag-clear-btn { background: var(--theme); }
+.tag-clear-btn:hover { background: var(--theme-hover); }
 
 #file-input { display: none; }
 
@@ -490,13 +486,8 @@ header h1 { font-size: 20px; }
   background: transparent;
 }
 
-.feed-video-shell.phone {
-  width: min(100%, 430px);
-}
-
-.feed-video-shell.desktop {
-  width: min(100%, 920px);
-}
+.feed-video-shell.phone { width: min(100%, 430px); }
+.feed-video-shell.desktop { width: min(100%, 920px); }
 
 .feed-video {
   width: 100%;

@@ -204,16 +204,16 @@ function render() {
 
     const actions = document.createElement("div");
     actions.className = "media-actions";
-    if (item.type === "image") {
-      const tagBtn = document.createElement("button");
-      tagBtn.className = "add-tag-btn";
-      tagBtn.textContent = "Add Tag";
-      tagBtn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        await addTagToItem(item.public_id);
-      });
-      actions.appendChild(tagBtn);
-    }
+
+    const tagBtn = document.createElement("button");
+    tagBtn.className = "add-tag-btn";
+    tagBtn.textContent = "Add Tag";
+    tagBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await addTagToItem(item.public_id);
+    });
+    actions.appendChild(tagBtn);
+
     div.appendChild(actions);
 
     const likeDiv = document.createElement("div");
@@ -248,15 +248,17 @@ function render() {
 }
 
 async function addTagToItem(publicId) {
-  const tag = prompt("Enter a tag for this image:");
+  const tag = prompt("Enter a tag for this item:");
   if (!tag) return;
-  const clean = tag.trim();
+  const clean = tag.trim().replace(/^#/, "").replace(/\s+/g, " ");
   if (!clean) return;
+
   const res = await fetch("/api/tag", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ public_id: publicId, tag: clean })
   });
+
   const data = await res.json();
   if (data.success) {
     await loadMedia();
