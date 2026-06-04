@@ -7,9 +7,7 @@ let feedObserver = null;
 let feedVideos = [];
 let feedMode = "phone";
 
-feedClose.addEventListener("click", () => {
-  window.close();
-});
+feedClose.addEventListener("click", () => window.close());
 
 feedPhoneBtn.addEventListener("click", async () => {
   setFeedMode("phone");
@@ -30,7 +28,7 @@ function setFeedMode(mode) {
 }
 
 async function buildFeed() {
-  const res = await fetch("/media?sort=newest");
+  const res = await fetch("/media?sort=newest&gallery=family");
   const all = await res.json();
   const videos = all.filter(item => item.type === "video");
   feedScroller.innerHTML = "";
@@ -83,15 +81,13 @@ async function buildFeed() {
       const res = await fetch("/api/like", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ public_id: item.public_id })
+        body: JSON.stringify({ public_id: item.public_id, gallery: "family" })
       });
       const data = await res.json();
       if (data.success) likeCount.textContent = data.likes;
     });
 
-    commentBtn.addEventListener("click", () => {
-      commentsBox.classList.toggle("active");
-    });
+    commentBtn.addEventListener("click", () => commentsBox.classList.toggle("active"));
 
     postBtn.addEventListener("click", () => {
       const text = commentInput.value.trim();
@@ -105,9 +101,7 @@ async function buildFeed() {
 
     shareBtn.addEventListener("click", async () => {
       if (navigator.share) {
-        try {
-          await navigator.share({ title: "Video", url: item.url });
-        } catch {}
+        try { await navigator.share({ title: "Video", url: item.url }); } catch {}
       } else if (navigator.clipboard) {
         await navigator.clipboard.writeText(item.url);
         alert("Video link copied!");
@@ -118,15 +112,8 @@ async function buildFeed() {
   });
 
   feedVideos = Array.from(document.querySelectorAll(".feed-video"));
-  feedVideos.forEach(v => {
-    v.pause();
-    v.currentTime = 0;
-  });
-
   if (feedVideos[0]) {
-    try {
-      await feedVideos[0].play();
-    } catch {}
+    try { await feedVideos[0].play(); } catch {}
   }
 }
 

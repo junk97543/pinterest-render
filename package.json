@@ -1,13 +1,18 @@
 {
-  "name": "pinterest-render",
+  "name": "family-private-gallery",
   "version": "1.0.0",
-  "description": "Gallery app with uploads, tags, likes, chat, and video feed",
+  "description": "Two-gallery Cloudinary app with family access and private admin gallery",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
+    "cloudinary": "^2.5.0",
+    "connect-mongo": "^5.1.0",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^17.2.1",
     "express": "^4.21.2",
+    "express-session": "^1.18.1",
     "multer": "^1.4.5-lts.1"
   }
 }

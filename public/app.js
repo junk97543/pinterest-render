@@ -1,7 +1,20 @@
+const gateScreen = document.getElementById("gate-screen");
+const familyCodeInput = document.getElementById("family-code-input");
+const familyCodeBtn = document.getElementById("family-code-btn");
+const gateMessage = document.getElementById("gate-message");
+
+const mainHeader = document.getElementById("main-header");
+const adminBar = document.getElementById("admin-bar");
+const sortButtons = document.getElementById("sort-buttons");
+
 const fileInput = document.getElementById("file-input");
 const gallery = document.getElementById("gallery");
 const deleteAllBtn = document.getElementById("delete-all-btn");
-const loginBtn = document.getElementById("login-btn");
+const adminLoginBtn = document.getElementById("admin-login-btn");
+const adminLogoutBtn = document.getElementById("admin-logout-btn");
+const familyGalleryBtn = document.getElementById("family-gallery-btn");
+const privateGalleryBtn = document.getElementById("private-gallery-btn");
+const logoutFamilyBtn = document.getElementById("logout-family-btn");
 const themeToggle = document.getElementById("theme-toggle");
 const lightbox = document.getElementById("lightbox");
 const lightboxClose = document.getElementById("lightbox-close");
@@ -18,8 +31,6 @@ const chatToggleBtn = document.getElementById("chat-toggle-btn");
 const chatCloseBtn = document.getElementById("chat-close-btn");
 const chatSection = document.getElementById("chat-section");
 const backToTopBtn = document.getElementById("back-to-top");
-const topLogo = document.getElementById("top-logo");
-const favicon = document.getElementById("favicon");
 const videoFeedBtn = document.getElementById("video-feed-btn");
 const feedModal = document.getElementById("feed-modal");
 const feedClose = document.getElementById("feed-close");
@@ -31,12 +42,16 @@ const tagPanel = document.getElementById("tag-panel");
 const tagList = document.getElementById("tag-list");
 const closeTagPanel = document.getElementById("close-tag-panel");
 const clearTagFilter = document.getElementById("clear-tag-filter");
+const galleryTitle = document.getElementById("gallery-title");
+const galleryBadge = document.getElementById("gallery-badge");
 
 let items = [];
 let zoom = 1, x = 0, y = 0, dragging = false, startX = 0, startY = 0;
 let isAdmin = false;
+let familyAccess = false;
 let currentSort = "random";
 let currentLayout = "masonry";
+let currentGallery = "family";
 let logoIndex = 0;
 let logoTimer = null;
 let feedObserver = null;
@@ -44,107 +59,285 @@ let feedVideos = [];
 let feedMode = "phone";
 let activeTagFilter = "";
 
-checkAdmin();
+initTheme();
+initGate();
+initHandlers();
+refreshStatus();
 
-(async () => {
-  await loadMedia();
-  loadChat();
-  setInterval(loadChat, 3000);
-})();
-
-async function checkAdmin() {
-  const res = await fetch("/api/admin");
-  const data = await res.json();
-  isAdmin = data.isAdmin;
-  updateAdminUI();
+function initTheme() {
+  const theme = localStorage.getItem("theme") || "light";
+  document.body.className = theme;
+  themeToggle.textContent = theme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
+  themeToggle.addEventListener("click", () => {
+    const newTheme = document.body.classList.contains("dark") ? "light" : "dark";
+    document.body.className = newTheme;
+    localStorage.setItem("theme", newTheme);
+    themeToggle.textContent = newTheme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
+  });
 }
 
-function updateAdminUI() {
-  deleteAllBtn.style.display = isAdmin ? "inline-block" : "none";
-  loginBtn.style.display = isAdmin ? "none" : "inline-block";
-  loginBtn.textContent = isAdmin ? "Logged in as Admin" : "Login (Admin)";
+function initGate() {
+  familyCodeBtn.addEventListener("click", unlockFamily);
+  familyCodeInput.addEventListener("keydown", e => {
+    if (e.key === "Enter") unlockFamily();
+  });
 }
 
-const theme = localStorage.getItem("theme") || "light";
-document.body.className = theme;
-updateThemeBtn(theme);
+function initHandlers() {
+  sortNewestBtn.addEventListener("click", async () => {
+    currentSort = "newest";
+    currentLayout = "grid";
+    setSortActive(sortNewestBtn);
+    await loadMedia();
+  });
 
-themeToggle.addEventListener("click", () => {
-  const newTheme = document.body.classList.contains("dark") ? "light" : "dark";
-  document.body.className = newTheme;
-  localStorage.setItem("theme", newTheme);
-  updateThemeBtn(newTheme);
-});
+  sortRandomBtn.addEventListener("click", async () => {
+    currentSort = "random";
+    currentLayout = "masonry";
+    setSortActive(sortRandomBtn);
+    await loadMedia();
+  });
 
-function updateThemeBtn(t) {
-  themeToggle.textContent = t === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
-}
+  sortPopularBtn.addEventListener("click", async () => {
+    currentSort = "popular";
+    currentLayout = "grid";
+    setSortActive(sortPopularBtn);
+    await loadMedia();
+  });
 
-loginBtn.addEventListener("click", async () => {
-  if (isAdmin) {
-    await fetch("/api/logout", { method: "POST" });
+  adminLoginBtn.addEventListener("click", async () => {
+    const password = prompt("Enter admin password:");
+    if (!password) return;
+    const res = await fetch("/api/admin-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password })
+    });
+    const data = await res.json();
+    if (data.success) {
+      isAdmin = true;
+      currentGallery = "private";
+      await refreshStatus();
+      await loadMedia();
+    } else {
+      alert("Wrong admin password");
+    }
+  });
+
+  adminLogoutBtn.addEventListener("click", async () => {
+    await fetch("/api/admin-logout", { method: "POST" });
     isAdmin = false;
-    updateAdminUI();
-    return;
-  }
+    currentGallery = "family";
+    await refreshStatus();
+    await loadMedia();
+  });
 
-  const password = prompt("Enter admin password:");
-  if (!password) return;
+  familyGalleryBtn.addEventListener("click", async () => {
+    if (!familyAccess && !isAdmin) return;
+    currentGallery = "family";
+    await fetch("/api/switch-gallery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gallery: "family" })
+    }).catch(() => {});
+    await refreshStatus();
+    await loadMedia();
+  });
 
-  const res = await fetch("/api/login", {
+  privateGalleryBtn.addEventListener("click", async () => {
+    if (!isAdmin) return;
+    currentGallery = "private";
+    await fetch("/api/switch-gallery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gallery: "private" })
+    });
+    await refreshStatus();
+    await loadMedia();
+  });
+
+  logoutFamilyBtn.addEventListener("click", async () => {
+    await fetch("/api/family-logout", { method: "POST" });
+    familyAccess = false;
+    currentGallery = isAdmin ? "private" : "family";
+    await refreshStatus();
+    await loadMedia();
+  });
+
+  tagsTabBtn.addEventListener("click", () => {
+    tagPanel.style.display = tagPanel.style.display === "none" ? "block" : "none";
+  });
+
+  closeTagPanel.addEventListener("click", () => {
+    tagPanel.style.display = "none";
+  });
+
+  clearTagFilter.addEventListener("click", () => {
+    activeTagFilter = "";
+    render();
+    renderTags();
+  });
+
+  chatToggleBtn.addEventListener("click", () => {
+    chatSection.style.display = "block";
+    chatToggleBtn.style.display = "none";
+    chatCloseBtn.style.display = "inline-block";
+  });
+
+  chatCloseBtn.addEventListener("click", () => {
+    chatSection.style.display = "none";
+    chatToggleBtn.style.display = "none";
+    chatCloseBtn.style.display = "none";
+  });
+
+  backToTopBtn.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+
+  deleteAllBtn.addEventListener("click", async () => {
+    if (!confirm(`Delete all items from ${currentGallery} gallery?`)) return;
+    const res = await fetch("/delete-all", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gallery: currentGallery })
+    });
+    const data = await res.json();
+    if (data.success) await loadMedia();
+    else alert(data.error || "Delete failed");
+  });
+
+  fileInput.addEventListener("change", uploadFiles);
+  videoFeedBtn.addEventListener("click", openFeed);
+  feedClose.addEventListener("click", closeFeed);
+  feedModal.addEventListener("click", e => { if (e.target === feedModal) closeFeed(); });
+  feedPhoneBtn.addEventListener("click", async () => {
+    setFeedMode("phone");
+    await buildFeed();
+    setupFeedObserver();
+  });
+  feedDesktopBtn.addEventListener("click", async () => {
+    setFeedMode("desktop");
+    await buildFeed();
+    setupFeedObserver();
+  });
+
+  sendChat.addEventListener("click", sendChatMsg);
+  chatMessage.addEventListener("keydown", e => {
+    if (e.key === "Enter") sendChatMsg();
+  });
+
+  lightboxClose.addEventListener("click", closeLightbox);
+  lightbox.addEventListener("click", e => {
+    if (e.target === lightbox || e.target.classList.contains("lightbox-content")) closeLightbox();
+  });
+
+  window.addEventListener("keydown", e => {
+    if (e.key === "Escape") {
+      closeLightbox();
+      closeFeed();
+    }
+  });
+
+  lightboxImg.addEventListener("mousedown", e => {
+    if (e.button !== 0) return;
+    dragging = true;
+    startX = e.clientX - x;
+    startY = e.clientY - y;
+  });
+
+  window.addEventListener("mousemove", e => {
+    if (!dragging) return;
+    x = e.clientX - startX;
+    y = e.clientY - startY;
+    updateTransform();
+  });
+
+  window.addEventListener("mouseup", () => { dragging = false; });
+
+  lightboxImg.addEventListener("wheel", e => {
+    e.preventDefault();
+    const delta = -e.deltaY;
+    const oldZoom = zoom;
+    if (delta > 0) zoom *= 1.1;
+    else zoom /= 1.1;
+    zoom = Math.max(1, Math.min(zoom, 5));
+    const rect = lightboxImg.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const ratio = zoom / oldZoom;
+    x -= (mx - rect.width / 2) * (ratio - 1);
+    y -= (my - rect.height / 2) * (ratio - 1);
+    updateTransform();
+  });
+
+  window.addEventListener("scroll", () => {
+    backToTopBtn.style.display = window.scrollY > 300 ? "inline-block" : "none";
+  });
+}
+
+function setSortActive(btn) {
+  [sortNewestBtn, sortRandomBtn, sortPopularBtn].forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+}
+
+async function unlockFamily() {
+  const code = familyCodeInput.value.trim();
+  if (!code) return;
+
+  const res = await fetch("/api/family-unlock", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password })
+    body: JSON.stringify({ code })
   });
 
   const data = await res.json();
   if (data.success) {
-    isAdmin = true;
-    updateAdminUI();
-    alert("Logged in as admin!");
+    familyAccess = true;
+    currentGallery = "family";
+    gateScreen.style.display = "none";
+    mainHeader.style.display = "flex";
+    sortButtons.style.display = "flex";
+    await refreshStatus();
+    await loadMedia();
   } else {
-    alert("Wrong password!");
+    gateMessage.textContent = "Wrong code. Try again.";
   }
-});
+}
 
-sortNewestBtn.addEventListener("click", async () => {
-  currentSort = "newest";
-  currentLayout = "grid";
-  sortNewestBtn.classList.add("active");
-  sortRandomBtn.classList.remove("active");
-  sortPopularBtn.classList.remove("active");
-  await loadMedia();
-});
+async function refreshStatus() {
+  const res = await fetch("/api/status");
+  const data = await res.json();
 
-sortRandomBtn.addEventListener("click", async () => {
-  currentSort = "random";
-  currentLayout = "masonry";
-  sortRandomBtn.classList.add("active");
-  sortNewestBtn.classList.remove("active");
-  sortPopularBtn.classList.remove("active");
-  await loadMedia();
-});
+  isAdmin = data.isAdmin;
+  familyAccess = data.familyAccess;
+  currentGallery = data.currentView || (isAdmin ? "private" : "family");
 
-sortPopularBtn.addEventListener("click", async () => {
-  currentSort = "popular";
-  currentLayout = "grid";
-  sortPopularBtn.classList.add("active");
-  sortNewestBtn.classList.remove("active");
-  sortRandomBtn.classList.remove("active");
-  await loadMedia();
-});
+  gateScreen.style.display = familyAccess || isAdmin ? "none" : "flex";
+  mainHeader.style.display = familyAccess || isAdmin ? "flex" : "none";
+  sortButtons.style.display = familyAccess || isAdmin ? "flex" : "none";
+  adminBar.style.display = isAdmin ? "flex" : "none";
 
-function shuffleArray(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
+  deleteAllBtn.style.display = isAdmin ? "inline-block" : "none";
+  privateGalleryBtn.style.display = isAdmin ? "inline-block" : "none";
+  chatToggleBtn.style.display = isAdmin && currentGallery === "private" ? "inline-block" : "none";
+  chatSection.style.display = "none";
+  chatCloseBtn.style.display = "none";
+
+  galleryTitle.textContent = currentGallery === "private" ? "Private Gallery" : "Family Gallery";
+  galleryBadge.textContent = currentGallery === "private" ? "Private" : "Family";
+
+  if (!familyAccess && !isAdmin) {
+    gateScreen.style.display = "flex";
   }
-  return a;
 }
 
 async function loadMedia() {
-  const res = await fetch(`/media?sort=${currentSort}`);
+  if (!familyAccess && !isAdmin) return;
+
+  const res = await fetch(`/media?sort=${currentSort}&gallery=${currentGallery}`);
+  if (!res.ok) {
+    const text = await res.text();
+    console.error(text);
+    return;
+  }
   items = await res.json();
   gallery.className = currentLayout === "grid" ? "grid-gallery" : "masonry";
   render();
@@ -158,12 +351,21 @@ function getFilteredItems() {
   return base.filter(item => Array.isArray(item.tags) && item.tags.some(t => t.toLowerCase() === activeTagFilter.toLowerCase()));
 }
 
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 function render() {
   gallery.innerHTML = "";
   const displayItems = getFilteredItems();
 
   if (!displayItems.length) {
-    gallery.innerHTML = "<p>No matching images or videos.</p>";
+    gallery.innerHTML = "<p style='padding:20px;'>No matching images or videos.</p>";
     return;
   }
 
@@ -194,9 +396,11 @@ function render() {
       const chip = document.createElement("button");
       chip.className = "media-tag";
       chip.textContent = `#${tag}`;
-      chip.addEventListener("click", (e) => {
+      chip.addEventListener("click", e => {
         e.stopPropagation();
-        setActiveTagFilter(tag);
+        activeTagFilter = tag;
+        render();
+        renderTags();
       });
       tagsWrap.appendChild(chip);
     });
@@ -208,12 +412,11 @@ function render() {
     const tagBtn = document.createElement("button");
     tagBtn.className = "add-tag-btn";
     tagBtn.textContent = "Add Tag";
-    tagBtn.addEventListener("click", async (e) => {
+    tagBtn.addEventListener("click", async e => {
       e.stopPropagation();
       await addTagToItem(item.public_id);
     });
     actions.appendChild(tagBtn);
-
     div.appendChild(actions);
 
     const likeDiv = document.createElement("div");
@@ -225,24 +428,18 @@ function render() {
     `;
     div.appendChild(likeDiv);
 
-    const likeBtn = likeDiv.querySelector(".like-btn");
-    likeBtn.addEventListener("click", async (e) => {
+    likeDiv.querySelector(".like-btn").addEventListener("click", async e => {
       e.stopPropagation();
-      const countSpan = likeBtn.querySelector(".like-count");
       const res = await fetch("/api/like", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ public_id: item.public_id })
+        body: JSON.stringify({ public_id: item.public_id, gallery: currentGallery })
       });
       const data = await res.json();
-      if (data.success) countSpan.textContent = data.likes;
+      if (data.success) e.currentTarget.querySelector(".like-count").textContent = data.likes;
     });
 
-    div.addEventListener("click", () => {
-      const index = Number(div.dataset.index);
-      openLightbox(index);
-    });
-
+    div.addEventListener("click", () => openLightbox(originalIndex));
     gallery.appendChild(div);
   });
 }
@@ -250,37 +447,21 @@ function render() {
 async function addTagToItem(publicId) {
   const tag = prompt("Enter a tag for this item:");
   if (!tag) return;
-
   const clean = tag.trim().replace(/^#/, "").replace(/\s+/g, " ");
   if (!clean) return;
 
   const res = await fetch("/api/tag", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ public_id: publicId, tag: clean })
+    body: JSON.stringify({ public_id: publicId, tag: clean, gallery: currentGallery })
   });
-
-  if (!res.ok) {
-    const text = await res.text();
-    console.error("Tag API failed:", text);
-    alert("Tag save failed");
-    return;
-  }
 
   const data = await res.json();
   if (data.success) {
     await loadMedia();
-    renderTags();
   } else {
     alert(data.error || "Could not add tag");
   }
-}
-
-function setActiveTagFilter(tag) {
-  activeTagFilter = tag;
-  render();
-  renderTags();
-  tagPanel.style.display = "block";
 }
 
 function renderTags() {
@@ -305,50 +486,104 @@ function renderTags() {
   });
 }
 
-tagsTabBtn.addEventListener("click", () => {
-  tagPanel.style.display = tagPanel.style.display === "none" ? "block" : "none";
-});
+async function uploadFiles() {
+  const files = Array.from(fileInput.files || []);
+  if (!files.length) return;
 
-closeTagPanel.addEventListener("click", () => {
-  tagPanel.style.display = "none";
-});
+  if (files.length > 1000) {
+    alert("Maximum 1000 files per upload.");
+    return;
+  }
 
-clearTagFilter.addEventListener("click", () => {
-  activeTagFilter = "";
-  render();
-  renderTags();
-});
+  if (currentGallery === "private" && !isAdmin) {
+    alert("Admin only for private gallery.");
+    return;
+  }
 
-chatToggleBtn.addEventListener("click", () => {
-  chatSection.style.display = "block";
-  chatToggleBtn.style.display = "none";
-  chatCloseBtn.style.display = "inline-block";
-  setTimeout(() => {
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-  }, 100);
-});
+  if (currentGallery === "family" && !familyAccess && !isAdmin) {
+    alert("Family access required.");
+    return;
+  }
 
-chatCloseBtn.addEventListener("click", () => {
-  chatSection.style.display = "none";
-  chatToggleBtn.style.display = "inline-block";
-  chatCloseBtn.style.display = "none";
-});
+  const fd = new FormData();
+  files.forEach(f => fd.append("files", f));
+  fd.append("gallery", currentGallery);
 
-backToTopBtn.addEventListener("click", () => {
-  window.scrollTo({ top: 0, behavior: "smooth" });
-});
+  const btn = document.querySelector(".upload-btn");
+  btn.textContent = "Uploading...";
+  btn.disabled = true;
 
-window.addEventListener("scroll", () => {
-  backToTopBtn.style.display = window.scrollY > 300 ? "inline-block" : "none";
-});
-
-async function loadChat() {
-  const res = await fetch("/api/chat");
-  const messages = await res.json();
-  renderChat(messages);
+  try {
+    const res = await fetch("/upload", { method: "POST", body: fd });
+    const data = await res.json();
+    if (data.success) {
+      await loadMedia();
+    } else {
+      alert(data.error || "Upload failed");
+    }
+  } catch {
+    alert("Upload error");
+  } finally {
+    btn.textContent = "Upload Photos & Videos";
+    btn.disabled = false;
+    fileInput.value = "";
+  }
 }
 
-function renderChat(messages) {
+function openLightbox(index) {
+  const item = items[index];
+  if (!item) return;
+  lightbox.classList.add("active");
+  zoom = 1;
+  x = 0;
+  y = 0;
+  updateTransform();
+
+  if (item.type === "image") {
+    lightboxImg.src = item.url;
+    lightboxImg.style.display = "block";
+    lightboxVideo.style.display = "none";
+    lightboxVideo.pause();
+  } else {
+    lightboxVideo.src = item.url;
+    lightboxVideo.style.display = "block";
+    lightboxImg.style.display = "none";
+    lightboxImg.src = "";
+    lightboxVideo.play().catch(() => {});
+  }
+}
+
+function closeLightbox() {
+  lightbox.classList.remove("active");
+  lightboxImg.src = "";
+  lightboxVideo.src = "";
+  lightboxVideo.pause();
+}
+
+function updateTransform() {
+  lightboxImg.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
+}
+
+async function sendChatMsg() {
+  if (currentGallery !== "private" || !isAdmin) return;
+  const name = chatName.value.trim();
+  const message = chatMessage.value.trim();
+  if (!name || !message) return;
+
+  await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, message })
+  });
+
+  chatMessage.value = "";
+  loadChat();
+}
+
+async function loadChat() {
+  if (currentGallery !== "private" || !isAdmin) return;
+  const res = await fetch("/api/chat");
+  const messages = await res.json();
   chatMessages.innerHTML = "";
   messages.forEach(msg => {
     const div = document.createElement("div");
@@ -360,114 +595,17 @@ function renderChat(messages) {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-sendChat.addEventListener("click", async () => {
-  const name = chatName.value.trim();
-  const message = chatMessage.value.trim();
-  if (!name || !message) {
-    alert("Please enter your name and a message");
-    return;
-  }
-
-  await fetch("/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, message })
-  });
-
-  chatMessage.value = "";
-  loadChat();
-});
-
-chatMessage.addEventListener("keypress", (e) => {
-  if (e.key === "Enter") sendChat.click();
-});
-
 function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;
 }
 
-fileInput.addEventListener("change", async (e) => {
-  const files = Array.from(e.target.files || []);
-  if (!files.length) return;
-
-  const fd = new FormData();
-  files.forEach(f => fd.append("files", f));
-
-  const btn = document.querySelector(".upload-btn");
-  btn.textContent = "Uploading...";
-  btn.disabled = true;
-
-  try {
-    const res = await fetch("/upload", { method: "POST", body: fd });
-    const data = await res.json();
-    if (data.success) {
-      await loadMedia();
-      isAdmin = data.isAdmin || isAdmin;
-      updateAdminUI();
-    } else {
-      alert(data.error || "Upload failed");
-    }
-  } catch {
-    alert("Upload error");
-  } finally {
-    btn.textContent = "Upload Photos & Videos";
-    btn.disabled = false;
-    fileInput.value = "";
-  }
-});
-
-deleteAllBtn.addEventListener("click", async () => {
-  if (!isAdmin) {
-    alert("Admin only!");
-    return;
-  }
-  if (!confirm("Delete ALL tagged photos and videos from the server? This cannot be undone!")) return;
-
-  const res = await fetch("/delete-all", { method: "POST" });
-  const data = await res.json();
-
-  if (data.success) {
-    alert("All tagged images deleted.");
-    await loadMedia();
-    closeLightbox();
-  } else {
-    alert("Delete failed: " + (data.error || "Unknown error"));
-  }
-});
-
-videoFeedBtn.addEventListener("click", async () => {
+async function openFeed() {
   feedModal.classList.add("active");
-  setFeedMode(feedMode);
-  await buildFeed();
-  setupFeedObserver();
-});
-
-feedClose.addEventListener("click", () => {
-  closeFeed();
-});
-
-feedModal.addEventListener("click", (e) => {
-  if (e.target === feedModal) closeFeed();
-});
-
-feedPhoneBtn.addEventListener("click", async () => {
   setFeedMode("phone");
   await buildFeed();
   setupFeedObserver();
-});
-
-feedDesktopBtn.addEventListener("click", async () => {
-  setFeedMode("desktop");
-  await buildFeed();
-  setupFeedObserver();
-});
-
-function setFeedMode(mode) {
-  feedMode = mode;
-  feedPhoneBtn.classList.toggle("active", mode === "phone");
-  feedDesktopBtn.classList.toggle("active", mode === "desktop");
 }
 
 function closeFeed() {
@@ -482,8 +620,18 @@ function closeFeed() {
   feedModal.classList.remove("active");
 }
 
+function setFeedMode(mode) {
+  feedMode = mode;
+  feedPhoneBtn.classList.toggle("active", mode === "phone");
+  feedDesktopBtn.classList.toggle("active", mode === "desktop");
+}
+
 async function buildFeed() {
-  const res = await fetch("/media?sort=newest");
+  const res = await fetch(`/media?sort=newest&gallery=${currentGallery}`);
+  if (!res.ok) {
+    feedScroller.innerHTML = "<p style='text-align:center;color:#fff;padding:30px;'>No access to this feed.</p>";
+    return;
+  }
   const all = await res.json();
   const videos = all.filter(item => item.type === "video");
   feedScroller.innerHTML = "";
@@ -536,15 +684,13 @@ async function buildFeed() {
       const res = await fetch("/api/like", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ public_id: item.public_id })
+        body: JSON.stringify({ public_id: item.public_id, gallery: currentGallery })
       });
       const data = await res.json();
       if (data.success) likeCount.textContent = data.likes;
     });
 
-    commentBtn.addEventListener("click", () => {
-      commentsBox.classList.toggle("active");
-    });
+    commentBtn.addEventListener("click", () => commentsBox.classList.toggle("active"));
 
     postBtn.addEventListener("click", () => {
       const text = commentInput.value.trim();
@@ -558,9 +704,7 @@ async function buildFeed() {
 
     shareBtn.addEventListener("click", async () => {
       if (navigator.share) {
-        try {
-          await navigator.share({ title: "Video", url: item.url });
-        } catch {}
+        try { await navigator.share({ title: "Video", url: item.url }); } catch {}
       } else if (navigator.clipboard) {
         await navigator.clipboard.writeText(item.url);
         alert("Video link copied!");
@@ -571,15 +715,8 @@ async function buildFeed() {
   });
 
   feedVideos = Array.from(document.querySelectorAll(".feed-video"));
-  feedVideos.forEach(v => {
-    v.pause();
-    v.currentTime = 0;
-  });
-
   if (feedVideos[0]) {
-    try {
-      await feedVideos[0].play();
-    } catch {}
+    try { await feedVideos[0].play(); } catch {}
   }
 }
 
@@ -607,105 +744,32 @@ function setupFeedObserver() {
   feedVideos.forEach(video => feedObserver.observe(video));
 }
 
-function openLightbox(index) {
-  const item = items[index];
-  if (!item) return;
-  lightbox.classList.add("active");
-  zoom = 1;
-  x = 0;
-  y = 0;
-  updateTransform();
+async function refreshStatus() {
+  const res = await fetch("/api/status");
+  const data = await res.json();
 
-  if (item.type === "image") {
-    lightboxImg.src = item.url;
-    lightboxImg.style.display = "block";
-    lightboxVideo.style.display = "none";
-    lightboxVideo.pause();
-    lightboxVideo.removeAttribute("src");
-  } else {
-    lightboxVideo.src = item.url;
-    lightboxVideo.style.display = "block";
-    lightboxImg.style.display = "none";
-    lightboxImg.src = "";
-    lightboxVideo.play().catch(() => {});
+  isAdmin = data.isAdmin;
+  familyAccess = data.familyAccess;
+  currentGallery = data.currentView || (isAdmin ? "private" : "family");
+
+  gateScreen.style.display = familyAccess || isAdmin ? "none" : "flex";
+  mainHeader.style.display = familyAccess || isAdmin ? "flex" : "none";
+  sortButtons.style.display = familyAccess || isAdmin ? "flex" : "none";
+  adminBar.style.display = isAdmin ? "flex" : "none";
+
+  deleteAllBtn.style.display = isAdmin ? "inline-block" : "none";
+  privateGalleryBtn.style.display = isAdmin ? "inline-block" : "none";
+  chatToggleBtn.style.display = isAdmin && currentGallery === "private" ? "inline-block" : "none";
+
+  galleryTitle.textContent = currentGallery === "private" ? "Private Gallery" : "Family Gallery";
+  galleryBadge.textContent = currentGallery === "private" ? "Private" : "Family";
+
+  if (currentGallery === "private") {
+    chatSection.style.display = "none";
+    chatCloseBtn.style.display = "none";
   }
+
+  if (!familyAccess && !isAdmin) gateScreen.style.display = "flex";
 }
 
-function closeLightbox() {
-  lightbox.classList.remove("active");
-  lightboxImg.src = "";
-  lightboxVideo.src = "";
-  lightboxVideo.pause();
-}
-
-lightboxClose.addEventListener("click", closeLightbox);
-lightbox.addEventListener("click", e => {
-  if (e.target === lightbox || e.target.classList.contains("lightbox-content")) closeLightbox();
-});
-
-window.addEventListener("keydown", e => {
-  if (e.key === "Escape") {
-    closeLightbox();
-    closeFeed();
-  }
-});
-
-lightboxImg.addEventListener("mousedown", e => {
-  if (e.button !== 0) return;
-  dragging = true;
-  startX = e.clientX - x;
-  startY = e.clientY - y;
-  lightboxImg.style.cursor = "grabbing";
-});
-
-window.addEventListener("mousemove", e => {
-  if (!dragging) return;
-  e.preventDefault();
-  x = e.clientX - startX;
-  y = e.clientY - startY;
-  updateTransform();
-});
-
-window.addEventListener("mouseup", () => {
-  dragging = false;
-  lightboxImg.style.cursor = "zoom-in";
-});
-
-lightboxImg.addEventListener("wheel", e => {
-  e.preventDefault();
-  const delta = -e.deltaY;
-  const oldZoom = zoom;
-  if (delta > 0) zoom *= 1.1;
-  else zoom /= 1.1;
-  zoom = Math.max(1, Math.min(zoom, 5));
-  const rect = lightboxImg.getBoundingClientRect();
-  const mx = e.clientX - rect.left;
-  const my = e.clientY - rect.top;
-  const ratio = zoom / oldZoom;
-  x -= (mx - rect.width / 2) * (ratio - 1);
-  y -= (my - rect.height / 2) * (ratio - 1);
-  updateTransform();
-});
-
-function updateTransform() {
-  lightboxImg.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
-}
-
-function updateLogoRotation() {
-  const onlyImages = items.filter(item => item.type === "image");
-  if (onlyImages.length) {
-    logoIndex = (logoIndex + 1) % onlyImages.length;
-    const url = onlyImages[logoIndex].url;
-    topLogo.src = url;
-    favicon.href = url;
-  }
-  if (logoTimer) clearInterval(logoTimer);
-  if (onlyImages.length) {
-    logoTimer = setInterval(() => {
-      logoIndex = (logoIndex + 1) % onlyImages.length;
-      const url = onlyImages[logoIndex].url;
-      topLogo.src = url;
-      favicon.href = url;
-    }, 5000);
-  }
-}
+refreshStatus();

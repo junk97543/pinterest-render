@@ -3,29 +3,46 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>junk97543's gallery</title>
-  <link id="favicon" rel="icon" type="image/png" href="" />
+  <title>Family Gallery</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body class="light">
-  <header>
+  <div id="gate-screen" class="gate-screen">
+    <div class="gate-card">
+      <h1>Family Gallery</h1>
+      <p id="gate-message">Enter the family access code.</p>
+      <input id="family-code-input" type="password" placeholder="Code" />
+      <button id="family-code-btn">Enter</button>
+    </div>
+  </div>
+
+  <header id="main-header" style="display:none;">
     <div class="brand">
-      <img id="top-logo" class="top-logo" src="" alt="logo" />
-      <h1>junk97543's gallery</h1>
+      <h1 id="gallery-title">Family Gallery</h1>
+      <span id="gallery-badge" class="gallery-badge">Family</span>
     </div>
 
     <label for="file-input" class="upload-btn">Upload Photos & Videos</label>
     <input id="file-input" type="file" accept="image/*,video/*" multiple />
-    <button id="login-btn" class="login-btn">Login (Admin)</button>
-    <button id="chat-toggle-btn" class="chat-toggle-btn">💬 Chat</button>
+
+    <button id="family-gallery-btn" class="feed-btn">Family Mode</button>
+    <button id="private-gallery-btn" class="feed-btn" style="display:none;">Private Mode</button>
+    <button id="admin-login-btn" class="login-btn">Admin Login</button>
+    <button id="chat-toggle-btn" class="chat-toggle-btn" style="display:none;">💬 Chat</button>
     <button id="theme-toggle" class="theme-toggle">🌙 Dark Mode</button>
     <button id="video-feed-btn" class="feed-btn">Video Feed</button>
     <button id="tags-tab-btn" class="feed-btn">Tags</button>
     <button id="delete-all-btn" class="delete-btn" style="display:none;">Delete All</button>
+    <button id="logout-family-btn" class="login-btn">Family Logout</button>
     <button id="back-to-top" class="back-to-top-btn" style="display:none;">↑ Top</button>
   </header>
 
-  <div class="sort-buttons">
+  <div id="admin-bar" class="admin-bar" style="display:none;">
+    <span>Admin is logged in</span>
+    <button id="admin-logout-btn" class="login-btn">Admin Logout</button>
+  </div>
+
+  <div class="sort-buttons" id="sort-buttons" style="display:none;">
     <button id="sort-newest" class="sort-btn">🕐 Newest</button>
     <button id="sort-random" class="sort-btn active">🔀 Random</button>
     <button id="sort-popular" class="sort-btn">❤️ Most Liked</button>
