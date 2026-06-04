@@ -10,21 +10,22 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, "data");
 const MEDIA_FILE = path.join(DATA_DIR, "media.json");
 const CHAT_FILE = path.join(DATA_DIR, "chat.json");
+const UPLOAD_DIR = path.join(__dirname, "uploads");
+const PUBLIC_DIR = path.join(__dirname, "public");
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-if (!fs.existsSync(MEDIA_FILE)) fs.writeFileSync(MEDIA_FILE, JSON.stringify([] , null, 2));
-if (!fs.existsSync(CHAT_FILE)) fs.writeFileSync(CHAT_FILE, JSON.stringify([] , null, 2));
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+if (!fs.existsSync(MEDIA_FILE)) fs.writeFileSync(MEDIA_FILE, JSON.stringify([], null, 2));
+if (!fs.existsSync(CHAT_FILE)) fs.writeFileSync(CHAT_FILE, JSON.stringify([], null, 2));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(PUBLIC_DIR));
+app.use("/uploads", express.static(UPLOAD_DIR));
 
-const upload = multer({ dest: path.join(__dirname, "uploads") });
-if (!fs.existsSync(path.join(__dirname, "uploads"))) {
-  fs.mkdirSync(path.join(__dirname, "uploads"), { recursive: true });
-}
-
+const upload = multer({ dest: UPLOAD_DIR });
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin";
+let adminSession = false;
 
 function readJSON(file) {
   try {
@@ -53,8 +54,6 @@ function getChat() {
 function saveChat(chat) {
   writeJSON(CHAT_FILE, chat);
 }
-
-let adminSession = false;
 
 app.get("/api/admin", (req, res) => {
   res.json({ isAdmin: adminSession });
@@ -97,10 +96,13 @@ app.post("/upload", upload.array("files"), (req, res) => {
       const isVideo = [".mp4", ".mov", ".webm", ".m4v", ".avi"].includes(ext);
       const isImage = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".avif"].includes(ext);
 
-      if (!isVideo && !isImage) return;
+      if (!isVideo && !isImage) {
+        fs.unlinkSync(file.path);
+        return;
+      }
 
       const newName = `${crypto.randomUUID()}${ext}`;
-      const newPath = path.join(__dirname, "uploads", newName);
+      const newPath = path.join(UPLOAD_DIR, newName);
       fs.renameSync(file.path, newPath);
 
       media.push({
@@ -120,8 +122,6 @@ app.post("/upload", upload.array("files"), (req, res) => {
     res.status(500).json({ success: false, error: "Upload failed" });
   }
 });
-
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.post("/api/like", (req, res) => {
   try {
@@ -145,7 +145,6 @@ app.post("/api/like", (req, res) => {
 app.post("/api/tag", (req, res) => {
   try {
     const { public_id, tag } = req.body || {};
-
     if (!public_id || !tag) {
       return res.status(400).json({ success: false, error: "Missing public_id or tag" });
     }
@@ -204,7 +203,7 @@ app.post("/delete-all", (req, res) => {
 
     const media = getMedia();
     media.forEach(item => {
-      const filePath = path.join(__dirname, "uploads", path.basename(item.url));
+      const filePath = path.join(UPLOAD_DIR, path.basename(item.url));
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     });
 
@@ -217,7 +216,7 @@ app.post("/delete-all", (req, res) => {
 });
 
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 
 app.listen(PORT, () => {

@@ -35,14 +35,14 @@ const clearTagFilter = document.getElementById("clear-tag-filter");
 let items = [];
 let zoom = 1, x = 0, y = 0, dragging = false, startX = 0, startY = 0;
 let isAdmin = false;
-let currentSort = 'random';
-let currentLayout = 'masonry';
+let currentSort = "random";
+let currentLayout = "masonry";
 let logoIndex = 0;
 let logoTimer = null;
 let feedObserver = null;
 let feedVideos = [];
-let feedMode = 'phone';
-let activeTagFilter = '';
+let feedMode = "phone";
+let activeTagFilter = "";
 
 checkAdmin();
 
@@ -108,29 +108,29 @@ loginBtn.addEventListener("click", async () => {
 });
 
 sortNewestBtn.addEventListener("click", async () => {
-  currentSort = 'newest';
-  currentLayout = 'grid';
-  sortNewestBtn.classList.add('active');
-  sortRandomBtn.classList.remove('active');
-  sortPopularBtn.classList.remove('active');
+  currentSort = "newest";
+  currentLayout = "grid";
+  sortNewestBtn.classList.add("active");
+  sortRandomBtn.classList.remove("active");
+  sortPopularBtn.classList.remove("active");
   await loadMedia();
 });
 
 sortRandomBtn.addEventListener("click", async () => {
-  currentSort = 'random';
-  currentLayout = 'masonry';
-  sortRandomBtn.classList.add('active');
-  sortNewestBtn.classList.remove('active');
-  sortPopularBtn.classList.remove('active');
+  currentSort = "random";
+  currentLayout = "masonry";
+  sortRandomBtn.classList.add("active");
+  sortNewestBtn.classList.remove("active");
+  sortPopularBtn.classList.remove("active");
   await loadMedia();
 });
 
 sortPopularBtn.addEventListener("click", async () => {
-  currentSort = 'popular';
-  currentLayout = 'grid';
-  sortPopularBtn.classList.add('active');
-  sortNewestBtn.classList.remove('active');
-  sortRandomBtn.classList.remove('active');
+  currentSort = "popular";
+  currentLayout = "grid";
+  sortPopularBtn.classList.add("active");
+  sortNewestBtn.classList.remove("active");
+  sortRandomBtn.classList.remove("active");
   await loadMedia();
 });
 
@@ -146,14 +146,14 @@ function shuffleArray(arr) {
 async function loadMedia() {
   const res = await fetch(`/media?sort=${currentSort}`);
   items = await res.json();
-  gallery.className = currentLayout === 'grid' ? 'grid-gallery' : 'masonry';
+  gallery.className = currentLayout === "grid" ? "grid-gallery" : "masonry";
   render();
   renderTags();
   updateLogoRotation();
 }
 
 function getFilteredItems() {
-  const base = currentSort === 'random' ? shuffleArray(items) : [...items];
+  const base = currentSort === "random" ? shuffleArray(items) : [...items];
   if (!activeTagFilter) return base;
   return base.filter(item => Array.isArray(item.tags) && item.tags.some(t => t.toLowerCase() === activeTagFilter.toLowerCase()));
 }
@@ -250,6 +250,7 @@ function render() {
 async function addTagToItem(publicId) {
   const tag = prompt("Enter a tag for this item:");
   if (!tag) return;
+
   const clean = tag.trim().replace(/^#/, "").replace(/\s+/g, " ");
   if (!clean) return;
 
@@ -258,6 +259,13 @@ async function addTagToItem(publicId) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ public_id: publicId, tag: clean })
   });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("Tag API failed:", text);
+    alert("Tag save failed");
+    return;
+  }
 
   const data = await res.json();
   if (data.success) {
@@ -415,7 +423,7 @@ deleteAllBtn.addEventListener("click", async () => {
     alert("Admin only!");
     return;
   }
-  if (!confirm("Delete ALL tagged photos and videos from Cloudinary? This cannot be undone!")) return;
+  if (!confirm("Delete ALL tagged photos and videos from the server? This cannot be undone!")) return;
 
   const res = await fetch("/delete-all", { method: "POST" });
   const data = await res.json();
@@ -445,13 +453,13 @@ feedModal.addEventListener("click", (e) => {
 });
 
 feedPhoneBtn.addEventListener("click", async () => {
-  setFeedMode('phone');
+  setFeedMode("phone");
   await buildFeed();
   setupFeedObserver();
 });
 
 feedDesktopBtn.addEventListener("click", async () => {
-  setFeedMode('desktop');
+  setFeedMode("desktop");
   await buildFeed();
   setupFeedObserver();
 });
