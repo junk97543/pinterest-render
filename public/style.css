@@ -111,9 +111,27 @@ header {
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-width: 250px;
+  gap: 12px;
+  min-width: 260px;
   flex: 1;
+}
+
+.logo-rotator {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex: 0 0 auto;
+  background: var(--tag-bg);
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+.logo-rotator img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: opacity 0.35s ease;
 }
 
 .gallery-badge {
@@ -529,8 +547,8 @@ header {
   background: transparent;
 }
 
-.feed-video-shell.phone { width: min(100%, 430px); }
-.feed-video-shell.desktop { width: min(100%, 920px); }
+.feed-video-shell.phone { width: 100%; max-width: none; border-radius: 0; box-shadow: none; }
+.feed-video-shell.computer { width: min(100%, 920px); }
 
 .feed-video {
   width: 100%;
@@ -538,7 +556,12 @@ header {
   display: block;
   object-fit: contain;
   background: transparent;
-  border-radius: 24px;
+}
+
+.feed-video-shell.phone .feed-video {
+  width: 100vw;
+  height: calc(100vh - 62px);
+  object-fit: cover;
 }
 
 .feed-overlay {
@@ -551,11 +574,47 @@ header {
   color: #fff;
 }
 
+.feed-video-shell.phone .feed-overlay {
+  padding: 18px 18px 22px 18px;
+  min-height: 38%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.feed-caption {
+  font-size: 15px;
+  line-height: 1.35;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+  pointer-events: auto;
+}
+
+.feed-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  pointer-events: auto;
+}
+
+.feed-tag {
+  border: none;
+  border-radius: 999px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 12px;
+  background: rgba(255,255,255,0.16);
+  color: #fff;
+}
+
 .feed-actions {
   display: flex;
   gap: 10px;
   margin-top: 12px;
   flex-wrap: wrap;
+  pointer-events: auto;
 }
 
 .feed-actions button {
@@ -569,6 +628,32 @@ header {
 .feed-like { background: #ff4d6d; color: #fff; }
 .feed-comment { background: rgba(255,255,255,0.92); color: #111; }
 .feed-share { background: rgba(255,255,255,0.92); color: #111; }
+
+.feed-video-shell.phone .feed-actions {
+  position: absolute;
+  right: 12px;
+  bottom: 120px;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-top: 0;
+}
+
+.feed-video-shell.phone .feed-actions button {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 12px;
+}
+
+.feed-video-shell.phone .feed-like,
+.feed-video-shell.phone .feed-comment,
+.feed-video-shell.phone .feed-share {
+  background: rgba(255,255,255,0.18);
+  color: #fff;
+  backdrop-filter: blur(12px);
+}
 
 .feed-comments {
   display: none;

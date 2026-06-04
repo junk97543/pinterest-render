@@ -35,8 +35,8 @@ const videoFeedBtn = document.getElementById("video-feed-btn");
 const feedModal = document.getElementById("feed-modal");
 const feedClose = document.getElementById("feed-close");
 const feedScroller = document.getElementById("feed-scroller");
+const feedComputerBtn = document.getElementById("feed-computer-btn");
 const feedPhoneBtn = document.getElementById("feed-phone-btn");
-const feedDesktopBtn = document.getElementById("feed-desktop-btn");
 const tagsTabBtn = document.getElementById("tags-tab-btn");
 const tagPanel = document.getElementById("tag-panel");
 const tagList = document.getElementById("tag-list");
@@ -44,6 +44,7 @@ const closeTagPanel = document.getElementById("close-tag-panel");
 const clearTagFilter = document.getElementById("clear-tag-filter");
 const galleryTitle = document.getElementById("gallery-title");
 const galleryBadge = document.getElementById("gallery-badge");
+const mainRotatingLogo = document.getElementById("main-rotating-logo");
 
 let items = [];
 let zoom = 1, x = 0, y = 0, dragging = false, startX = 0, startY = 0;
@@ -55,7 +56,11 @@ let currentGallery = "family";
 let activeTagFilter = "";
 let feedObserver = null;
 let feedVideos = [];
-let feedMode = "phone";
+let feedMode = "computer";
+let galleryLogoTimer = null;
+let galleryLogoIndex = 0;
+let mainLogoTimer = null;
+let mainLogoIndex = 0;
 
 initTheme();
 initHandlers();
@@ -204,14 +209,14 @@ function initHandlers() {
   feedClose.addEventListener("click", closeFeed);
   feedModal.addEventListener("click", e => { if (e.target === feedModal) closeFeed(); });
 
-  feedPhoneBtn.addEventListener("click", async () => {
-    setFeedMode("phone");
+  feedComputerBtn.addEventListener("click", async () => {
+    setFeedMode("computer");
     await buildFeed();
     setupFeedObserver();
   });
 
-  feedDesktopBtn.addEventListener("click", async () => {
-    setFeedMode("desktop");
+  feedPhoneBtn.addEventListener("click", async () => {
+    setFeedMode("phone");
     await buildFeed();
     setupFeedObserver();
   });
@@ -325,6 +330,69 @@ async function refreshStatus() {
   if (!familyAccess && !isAdmin) gateScreen.style.display = "flex";
 }
 
+function getLogoItems() {
+  return items.filter(item => item.type === "image");
+}
+
+function startGalleryLogoRotation() {
+  const logos = getLogoItems();
+  if (galleryLogoTimer) clearInterval(galleryLogoTimer);
+
+  if (!logos.length) {
+    const fallback = currentGallery === "private" ? "/private-placeholder.png" : "/family-placeholder.png";
+    if (document.getElementById("gallery-logo-img")) document.getElementById("gallery-logo-img").src = fallback;
+    return;
+  }
+
+  const img = document.getElementById("gallery-logo-img");
+  if (!img) return;
+
+  const update = () => {
+    galleryLogoIndex = galleryLogoIndex % logos.length;
+    img.style.opacity = "0";
+    setTimeout(() => {
+      img.src = logos[galleryLogoIndex].url;
+      img.style.opacity = "1";
+    }, 200);
+    galleryLogoIndex = (galleryLogoIndex + 1) % logos.length;
+  };
+
+  update();
+  galleryLogoTimer = setInterval(update, 3500);
+}
+
+function startMainLogoRotation() {
+  if (mainLogoTimer) clearInterval(mainLogoTimer);
+  const img = mainRotatingLogo;
+  if (!img) return;
+
+  if (currentGallery !== "family") {
+    img.style.opacity = "0";
+    img.removeAttribute("src");
+    return;
+  }
+
+  const familyImages = items.filter(item => item.type === "image");
+  if (!familyImages.length) {
+    img.style.opacity = "0";
+    img.removeAttribute("src");
+    return;
+  }
+
+  const update = () => {
+    mainLogoIndex = mainLogoIndex % familyImages.length;
+    img.style.opacity = "0";
+    setTimeout(() => {
+      img.src = familyImages[mainLogoIndex].url;
+      img.style.opacity = "1";
+    }, 200);
+    mainLogoIndex = (mainLogoIndex + 1) % familyImages.length;
+  };
+
+  update();
+  mainLogoTimer = setInterval(update, 3500);
+}
+
 async function loadMedia() {
   if (!familyAccess && !isAdmin) return;
 
@@ -340,6 +408,8 @@ async function loadMedia() {
   gallery.className = currentLayout === "grid" ? "grid-gallery" : "masonry";
   render();
   renderTags();
+  startGalleryLogoRotation();
+  startMainLogoRotation();
 }
 
 function getFilteredItems() {
@@ -613,7 +683,7 @@ function escapeHtml(text) {
 
 async function openFeed() {
   feedModal.classList.add("active");
-  setFeedMode("phone");
+  setFeedMode("computer");
   await buildFeed();
   setupFeedObserver();
 }
@@ -632,8 +702,8 @@ function closeFeed() {
 
 function setFeedMode(mode) {
   feedMode = mode;
+  feedComputerBtn.classList.toggle("active", mode === "computer");
   feedPhoneBtn.classList.toggle("active", mode === "phone");
-  feedDesktopBtn.classList.toggle("active", mode === "desktop");
 }
 
 async function buildFeed() {
@@ -642,6 +712,7 @@ async function buildFeed() {
     feedScroller.innerHTML = "<p style='text-align:center;color:#fff;padding:30px;'>No access to this feed.</p>";
     return;
   }
+
   const all = await res.json();
   const videos = all.filter(item => item.type === "video");
   feedScroller.innerHTML = "";
@@ -652,17 +723,19 @@ async function buildFeed() {
   }
 
   videos.forEach(item => {
+    const tagButtons = (item.tags || []).map(tag => `<button class="feed-tag" data-tag="${escapeHtml(tag)}">#${escapeHtml(tag)}</button>`).join("");
     const card = document.createElement("section");
     card.className = "feed-item";
     card.innerHTML = `
       <div class="feed-video-shell ${feedMode}">
         <video class="feed-video" playsinline muted preload="metadata" loop src="${item.url}"></video>
         <div class="feed-overlay">
-          <div class="feed-caption">${escapeHtml(item.caption || "Untitled video")}</div>
+          <div class="feed-caption">${escapeHtml(item.caption || "")}</div>
+          <div class="feed-tags">${tagButtons}</div>
           <div class="feed-actions">
             <button class="feed-like">❤️ <span class="like-count">${item.likes || 0}</span></button>
-            <button class="feed-comment">💬 Comment</button>
-            <button class="feed-share">↗ Share</button>
+            <button class="feed-comment">💬</button>
+            <button class="feed-share">↗</button>
           </div>
           <div class="feed-comments">
             <div class="feed-comments-list"></div>
@@ -675,6 +748,7 @@ async function buildFeed() {
       </div>
     `;
 
+    const shell = card.querySelector(".feed-video-shell");
     const video = card.querySelector(".feed-video");
     const likeBtn = card.querySelector(".feed-like");
     const commentBtn = card.querySelector(".feed-comment");
@@ -685,12 +759,25 @@ async function buildFeed() {
     const postBtn = card.querySelector(".feed-comment-form button");
     const likeCount = card.querySelector(".like-count");
 
+    if (feedMode === "computer") {
+      shell.classList.add("computer");
+    } else {
+      shell.classList.add("phone");
+    }
+
     video.muted = true;
     video.playsInline = true;
     video.autoplay = true;
     video.loop = true;
 
-    likeBtn.addEventListener("click", async () => {
+    shell.addEventListener("click", (e) => {
+      if (e.target.closest(".feed-actions") || e.target.closest(".feed-comments") || e.target.closest(".feed-tag")) return;
+      if (video.paused) video.play().catch(() => {});
+      else video.pause();
+    });
+
+    likeBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
       const res = await fetch("/api/like", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -700,9 +787,13 @@ async function buildFeed() {
       if (data.success) likeCount.textContent = data.likes;
     });
 
-    commentBtn.addEventListener("click", () => commentsBox.classList.toggle("active"));
+    commentBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      commentsBox.classList.toggle("active");
+    });
 
-    postBtn.addEventListener("click", () => {
+    postBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
       const text = commentInput.value.trim();
       if (!text) return;
       const div = document.createElement("div");
@@ -712,13 +803,25 @@ async function buildFeed() {
       commentInput.value = "";
     });
 
-    shareBtn.addEventListener("click", async () => {
+    shareBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
       if (navigator.share) {
         try { await navigator.share({ title: "Video", url: item.url }); } catch {}
       } else if (navigator.clipboard) {
         await navigator.clipboard.writeText(item.url);
         alert("Video link copied!");
       }
+    });
+
+    card.querySelectorAll(".feed-tag").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const tag = btn.dataset.tag;
+        activeTagFilter = tag;
+        closeFeed();
+        render();
+        renderTags();
+      });
     });
 
     feedScroller.appendChild(card);
