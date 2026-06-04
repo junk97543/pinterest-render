@@ -44,10 +44,7 @@ let activeGallery = "family";
 function readJSON(file) {
   try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return []; }
 }
-
-function writeJSON(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
-}
+function writeJSON(file, data) { fs.writeFileSync(file, JSON.stringify(data, null, 2)); }
 
 function loadState() {
   try {
@@ -60,41 +57,23 @@ function loadState() {
     return { family: [], private: [] };
   }
 }
+function saveState(state) { writeJSON(STATE_FILE, state); }
+function loadChat() { return readJSON(CHAT_FILE); }
+function saveChat(chat) { writeJSON(CHAT_FILE, chat); }
 
-function saveState(state) {
-  writeJSON(STATE_FILE, state);
-}
-
-function loadChat() {
-  return readJSON(CHAT_FILE);
-}
-
-function saveChat(chat) {
-  writeJSON(CHAT_FILE, chat);
-}
-
-function isAdmin(req) {
-  return !!req.session?.isAdmin;
-}
-
-function hasFamilyAccess(req) {
-  return !!req.session?.familyAccess;
-}
-
+function isAdmin(req) { return !!req.session?.isAdmin; }
+function hasFamilyAccess(req) { return !!req.session?.familyAccess; }
 function canAccessGallery(req, gallery) {
   if (gallery === "private") return isAdmin(req);
   return hasFamilyAccess(req) || isAdmin(req);
 }
-
 function normalizeTag(tag) {
   return String(tag || "").trim().replace(/^#/, "").replace(/\s+/g, " ");
 }
-
 function getTargetGallery(req) {
   const g = String(req.query.gallery || req.body?.gallery || activeGallery || "family").toLowerCase();
   return g === "private" ? "private" : "family";
 }
-
 function configureCloudinary(gallery) {
   if (gallery === "private") {
     cloudinary.config({
@@ -112,27 +91,22 @@ function configureCloudinary(gallery) {
     });
   }
 }
-
 async function uploadToCloudinary(filePath, originalName, gallery) {
   const ext = path.extname(originalName).toLowerCase();
   const isVideo = [".mp4", ".mov", ".webm", ".m4v", ".avi", ".ogg"].includes(ext);
-  const resource_type = isVideo ? "video" : "image";
-
   configureCloudinary(gallery);
-
   return await cloudinary.uploader.upload(filePath, {
-    resource_type,
+    resource_type: isVideo ? "video" : "image",
     folder: gallery === "private" ? "private_gallery" : "family_gallery"
   });
 }
 
 app.get("/api/status", (req, res) => {
-  const currentView = isAdmin(req) ? activeGallery : "family";
   res.json({
     isAdmin: isAdmin(req),
     familyAccess: hasFamilyAccess(req),
     activeGallery,
-    currentView
+    currentView: isAdmin(req) ? activeGallery : "family"
   });
 });
 
@@ -171,18 +145,14 @@ app.post("/api/family-logout", (req, res) => {
 app.post("/api/switch-gallery", (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
   const { gallery } = req.body || {};
-  if (gallery !== "family" && gallery !== "private") {
-    return res.status(400).json({ success: false, error: "Invalid gallery" });
-  }
+  if (gallery !== "family" && gallery !== "private") return res.status(400).json({ success: false, error: "Invalid gallery" });
   activeGallery = gallery;
   res.json({ success: true, activeGallery });
 });
 
 app.get("/media", (req, res) => {
   const gallery = getTargetGallery(req);
-  if (!canAccessGallery(req, gallery)) {
-    return res.status(403).json({ success: false, error: "Access denied" });
-  }
+  if (!canAccessGallery(req, gallery)) return res.status(403).json({ success: false, error: "Access denied" });
 
   const sort = String(req.query.sort || "random");
   const state = loadState();
@@ -198,14 +168,8 @@ app.post("/upload", upload.array("files", 1000), async (req, res) => {
   const gallery = String(req.body.gallery || "family").toLowerCase() === "private" ? "private" : "family";
 
   try {
-    if (!canAccessGallery(req, gallery)) {
-      return res.status(403).json({ success: false, error: "Access denied" });
-    }
-
-    if (gallery === "private" && !isAdmin(req)) {
-      return res.status(401).json({ success: false, error: "Admin only" });
-    }
-
+    if (!canAccessGallery(req, gallery)) return res.status(403).json({ success: false, error: "Access denied" });
+    if (gallery === "private" && !isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
     if (gallery === "family" && !hasFamilyAccess(req) && !isAdmin(req)) {
       return res.status(401).json({ success: false, error: "Family access required" });
     }
@@ -227,6 +191,7 @@ app.post("/upload", upload.array("files", 1000), async (req, res) => {
           type: result.resource_type === "video" ? "video" : "image",
           likes: 0,
           tags: [],
+          caption: "",
           createdAt: new Date().toISOString(),
           gallery
         });
@@ -240,15 +205,10 @@ app.post("/upload", upload.array("files", 1000), async (req, res) => {
     state[gallery].push(...uploaded);
     saveState(state);
 
-    return res.json({
-      success: true,
-      count: uploaded.length,
-      errors,
-      activeGallery: gallery
-    });
+    res.json({ success: true, count: uploaded.length, errors, activeGallery: gallery });
   } catch (err) {
     console.error("UPLOAD ERROR:", err);
-    return res.status(500).json({ success: false, error: "Upload failed" });
+    res.status(500).json({ success: false, error: "Upload failed" });
   }
 });
 
@@ -256,9 +216,7 @@ app.post("/api/like", (req, res) => {
   try {
     const { public_id, gallery } = req.body || {};
     const targetGallery = gallery === "private" ? "private" : "family";
-    if (!canAccessGallery(req, targetGallery)) {
-      return res.status(403).json({ success: false, error: "Access denied" });
-    }
+    if (!canAccessGallery(req, targetGallery)) return res.status(403).json({ success: false, error: "Access denied" });
 
     const state = loadState();
     const item = state[targetGallery].find(m => m.public_id === public_id);
@@ -266,7 +224,6 @@ app.post("/api/like", (req, res) => {
 
     item.likes = (item.likes || 0) + 1;
     saveState(state);
-
     res.json({ success: true, likes: item.likes });
   } catch (err) {
     console.error(err);
@@ -278,14 +235,10 @@ app.post("/api/tag", (req, res) => {
   try {
     const { public_id, tag, gallery } = req.body || {};
     const targetGallery = gallery === "private" ? "private" : "family";
-    if (!canAccessGallery(req, targetGallery)) {
-      return res.status(403).json({ success: false, error: "Access denied" });
-    }
+    if (!canAccessGallery(req, targetGallery)) return res.status(403).json({ success: false, error: "Access denied" });
 
     const cleanTag = normalizeTag(tag);
-    if (!public_id || !cleanTag) {
-      return res.status(400).json({ success: false, error: "Missing public_id or tag" });
-    }
+    if (!public_id || !cleanTag) return res.status(400).json({ success: false, error: "Missing public_id or tag" });
 
     const state = loadState();
     const item = state[targetGallery].find(m => m.public_id === public_id);
@@ -302,6 +255,23 @@ app.post("/api/tag", (req, res) => {
   }
 });
 
+app.post("/api/caption", (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
+    const { public_id, caption, gallery } = req.body || {};
+    const targetGallery = gallery === "private" ? "private" : "family";
+    const state = loadState();
+    const item = state[targetGallery].find(m => m.public_id === public_id);
+    if (!item) return res.status(404).json({ success: false, error: "Media not found" });
+    item.caption = String(caption || "").slice(0, 200);
+    saveState(state);
+    res.json({ success: true, caption: item.caption });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Caption failed" });
+  }
+});
+
 app.post("/delete-all", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
@@ -313,9 +283,7 @@ app.post("/delete-all", async (req, res) => {
 
     for (const item of state[targetGallery]) {
       try {
-        await cloudinary.uploader.destroy(item.public_id, {
-          resource_type: item.type === "video" ? "video" : "image"
-        });
+        await cloudinary.uploader.destroy(item.public_id, { resource_type: item.type === "video" ? "video" : "image" });
       } catch {}
     }
 
@@ -337,9 +305,7 @@ app.post("/api/chat", (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(403).json({ success: false, error: "Admin only" });
     const { name, message } = req.body || {};
-    if (!name || !message) {
-      return res.status(400).json({ success: false, error: "Missing name or message" });
-    }
+    if (!name || !message) return res.status(400).json({ success: false, error: "Missing name or message" });
 
     const chat = loadChat();
     chat.push({
@@ -360,6 +326,4 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on ${PORT}`));

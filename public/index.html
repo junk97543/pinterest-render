@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Family Gallery</title>
+  <link rel="manifest" href="/manifest.json" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body class="light">
@@ -18,9 +22,7 @@
 
   <header id="main-header" style="display:none;">
     <div class="brand">
-      <div class="logo-rotator">
-        <img id="main-rotating-logo" alt="Rotating logo" />
-      </div>
+      <div class="logo-rotator"><img id="main-rotating-logo" alt="Rotating logo" /></div>
       <div>
         <h1 id="gallery-title">Family Gallery</h1>
         <span id="gallery-badge" class="gallery-badge">Family</span>
@@ -81,18 +83,6 @@
       <img id="lightbox-img" alt="" />
       <video id="lightbox-video" controls></video>
     </div>
-  </div>
-
-  <div id="feed-modal" class="feed-modal">
-    <div class="feed-modal-bar">
-      <div class="feed-modal-title">Video Feed</div>
-      <div class="feed-switches">
-        <button id="feed-computer-btn" class="feed-mode-btn active">Computer</button>
-        <button id="feed-phone-btn" class="feed-mode-btn">Phone</button>
-      </div>
-      <button id="feed-close" class="feed-close">✕</button>
-    </div>
-    <div id="feed-scroller" class="feed-scroller"></div>
   </div>
 
   <script src="app.js"></script>
