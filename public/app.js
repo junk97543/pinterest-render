@@ -134,7 +134,12 @@ function initHandlers() {
     await loadMedia();
   });
 
-  tagsTabBtn.addEventListener("click", () => { document.getElementById("tag-panel").style.display = tagPanel.style.display === "none" ? "block" : "none"; });
+  if (document.getElementById("tags-tab-btn")) {
+    document.getElementById("tags-tab-btn").addEventListener("click", () => {
+      tagPanel.style.display = tagPanel.style.display === "none" ? "block" : "none";
+    });
+  }
+
   closeTagPanel.addEventListener("click", () => { tagPanel.style.display = "none"; });
   clearTagFilter.addEventListener("click", () => { activeTagFilter = ""; render(); renderTags(); });
 
@@ -164,11 +169,19 @@ function initHandlers() {
     else alert(data.error || "Delete failed");
   });
 
+  fileInput.addEventListener("change", () => {
+    const selected = Array.from(fileInput.files || []).map(f => f.name).join(", ");
+    const label = document.querySelector(".upload-btn");
+    if (selected) label.textContent = `Selected: ${selected.slice(0, 45)}${selected.length > 45 ? "..." : ""}`;
+    else label.textContent = "Upload Photos & Videos";
+  });
+
   fileInput.addEventListener("change", uploadFiles);
+
   videoFeedBtn.addEventListener("click", () => {
-    if (currentGallery !== "family" && currentGallery !== "private") return;
-    if (window.innerWidth < 768) window.open("/phone.html?gallery=" + currentGallery, "_blank");
-    else window.open("/phone.html?gallery=" + currentGallery, "_blank");
+    const url = `/phone.html?gallery=${encodeURIComponent(currentGallery)}`;
+    const win = window.open(url, "_blank", "noopener,noreferrer");
+    if (!win) location.href = url;
   });
 
   window.addEventListener("scroll", () => {
@@ -180,36 +193,6 @@ function initHandlers() {
     if (e.target === lightbox || e.target.classList.contains("lightbox-content")) closeLightbox();
   });
   window.addEventListener("keydown", e => { if (e.key === "Escape") closeLightbox(); });
-
-  lightboxImg.addEventListener("wheel", e => {
-    e.preventDefault();
-    const delta = -e.deltaY;
-    const oldZoom = zoom;
-    if (delta > 0) zoom *= 1.1;
-    else zoom /= 1.1;
-    zoom = Math.max(1, Math.min(zoom, 5));
-    const rect = lightboxImg.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    const ratio = zoom / oldZoom;
-    x -= (mx - rect.width / 2) * (ratio - 1);
-    y -= (my - rect.height / 2) * (ratio - 1);
-    updateTransform();
-  });
-
-  lightboxImg.addEventListener("mousedown", e => {
-    if (e.button !== 0) return;
-    dragging = true;
-    startX = e.clientX - x;
-    startY = e.clientY - y;
-  });
-  window.addEventListener("mousemove", e => {
-    if (!dragging) return;
-    x = e.clientX - startX;
-    y = e.clientY - startY;
-    updateTransform();
-  });
-  window.addEventListener("mouseup", () => { dragging = false; });
 }
 
 function setSortActive(btn) {
@@ -256,49 +239,58 @@ async function refreshStatus() {
 
   galleryTitle.textContent = currentGallery === "private" ? "Private Gallery" : "Family Gallery";
   galleryBadge.textContent = currentGallery === "private" ? "Private" : "Family";
-
-  if (!familyAccess && !isAdmin) gateScreen.style.display = "flex";
 }
 
-function getLogoItems() { return items.filter(item => item.type === "image"); }
+function getGalleryImages() {
+  return items.filter(item => item.type === "image");
+}
 
 function startGalleryLogoRotation() {
-  const logos = getLogoItems();
   const img = document.getElementById("gallery-logo-img");
+  const logos = currentGallery === "private"
+    ? items.filter(item => item.type === "image")
+    : items.filter(item => item.type === "image");
   if (galleryLogoTimer) clearInterval(galleryLogoTimer);
   if (!img || !logos.length) return;
 
   const update = () => {
-    galleryLogoIndex = galleryLogoIndex % logos.length;
     img.style.opacity = "0";
     setTimeout(() => {
-      img.src = logos[galleryLogoIndex].url;
+      img.src = logos[galleryLogoIndex % logos.length].url;
       img.style.opacity = "1";
-    }, 200);
+    }, 180);
     galleryLogoIndex = (galleryLogoIndex + 1) % logos.length;
   };
+
   update();
   galleryLogoTimer = setInterval(update, 3500);
 }
 
 function startMainLogoRotation() {
   if (mainLogoTimer) clearInterval(mainLogoTimer);
-  const img = mainRotatingLogo;
-  if (!img) return;
-  if (currentGallery !== "family") { img.style.opacity = "0"; img.removeAttribute("src"); return; }
+  if (!mainRotatingLogo) return;
+  if (currentGallery !== "family") {
+    mainRotatingLogo.removeAttribute("src");
+    mainRotatingLogo.style.opacity = "0";
+    return;
+  }
 
   const familyImages = items.filter(item => item.type === "image");
-  if (!familyImages.length) { img.style.opacity = "0"; img.removeAttribute("src"); return; }
+  if (!familyImages.length) {
+    mainRotatingLogo.removeAttribute("src");
+    mainRotatingLogo.style.opacity = "0";
+    return;
+  }
 
   const update = () => {
-    mainLogoIndex = mainLogoIndex % familyImages.length;
-    img.style.opacity = "0";
+    mainRotatingLogo.style.opacity = "0";
     setTimeout(() => {
-      img.src = familyImages[mainLogoIndex].url;
-      img.style.opacity = "1";
-    }, 200);
+      mainRotatingLogo.src = familyImages[mainLogoIndex % familyImages.length].url;
+      mainRotatingLogo.style.opacity = "1";
+    }, 180);
     mainLogoIndex = (mainLogoIndex + 1) % familyImages.length;
   };
+
   update();
   mainLogoTimer = setInterval(update, 3500);
 }
@@ -308,18 +300,13 @@ async function loadMedia() {
   const res = await fetch(`/media?sort=${currentSort}&gallery=${currentGallery}`);
   const text = await res.text();
   if (!res.ok) return alert("Could not load media");
+
   items = JSON.parse(text);
   gallery.className = currentLayout === "grid" ? "grid-gallery" : "masonry";
   render();
   renderTags();
   startGalleryLogoRotation();
   startMainLogoRotation();
-}
-
-function getFilteredItems() {
-  const base = currentSort === "random" ? shuffleArray(items) : [...items];
-  if (!activeTagFilter) return base;
-  return base.filter(item => Array.isArray(item.tags) && item.tags.some(t => t.toLowerCase() === activeTagFilter.toLowerCase()));
 }
 
 function shuffleArray(arr) {
@@ -331,9 +318,16 @@ function shuffleArray(arr) {
   return a;
 }
 
+function getFilteredItems() {
+  const base = currentSort === "random" ? shuffleArray(items) : [...items];
+  if (!activeTagFilter) return base;
+  return base.filter(item => Array.isArray(item.tags) && item.tags.some(t => t.toLowerCase() === activeTagFilter.toLowerCase()));
+}
+
 function render() {
   gallery.innerHTML = "";
   const displayItems = getFilteredItems();
+
   if (!displayItems.length) {
     gallery.innerHTML = "<p style='padding:20px;'>No matching images or videos.</p>";
     return;
@@ -433,6 +427,7 @@ async function addTagToItem(publicId) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ public_id: publicId, tag: clean, gallery: currentGallery })
   });
+
   const text = await res.text();
   if (!res.ok) return alert("Tag save failed");
   const data = JSON.parse(text);
@@ -442,6 +437,7 @@ async function addTagToItem(publicId) {
 async function editCaption(publicId) {
   const caption = prompt("Enter caption:");
   if (caption === null) return;
+
   const res = await fetch("/api/caption", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -475,6 +471,7 @@ function renderTags() {
 async function uploadFiles() {
   const files = Array.from(fileInput.files || []);
   if (!files.length) return;
+
   if (files.length > 1000) return alert("Maximum 1000 files per upload.");
   if (currentGallery === "private" && !isAdmin) return alert("Admin only for private gallery.");
   if (currentGallery === "family" && !familyAccess && !isAdmin) return alert("Family access required.");
@@ -484,22 +481,34 @@ async function uploadFiles() {
   fd.append("gallery", currentGallery);
 
   const btn = document.querySelector(".upload-btn");
-  btn.textContent = "Uploading...";
+  const originalLabel = "Upload Photos & Videos";
+  btn.textContent = `Uploading ${files.length} file${files.length === 1 ? "" : "s"}...`;
   btn.disabled = true;
 
   try {
-    const res = await fetch("/upload", { method: "POST", body: fd });
+    const res = await fetch("/upload", {
+      method: "POST",
+      body: fd
+    });
+
     const text = await res.text();
     let data = {};
     try { data = JSON.parse(text); } catch {}
+
     if (res.ok && data.success) {
       await loadMedia();
-      if (data.errors && data.errors.length) alert(`Uploaded ${data.count || 0} files. Some files failed:\n${data.errors.join("\n")}`);
-    } else alert(data.error || "Upload failed");
-  } catch {
+      if (data.errors && data.errors.length) {
+        alert(`Uploaded ${data.count || 0} files. Some files failed:\n${data.errors.join("\n")}`);
+      }
+    } else {
+      console.error(text);
+      alert(data.error || "Upload failed");
+    }
+  } catch (err) {
+    console.error(err);
     alert("Upload failed");
   } finally {
-    btn.textContent = "Upload Photos & Videos";
+    btn.textContent = originalLabel;
     btn.disabled = false;
     fileInput.value = "";
   }
