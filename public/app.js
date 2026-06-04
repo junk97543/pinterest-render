@@ -12,6 +12,7 @@ const gallery = document.getElementById("gallery");
 const deleteAllBtn = document.getElementById("delete-all-btn");
 const adminLoginBtn = document.getElementById("admin-login-btn");
 const adminLogoutBtn = document.getElementById("admin-logout-btn");
+const familyGalleryBtn = document.getElementById("family-gallery-btn");
 const privateGalleryBtn = document.getElementById("private-gallery-btn");
 const logoutFamilyBtn = document.getElementById("logout-family-btn");
 const themeToggle = document.getElementById("theme-toggle");
@@ -122,6 +123,18 @@ function initHandlers() {
     await fetch("/api/admin-logout", { method: "POST" });
     isAdmin = false;
     currentGallery = "family";
+    await refreshStatus();
+    await loadMedia();
+  });
+
+  familyGalleryBtn.addEventListener("click", async () => {
+    if (!isAdmin) return;
+    currentGallery = "family";
+    await fetch("/api/switch-gallery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gallery: "family" })
+    });
     await refreshStatus();
     await loadMedia();
   });
@@ -302,6 +315,7 @@ async function refreshStatus() {
   adminBar.style.display = isAdmin ? "flex" : "none";
 
   deleteAllBtn.style.display = isAdmin ? "inline-block" : "none";
+  familyGalleryBtn.style.display = isAdmin ? "inline-block" : "none";
   privateGalleryBtn.style.display = isAdmin ? "inline-block" : "none";
   chatToggleBtn.style.display = isAdmin && currentGallery === "private" ? "inline-block" : "none";
 

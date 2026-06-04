@@ -81,13 +81,13 @@ function hasFamilyAccess(req) {
   return !!req.session?.familyAccess;
 }
 
-function normalizeTag(tag) {
-  return String(tag || "").trim().replace(/^#/, "").replace(/\s+/g, " ");
-}
-
 function canAccessGallery(req, gallery) {
   if (gallery === "private") return isAdmin(req);
   return hasFamilyAccess(req) || isAdmin(req);
+}
+
+function normalizeTag(tag) {
+  return String(tag || "").trim().replace(/^#/, "").replace(/\s+/g, " ");
 }
 
 function getTargetGallery(req) {
