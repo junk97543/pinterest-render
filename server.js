@@ -1,241 +1,225 @@
-const express = require('express');
-const multer = require('multer');
-const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
-const mongoose = require('mongoose');
-const session = require('express-session');
-require('dotenv').config();
+const express = require("express");
+const fs = require("fs");
+const path = require("path");
+const multer = require("multer");
+const crypto = require("crypto");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const CLOUD_TAG = 'pinterest-gallery';
 
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch(err => console.error('MongoDB connection error:', err));
+const DATA_DIR = path.join(__dirname, "data");
+const MEDIA_FILE = path.join(DATA_DIR, "media.json");
+const CHAT_FILE = path.join(DATA_DIR, "chat.json");
 
-const UploadCountSchema = new mongoose.Schema({
-  identifier: String,
-  date: String,
-  count: Number
-});
-const UploadCount = mongoose.model('UploadCount', UploadCountSchema);
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(MEDIA_FILE)) fs.writeFileSync(MEDIA_FILE, JSON.stringify([] , null, 2));
+if (!fs.existsSync(CHAT_FILE)) fs.writeFileSync(CHAT_FILE, JSON.stringify([] , null, 2));
 
-const ChatMessageSchema = new mongoose.Schema({
-  name: String,
-  message: String,
-  timestamp: { type: Date, default: Date.now }
-});
-const ChatMessage = mongoose.model('ChatMessage', ChatMessageSchema);
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, "public")));
 
-const LikeSchema = new mongoose.Schema({
-  public_id: String,
-  count: { type: Number, default: 0 }
-});
-const Like = mongoose.model('Like', LikeSchema);
+const upload = multer({ dest: path.join(__dirname, "uploads") });
+if (!fs.existsSync(path.join(__dirname, "uploads"))) {
+  fs.mkdirSync(path.join(__dirname, "uploads"), { recursive: true });
+}
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin";
 
-const storage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: 'pinterest-photos',
-    tags: [CLOUD_TAG],
-    resource_type: 'auto',
-    allowed_formats: ['jpg','jpeg','png','gif','webp','bmp','svg','mp4','webm','mov','avi','mkv']
+function readJSON(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return [];
   }
+}
+
+function writeJSON(file, data) {
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+}
+
+function getMedia() {
+  return readJSON(MEDIA_FILE);
+}
+
+function saveMedia(media) {
+  writeJSON(MEDIA_FILE, media);
+}
+
+function getChat() {
+  return readJSON(CHAT_FILE);
+}
+
+function saveChat(chat) {
+  writeJSON(CHAT_FILE, chat);
+}
+
+let adminSession = false;
+
+app.get("/api/admin", (req, res) => {
+  res.json({ isAdmin: adminSession });
 });
 
-const upload = multer({
-  storage,
-  limits: { fileSize: 100 * 1024 * 1024, files: 1000 }
-});
-
-app.use(express.json({ limit: '200mb' }));
-app.use(express.urlencoded({ limit: '200mb', extended: true }));
-app.use(express.static('public'));
-app.use(session({
-  secret: 'change-this-secret-please-12345',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }
-}));
-
-app.use((req, res, next) => {
-  res.locals.isAdmin = req.session.isAdmin || false;
-  next();
-});
-
-app.post('/api/login', (req, res) => {
-  const { password } = req.body;
-  if (password === process.env.ADMIN_PASSWORD) {
-    req.session.isAdmin = true;
-    return res.json({ success: true, isAdmin: true });
+app.post("/api/login", (req, res) => {
+  const { password } = req.body || {};
+  if (password === ADMIN_PASSWORD) {
+    adminSession = true;
+    return res.json({ success: true });
   }
-  res.json({ success: false, isAdmin: false });
+  return res.status(401).json({ success: false, error: "Wrong password" });
 });
 
-app.post('/api/logout', (req, res) => {
-  req.session.isAdmin = false;
+app.post("/api/logout", (req, res) => {
+  adminSession = false;
   res.json({ success: true });
 });
 
-app.get('/api/admin', (req, res) => {
-  res.json({ isAdmin: req.session.isAdmin || false });
+app.get("/media", (req, res) => {
+  const sort = req.query.sort || "random";
+  const media = getMedia();
+
+  if (sort === "newest") {
+    media.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  } else if (sort === "popular") {
+    media.sort((a, b) => (b.likes || 0) - (a.likes || 0));
+  }
+
+  res.json(media);
 });
 
-app.post('/upload', upload.array('files', 1000), async (req, res) => {
+app.post("/upload", upload.array("files"), (req, res) => {
   try {
-    const identifier = req.ip || req.connection.remoteAddress;
-    const today = new Date().toISOString().split('T')[0];
-    const isAdmin = req.session.isAdmin || false;
-
-    if (!isAdmin) {
-      let uploadCount = await UploadCount.findOne({ identifier, date: today });
-      if (!uploadCount) uploadCount = new UploadCount({ identifier, date: today, count: 0 });
-
-      if (uploadCount.count >= 5) {
-        return res.status(403).json({
-          success: false,
-          error: 'Daily upload limit reached (5 images per day). Come back tomorrow!'
-        });
-      }
-
-      uploadCount.count += req.files.length;
-      await uploadCount.save();
-    }
-
+    const media = getMedia();
     const files = req.files || [];
-    const result = files.map(f => ({
-      public_id: f.path.split('/').pop(),
-      url: f.path,
-      type: f.mimetype.startsWith('video/') ? 'video' : 'image',
-      mimetype: f.mimetype,
-      size: f.size
-    }));
 
-    res.json({ success: true, files: result, isAdmin });
+    files.forEach(file => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const isVideo = [".mp4", ".mov", ".webm", ".m4v", ".avi"].includes(ext);
+      const isImage = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".avif"].includes(ext);
+
+      if (!isVideo && !isImage) return;
+
+      const newName = `${crypto.randomUUID()}${ext}`;
+      const newPath = path.join(__dirname, "uploads", newName);
+      fs.renameSync(file.path, newPath);
+
+      media.push({
+        public_id: newName,
+        url: `/uploads/${newName}`,
+        type: isVideo ? "video" : "image",
+        likes: 0,
+        tags: [],
+        createdAt: new Date().toISOString()
+      });
+    });
+
+    saveMedia(media);
+    res.json({ success: true, isAdmin: adminSession });
   } catch (err) {
-    console.error('Upload error:', err);
-    res.status(500).json({ success: false, error: 'Upload failed' });
+    console.error(err);
+    res.status(500).json({ success: false, error: "Upload failed" });
   }
 });
 
-app.get('/media', async (req, res) => {
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+app.post("/api/like", (req, res) => {
   try {
-    const sortBy = req.query.sort || 'newest';
+    const { public_id } = req.body || {};
+    if (!public_id) return res.status(400).json({ success: false, error: "Missing public_id" });
 
-    const searchResult = await cloudinary.search
-      .expression(`tags=${CLOUD_TAG}`)
-      .sort_by('created_at', 'desc')
-      .max_results(500)
-      .execute();
+    const media = getMedia();
+    const item = media.find(m => m.public_id === public_id);
+    if (!item) return res.status(404).json({ success: false, error: "Media not found" });
 
-    const media = searchResult.resources.map(r => ({
-      public_id: r.public_id,
-      url: r.secure_url,
-      type: r.resource_type === 'video' ? 'video' : 'image',
-      mimetype: r.format ? (r.resource_type === 'video' ? 'video/mp4' : `image/${r.format}`) : 'image/jpeg',
-      size: r.bytes,
-      createdAt: r.created_at
-    }));
+    item.likes = (item.likes || 0) + 1;
+    saveMedia(media);
 
-    const likes = await Like.find();
-    const likeMap = {};
-    likes.forEach(l => {
-      likeMap[l.public_id] = l.count;
-    });
+    res.json({ success: true, likes: item.likes });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Like failed" });
+  }
+});
 
-    media.forEach(m => {
-      m.likes = likeMap[m.public_id] || 0;
-    });
+app.post("/api/tag", (req, res) => {
+  try {
+    const { public_id, tag } = req.body || {};
 
-    if (sortBy === 'popular') {
-      media.sort((a, b) => b.likes - a.likes);
-    } else {
-      media.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    if (!public_id || !tag) {
+      return res.status(400).json({ success: false, error: "Missing public_id or tag" });
     }
 
-    res.json(media);
+    const cleanTag = String(tag).trim().replace(/^#/, "").replace(/\s+/g, " ");
+    if (!cleanTag) {
+      return res.status(400).json({ success: false, error: "Invalid tag" });
+    }
+
+    const media = getMedia();
+    const item = media.find(m => m.public_id === public_id);
+    if (!item) {
+      return res.status(404).json({ success: false, error: "Media not found" });
+    }
+
+    if (!Array.isArray(item.tags)) item.tags = [];
+    if (!item.tags.includes(cleanTag)) item.tags.push(cleanTag);
+
+    saveMedia(media);
+    res.json({ success: true, tags: item.tags });
   } catch (err) {
-    console.error('Media list error:', err);
-    res.status(500).json([]);
+    console.error(err);
+    res.status(500).json({ success: false, error: "Tag failed" });
   }
 });
 
-app.post('/api/like', async (req, res) => {
-  const { public_id } = req.body;
+app.get("/api/chat", (req, res) => {
+  res.json(getChat());
+});
+
+app.post("/api/chat", (req, res) => {
   try {
-    let like = await Like.findOne({ public_id });
-    if (!like) like = new Like({ public_id, count: 1 });
-    else like.count += 1;
-    await like.save();
-    res.json({ success: true, likes: like.count });
+    const { name, message } = req.body || {};
+    if (!name || !message) {
+      return res.status(400).json({ success: false, error: "Missing name or message" });
+    }
+
+    const chat = getChat();
+    chat.push({
+      name: String(name).slice(0, 40),
+      message: String(message).slice(0, 500),
+      timestamp: new Date().toISOString()
+    });
+
+    saveChat(chat.slice(-200));
+    res.json({ success: true });
   } catch (err) {
-    console.error('Like error:', err);
-    res.status(500).json({ success: false, error: 'Like failed' });
+    console.error(err);
+    res.status(500).json({ success: false, error: "Chat failed" });
   }
 });
 
-app.post('/delete-all', async (req, res) => {
-  if (!req.session.isAdmin) {
-    return res.status(403).json({ success: false, error: 'Admin only' });
-  }
-
+app.post("/delete-all", (req, res) => {
   try {
-    console.log('Delete by tag started');
+    if (!adminSession) return res.status(401).json({ success: false, error: "Admin only" });
 
-    const deleteResult = await cloudinary.api.delete_resources_by_tag(CLOUD_TAG, {
-      resource_type: 'image'
+    const media = getMedia();
+    media.forEach(item => {
+      const filePath = path.join(__dirname, "uploads", path.basename(item.url));
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     });
 
-    const deleteVideoResult = await cloudinary.api.delete_resources_by_tag(CLOUD_TAG, {
-      resource_type: 'video'
-    });
-
-    const deleteRawResult = await cloudinary.api.delete_resources_by_tag(CLOUD_TAG, {
-      resource_type: 'raw'
-    });
-
-    await Like.deleteMany({});
-    await ChatMessage.deleteMany({});
-    await UploadCount.deleteMany({});
-
-    res.json({
-      success: true,
-      message: 'Deleted all tagged assets',
-      imageResult: deleteResult,
-      videoResult: deleteVideoResult,
-      rawResult: deleteRawResult
-    });
+    saveMedia([]);
+    res.json({ success: true });
   } catch (err) {
-    console.error('Delete all error:', err);
-    res.status(500).json({
-      success: false,
-      error: 'Delete failed: ' + err.message
-    });
+    console.error(err);
+    res.status(500).json({ success: false, error: "Delete failed" });
   }
 });
 
-app.post('/api/chat', async (req, res) => {
-  const { name, message } = req.body;
-  if (!name || !message) {
-    return res.status(400).json({ success: false, error: 'Name and message required' });
-  }
-  const chatMessage = new ChatMessage({ name, message });
-  await chatMessage.save();
-  res.json({ success: true });
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-app.get('/api/chat', async (req, res) => {
-  const messages = await ChatMessage.find().sort({ timestamp: -1 }).limit(100);
-  res.json(messages.reverse());
-});
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log('Server running on port ' + PORT);
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
