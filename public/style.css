@@ -18,6 +18,8 @@
   --close-bg: rgba(255,255,255,0.9);
   --chat-bg: #fff;
   --chat-msg-bg: #f0f0f0;
+  --tag-bg: #ececec;
+  --tag-active: #ff5a5f;
 }
 
 body.dark {
@@ -40,6 +42,8 @@ body.dark {
   --close-bg: rgba(255,255,255,0.9);
   --chat-bg: #1e1e1e;
   --chat-msg-bg: #2d2d2d;
+  --tag-bg: #2a2a2a;
+  --tag-active: #ff6b70;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -82,7 +86,7 @@ header {
 
 header h1 { font-size: 20px; }
 
-.upload-btn, .delete-btn, .login-btn, .theme-toggle, .chat-toggle-btn, .back-to-top-btn, .feed-btn, .feed-mode-btn {
+.upload-btn, .delete-btn, .login-btn, .theme-toggle, .chat-toggle-btn, .back-to-top-btn, .feed-btn, .feed-mode-btn, .tag-clear-btn {
   padding: 8px 14px;
   border-radius: 20px;
   border: none;
@@ -117,6 +121,13 @@ header h1 { font-size: 20px; }
   color: #111;
 }
 
+.tag-clear-btn {
+  background: var(--theme);
+}
+.tag-clear-btn:hover {
+  background: var(--theme-hover);
+}
+
 #file-input { display: none; }
 
 .sort-buttons {
@@ -141,6 +152,50 @@ header h1 { font-size: 20px; }
 
 .sort-btn:hover { background: var(--theme-hover); }
 .sort-btn.active { background: var(--upload); }
+
+.tag-panel {
+  max-width: 1600px;
+  margin: 12px auto 0 auto;
+  padding: 14px;
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(8px);
+  border-radius: 16px;
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+.tag-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.tag-panel-header h2 {
+  font-size: 18px;
+  margin-right: auto;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tag-chip {
+  border: none;
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: var(--tag-bg);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.tag-chip.active {
+  background: var(--tag-active);
+  color: #fff;
+}
 
 .masonry {
   column-count: 5;
@@ -184,6 +239,42 @@ header h1 { font-size: 20px; }
   min-height: 100px;
   max-height: 500px;
 }
+
+.media-tags {
+  padding: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.media-tag {
+  border: none;
+  background: var(--tag-bg);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.media-actions {
+  padding: 0 10px 10px 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.media-actions button {
+  border: none;
+  border-radius: 999px;
+  padding: 7px 10px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 12px;
+}
+
+.add-tag-btn { background: #007bff; color: #fff; }
+.add-tag-btn:hover { background: #0056b3; }
 
 .like-container {
   padding: 10px;

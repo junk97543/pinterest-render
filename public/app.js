@@ -26,6 +26,11 @@ const feedClose = document.getElementById("feed-close");
 const feedScroller = document.getElementById("feed-scroller");
 const feedPhoneBtn = document.getElementById("feed-phone-btn");
 const feedDesktopBtn = document.getElementById("feed-desktop-btn");
+const tagsTabBtn = document.getElementById("tags-tab-btn");
+const tagPanel = document.getElementById("tag-panel");
+const tagList = document.getElementById("tag-list");
+const closeTagPanel = document.getElementById("close-tag-panel");
+const clearTagFilter = document.getElementById("clear-tag-filter");
 
 let items = [];
 let zoom = 1, x = 0, y = 0, dragging = false, startX = 0, startY = 0;
@@ -37,6 +42,7 @@ let logoTimer = null;
 let feedObserver = null;
 let feedVideos = [];
 let feedMode = 'phone';
+let activeTagFilter = '';
 
 checkAdmin();
 
@@ -142,17 +148,24 @@ async function loadMedia() {
   items = await res.json();
   gallery.className = currentLayout === 'grid' ? 'grid-gallery' : 'masonry';
   render();
+  renderTags();
   updateLogoRotation();
+}
+
+function getFilteredItems() {
+  const base = currentSort === 'random' ? shuffleArray(items) : [...items];
+  if (!activeTagFilter) return base;
+  return base.filter(item => Array.isArray(item.tags) && item.tags.some(t => t.toLowerCase() === activeTagFilter.toLowerCase()));
 }
 
 function render() {
   gallery.innerHTML = "";
-  if (!items.length) {
-    gallery.innerHTML = "<p>No images yet. Upload some photos or videos.</p>";
+  const displayItems = getFilteredItems();
+
+  if (!displayItems.length) {
+    gallery.innerHTML = "<p>No matching images or videos.</p>";
     return;
   }
-
-  const displayItems = currentSort === 'random' ? shuffleArray(items) : [...items];
 
   displayItems.forEach((item) => {
     const originalIndex = items.findIndex(i => i.public_id === item.public_id);
@@ -174,6 +187,34 @@ function render() {
       vid.playsInline = true;
       div.appendChild(vid);
     }
+
+    const tagsWrap = document.createElement("div");
+    tagsWrap.className = "media-tags";
+    (item.tags || []).forEach(tag => {
+      const chip = document.createElement("button");
+      chip.className = "media-tag";
+      chip.textContent = `#${tag}`;
+      chip.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setActiveTagFilter(tag);
+      });
+      tagsWrap.appendChild(chip);
+    });
+    div.appendChild(tagsWrap);
+
+    const actions = document.createElement("div");
+    actions.className = "media-actions";
+    if (item.type === "image") {
+      const tagBtn = document.createElement("button");
+      tagBtn.className = "add-tag-btn";
+      tagBtn.textContent = "Add Tag";
+      tagBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await addTagToItem(item.public_id);
+      });
+      actions.appendChild(tagBtn);
+    }
+    div.appendChild(actions);
 
     const likeDiv = document.createElement("div");
     likeDiv.className = "like-container";
@@ -205,6 +246,68 @@ function render() {
     gallery.appendChild(div);
   });
 }
+
+async function addTagToItem(publicId) {
+  const tag = prompt("Enter a tag for this image:");
+  if (!tag) return;
+  const clean = tag.trim();
+  if (!clean) return;
+  const res = await fetch("/api/tag", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ public_id: publicId, tag: clean })
+  });
+  const data = await res.json();
+  if (data.success) {
+    await loadMedia();
+    renderTags();
+  } else {
+    alert(data.error || "Could not add tag");
+  }
+}
+
+function setActiveTagFilter(tag) {
+  activeTagFilter = tag;
+  render();
+  renderTags();
+  tagPanel.style.display = "block";
+}
+
+function renderTags() {
+  const allTags = [...new Set(items.flatMap(item => item.tags || []))].sort((a, b) => a.localeCompare(b));
+  tagList.innerHTML = "";
+
+  if (!allTags.length) {
+    tagList.innerHTML = "<p>No tags yet.</p>";
+    return;
+  }
+
+  allTags.forEach(tag => {
+    const btn = document.createElement("button");
+    btn.className = "tag-chip" + (activeTagFilter === tag ? " active" : "");
+    btn.textContent = `#${tag}`;
+    btn.addEventListener("click", () => {
+      activeTagFilter = activeTagFilter === tag ? "" : tag;
+      render();
+      renderTags();
+    });
+    tagList.appendChild(btn);
+  });
+}
+
+tagsTabBtn.addEventListener("click", () => {
+  tagPanel.style.display = tagPanel.style.display === "none" ? "block" : "none";
+});
+
+closeTagPanel.addEventListener("click", () => {
+  tagPanel.style.display = "none";
+});
+
+clearTagFilter.addEventListener("click", () => {
+  activeTagFilter = "";
+  render();
+  renderTags();
+});
 
 chatToggleBtn.addEventListener("click", () => {
   chatSection.style.display = "block";
@@ -296,7 +399,7 @@ fileInput.addEventListener("change", async (e) => {
     } else {
       alert(data.error || "Upload failed");
     }
-  } catch (err) {
+  } catch {
     alert("Upload error");
   } finally {
     btn.textContent = "Upload Photos & Videos";

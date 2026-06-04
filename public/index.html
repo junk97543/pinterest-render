@@ -20,6 +20,7 @@
     <button id="chat-toggle-btn" class="chat-toggle-btn">💬 Chat</button>
     <button id="theme-toggle" class="theme-toggle">🌙 Dark Mode</button>
     <button id="video-feed-btn" class="feed-btn">Video Feed</button>
+    <button id="tags-tab-btn" class="feed-btn">Tags</button>
     <button id="delete-all-btn" class="delete-btn" style="display:none;">Delete All</button>
     <button id="back-to-top" class="back-to-top-btn" style="display:none;">↑ Top</button>
   </header>
@@ -29,6 +30,15 @@
     <button id="sort-random" class="sort-btn active">🔀 Random</button>
     <button id="sort-popular" class="sort-btn">❤️ Most Liked</button>
   </div>
+
+  <section id="tag-panel" class="tag-panel" style="display:none;">
+    <div class="tag-panel-header">
+      <h2>Tags</h2>
+      <button id="clear-tag-filter" class="tag-clear-btn">Show All</button>
+      <button id="close-tag-panel" class="tag-clear-btn">Close</button>
+    </div>
+    <div id="tag-list" class="tag-list"></div>
+  </section>
 
   <main id="gallery" class="masonry"></main>
 
