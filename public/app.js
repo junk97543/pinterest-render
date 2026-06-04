@@ -40,6 +40,16 @@ const galleryTitle = document.getElementById("gallery-title");
 const galleryBadge = document.getElementById("gallery-badge");
 const mainRotatingLogo = document.getElementById("main-rotating-logo");
 
+const videoModal = document.getElementById("video-modal");
+const videoModalClose = document.getElementById("video-modal-close");
+const videoModalPhone = document.getElementById("video-modal-phone");
+const videoModalScroller = document.getElementById("video-modal-scroller");
+
+const phoneOverlay = document.getElementById("phone-overlay");
+const phoneFeed = document.getElementById("phone-feed");
+const phoneCloseBtn = document.getElementById("phone-close-btn");
+const phoneBackBtn = document.getElementById("phone-back-btn");
+
 let items = [];
 let zoom = 1, x = 0, y = 0, dragging = false, startX = 0, startY = 0;
 let isAdmin = false;
@@ -52,6 +62,7 @@ let galleryLogoTimer = null;
 let mainLogoTimer = null;
 let galleryLogoIndex = 0;
 let mainLogoIndex = 0;
+let videoMode = "computer";
 
 initTheme();
 initHandlers();
@@ -134,12 +145,7 @@ function initHandlers() {
     await loadMedia();
   });
 
-  if (document.getElementById("tags-tab-btn")) {
-    document.getElementById("tags-tab-btn").addEventListener("click", () => {
-      tagPanel.style.display = tagPanel.style.display === "none" ? "block" : "none";
-    });
-  }
-
+  tagsTabBtn?.addEventListener("click", () => { tagPanel.style.display = tagPanel.style.display === "none" ? "block" : "none"; });
   closeTagPanel.addEventListener("click", () => { tagPanel.style.display = "none"; });
   clearTagFilter.addEventListener("click", () => { activeTagFilter = ""; render(); renderTags(); });
 
@@ -169,30 +175,70 @@ function initHandlers() {
     else alert(data.error || "Delete failed");
   });
 
-  fileInput.addEventListener("change", () => {
-    const selected = Array.from(fileInput.files || []).map(f => f.name).join(", ");
-    const label = document.querySelector(".upload-btn");
-    if (selected) label.textContent = `Selected: ${selected.slice(0, 45)}${selected.length > 45 ? "..." : ""}`;
-    else label.textContent = "Upload Photos & Videos";
-  });
-
   fileInput.addEventListener("change", uploadFiles);
 
-  videoFeedBtn.addEventListener("click", () => {
-    const url = `/phone.html?gallery=${encodeURIComponent(currentGallery)}`;
-    const win = window.open(url, "_blank", "noopener,noreferrer");
-    if (!win) location.href = url;
+  videoFeedBtn.addEventListener("click", async () => {
+    await openVideoModal();
   });
 
-  window.addEventListener("scroll", () => {
-    backToTopBtn.style.display = window.scrollY > 300 ? "inline-block" : "none";
+  videoModalClose.addEventListener("click", closeVideoModal);
+  videoModalPhone.addEventListener("click", async () => {
+    videoMode = "phone";
+    videoModal.classList.remove("active");
+    phoneOverlay.classList.add("active");
+    await buildPhoneFeed();
+  });
+
+  phoneCloseBtn.addEventListener("click", closePhoneOverlay);
+  phoneBackBtn.addEventListener("click", () => {
+    phoneOverlay.classList.remove("active");
+    videoModal.classList.add("active");
   });
 
   lightboxClose.addEventListener("click", closeLightbox);
   lightbox.addEventListener("click", e => {
     if (e.target === lightbox || e.target.classList.contains("lightbox-content")) closeLightbox();
   });
-  window.addEventListener("keydown", e => { if (e.key === "Escape") closeLightbox(); });
+
+  window.addEventListener("keydown", e => {
+    if (e.key === "Escape") {
+      closeLightbox();
+      closeVideoModal();
+      closePhoneOverlay();
+    }
+  });
+
+  lightboxImg.addEventListener("mousedown", e => {
+    if (e.button !== 0) return;
+    dragging = true;
+    startX = e.clientX - x;
+    startY = e.clientY - y;
+  });
+
+  window.addEventListener("mousemove", e => {
+    if (!dragging) return;
+    x = e.clientX - startX;
+    y = e.clientY - startY;
+    updateTransform();
+  });
+
+  window.addEventListener("mouseup", () => { dragging = false; });
+
+  lightboxImg.addEventListener("wheel", e => {
+    e.preventDefault();
+    const delta = -e.deltaY;
+    const oldZoom = zoom;
+    if (delta > 0) zoom *= 1.1;
+    else zoom /= 1.1;
+    zoom = Math.max(1, Math.min(zoom, 5));
+    const rect = lightboxImg.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const ratio = zoom / oldZoom;
+    x -= (mx - rect.width / 2) * (ratio - 1);
+    y -= (my - rect.height / 2) * (ratio - 1);
+    updateTransform();
+  });
 }
 
 function setSortActive(btn) {
@@ -241,31 +287,6 @@ async function refreshStatus() {
   galleryBadge.textContent = currentGallery === "private" ? "Private" : "Family";
 }
 
-function getGalleryImages() {
-  return items.filter(item => item.type === "image");
-}
-
-function startGalleryLogoRotation() {
-  const img = document.getElementById("gallery-logo-img");
-  const logos = currentGallery === "private"
-    ? items.filter(item => item.type === "image")
-    : items.filter(item => item.type === "image");
-  if (galleryLogoTimer) clearInterval(galleryLogoTimer);
-  if (!img || !logos.length) return;
-
-  const update = () => {
-    img.style.opacity = "0";
-    setTimeout(() => {
-      img.src = logos[galleryLogoIndex % logos.length].url;
-      img.style.opacity = "1";
-    }, 180);
-    galleryLogoIndex = (galleryLogoIndex + 1) % logos.length;
-  };
-
-  update();
-  galleryLogoTimer = setInterval(update, 3500);
-}
-
 function startMainLogoRotation() {
   if (mainLogoTimer) clearInterval(mainLogoTimer);
   if (!mainRotatingLogo) return;
@@ -274,14 +295,8 @@ function startMainLogoRotation() {
     mainRotatingLogo.style.opacity = "0";
     return;
   }
-
   const familyImages = items.filter(item => item.type === "image");
-  if (!familyImages.length) {
-    mainRotatingLogo.removeAttribute("src");
-    mainRotatingLogo.style.opacity = "0";
-    return;
-  }
-
+  if (!familyImages.length) return;
   const update = () => {
     mainRotatingLogo.style.opacity = "0";
     setTimeout(() => {
@@ -290,7 +305,6 @@ function startMainLogoRotation() {
     }, 180);
     mainLogoIndex = (mainLogoIndex + 1) % familyImages.length;
   };
-
   update();
   mainLogoTimer = setInterval(update, 3500);
 }
@@ -300,12 +314,10 @@ async function loadMedia() {
   const res = await fetch(`/media?sort=${currentSort}&gallery=${currentGallery}`);
   const text = await res.text();
   if (!res.ok) return alert("Could not load media");
-
   items = JSON.parse(text);
   gallery.className = currentLayout === "grid" ? "grid-gallery" : "masonry";
   render();
   renderTags();
-  startGalleryLogoRotation();
   startMainLogoRotation();
 }
 
@@ -393,6 +405,7 @@ function render() {
       actions.appendChild(capBtn);
     }
 
+    div.addEventListener("click", () => openLightbox(originalIndex));
     div.appendChild(actions);
 
     const likeDiv = document.createElement("div");
@@ -411,7 +424,6 @@ function render() {
       if (data.success) e.currentTarget.querySelector(".like-count").textContent = data.likes;
     });
 
-    div.addEventListener("click", () => openLightbox(originalIndex));
     gallery.appendChild(div);
   });
 }
@@ -421,23 +433,18 @@ async function addTagToItem(publicId) {
   if (!tag) return;
   const clean = tag.trim().replace(/^#/, "").replace(/\s+/g, " ");
   if (!clean) return;
-
   const res = await fetch("/api/tag", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ public_id: publicId, tag: clean, gallery: currentGallery })
   });
-
-  const text = await res.text();
-  if (!res.ok) return alert("Tag save failed");
-  const data = JSON.parse(text);
+  const data = await res.json();
   if (data.success) await loadMedia();
 }
 
 async function editCaption(publicId) {
   const caption = prompt("Enter caption:");
   if (caption === null) return;
-
   const res = await fetch("/api/caption", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -445,7 +452,6 @@ async function editCaption(publicId) {
   });
   const data = await res.json();
   if (data.success) await loadMedia();
-  else alert(data.error || "Caption save failed");
 }
 
 function renderTags() {
@@ -471,7 +477,6 @@ function renderTags() {
 async function uploadFiles() {
   const files = Array.from(fileInput.files || []);
   if (!files.length) return;
-
   if (files.length > 1000) return alert("Maximum 1000 files per upload.");
   if (currentGallery === "private" && !isAdmin) return alert("Admin only for private gallery.");
   if (currentGallery === "family" && !familyAccess && !isAdmin) return alert("Family access required.");
@@ -486,22 +491,14 @@ async function uploadFiles() {
   btn.disabled = true;
 
   try {
-    const res = await fetch("/upload", {
-      method: "POST",
-      body: fd
-    });
-
+    const res = await fetch("/upload", { method: "POST", body: fd });
     const text = await res.text();
     let data = {};
     try { data = JSON.parse(text); } catch {}
-
     if (res.ok && data.success) {
       await loadMedia();
-      if (data.errors && data.errors.length) {
-        alert(`Uploaded ${data.count || 0} files. Some files failed:\n${data.errors.join("\n")}`);
-      }
+      if (data.errors && data.errors.length) alert(`Uploaded ${data.count || 0} files. Some files failed:\n${data.errors.join("\n")}`);
     } else {
-      console.error(text);
       alert(data.error || "Upload failed");
     }
   } catch (err) {
@@ -522,7 +519,6 @@ function openLightbox(index) {
   x = 0;
   y = 0;
   updateTransform();
-
   if (item.type === "image") {
     lightboxImg.src = item.url;
     lightboxImg.style.display = "block";
@@ -548,32 +544,243 @@ function updateTransform() {
   lightboxImg.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
 }
 
-async function sendChatMsg() {
-  if (currentGallery !== "private" || !isAdmin) return;
-  const name = chatName.value.trim();
-  const message = chatMessage.value.trim();
-  if (!name || !message) return;
-  await fetch("/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, message })
-  });
-  chatMessage.value = "";
-  loadChat();
+async function openVideoModal() {
+  videoModal.classList.add("active");
+  videoModalPhone.textContent = "Phone View";
+  await buildComputerFeed();
 }
 
-async function loadChat() {
-  if (currentGallery !== "private" || !isAdmin) return;
-  const res = await fetch("/api/chat");
-  const messages = await res.json();
-  chatMessages.innerHTML = "";
-  messages.forEach(msg => {
-    const div = document.createElement("div");
-    div.className = "chat-message";
-    const time = new Date(msg.timestamp).toLocaleTimeString();
-    div.innerHTML = `<strong>${escapeHtml(msg.name)}</strong> <small>(${time})</small>: ${escapeHtml(msg.message)}`;
-    chatMessages.appendChild(div);
+function closeVideoModal() {
+  videoModal.classList.remove("active");
+  videoModalScroller.innerHTML = "";
+}
+
+async function buildComputerFeed() {
+  videoMode = "computer";
+  const res = await fetch(`/media?sort=newest&gallery=${currentGallery}`);
+  if (!res.ok) {
+    videoModalScroller.innerHTML = "<p style='color:#fff;text-align:center;padding:30px;'>No access to this feed.</p>";
+    return;
+  }
+
+  const data = await res.json();
+  const videos = data.filter(item => item.type === "video");
+  videoModalScroller.innerHTML = "";
+
+  if (!videos.length) {
+    videoModalScroller.innerHTML = "<p style='color:#fff;text-align:center;padding:30px;'>No videos uploaded yet.</p>";
+    return;
+  }
+
+  videos.forEach(item => {
+    const card = document.createElement("div");
+    card.className = "video-feed-card";
+    card.innerHTML = `
+      <video class="video-feed-player" muted playsinline loop preload="metadata" src="${item.url}"></video>
+      <div class="card-actions">
+        <button class="card-like">❤️ <span>${item.likes || 0}</span></button>
+        <button class="card-comment">💬 Comment</button>
+        <button class="card-tag">🏷 Tag</button>
+        <button class="card-caption">✏ Caption</button>
+        <button class="card-share">↗ Share</button>
+      </div>
+    `;
+
+    const video = card.querySelector("video");
+    const likeBtn = card.querySelector(".card-like");
+    const commentBtn = card.querySelector(".card-comment");
+    const tagBtn = card.querySelector(".card-tag");
+    const captionBtn = card.querySelector(".card-caption");
+    const shareBtn = card.querySelector(".card-share");
+
+    video.autoplay = true;
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.play().catch(() => {});
+
+    video.addEventListener("click", () => {
+      if (video.paused) video.play().catch(() => {});
+      else video.pause();
+    });
+
+    likeBtn.addEventListener("click", async () => {
+      const res = await fetch("/api/like", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ public_id: item.public_id, gallery: currentGallery })
+      });
+      const data = await res.json();
+      if (data.success) likeBtn.querySelector("span").textContent = data.likes;
+    });
+
+    commentBtn.addEventListener("click", () => {
+      const note = prompt("Comment here:");
+      if (!note) return;
+    });
+
+    tagBtn.addEventListener("click", async () => {
+      await addTagToItem(item.public_id);
+      await buildComputerFeed();
+    });
+
+    captionBtn.addEventListener("click", async () => {
+      await editCaption(item.public_id);
+      await buildComputerFeed();
+    });
+
+    shareBtn.addEventListener("click", async () => {
+      if (navigator.share) {
+        try { await navigator.share({ title: "Video", url: item.url }); } catch {}
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(item.url);
+        alert("Video link copied!");
+      }
+    });
+
+    card.addEventListener("click", () => {
+      if (!video.paused) video.pause();
+    });
+
+    videoModalScroller.appendChild(card);
   });
+}
+
+async function buildPhoneFeed() {
+  const res = await fetch(`/media?sort=newest&gallery=${currentGallery}`);
+  if (!res.ok) {
+    phoneFeed.innerHTML = "<div class='phone-item'><div class='phone-overlay-ui'><div class='phone-caption'>No access or no videos.</div></div></div>";
+    return;
+  }
+
+  const data = await res.json();
+  const videos = data.filter(item => item.type === "video");
+  phoneFeed.innerHTML = "";
+
+  if (!videos.length) {
+    phoneFeed.innerHTML = "<div class='phone-item'><div class='phone-overlay-ui'><div class='phone-caption'>No videos uploaded yet.</div></div></div>";
+    return;
+  }
+
+  videos.forEach(item => {
+    const el = document.createElement("section");
+    el.className = "phone-item";
+    el.innerHTML = `
+      <video class="phone-video" muted playsinline loop preload="metadata" src="${item.url}"></video>
+      <div class="phone-overlay-ui">
+        <div class="phone-edit-bar">
+          <button class="phone-tag-edit">Add Tag</button>
+          <button class="phone-caption-edit">Edit Caption</button>
+        </div>
+        <div class="phone-caption">${escapeHtml(item.caption || "")}</div>
+        <div class="phone-tags">
+          ${(item.tags || []).map(tag => `<button class="phone-tag" data-tag="${escapeHtml(tag)}">#${escapeHtml(tag)}</button>`).join("")}
+        </div>
+        <div class="phone-comments">
+          <div class="phone-comments-list"></div>
+          <div class="phone-comment-form">
+            <input type="text" placeholder="Write a comment..." />
+            <button type="button">Post</button>
+          </div>
+        </div>
+        <div class="phone-actions">
+          <button class="phone-like">❤️ <span>${item.likes || 0}</span></button>
+          <button class="phone-comment">💬</button>
+          <button class="phone-share">↗</button>
+        </div>
+      </div>
+    `;
+
+    const video = el.querySelector(".phone-video");
+    const likeBtn = el.querySelector(".phone-like");
+    const commentBtn = el.querySelector(".phone-comment");
+    const shareBtn = el.querySelector(".phone-share");
+    const comments = el.querySelector(".phone-comments");
+    const commentInput = el.querySelector(".phone-comment-form input");
+    const postBtn = el.querySelector(".phone-comment-form button");
+    const tagButtons = el.querySelectorAll(".phone-tag");
+    const tagEditBtn = el.querySelector(".phone-tag-edit");
+    const captionEditBtn = el.querySelector(".phone-caption-edit");
+
+    video.autoplay = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.muted = true;
+    video.play().catch(() => {});
+
+    el.addEventListener("click", (e) => {
+      if (e.target.closest("button") || e.target.closest("input") || e.target.closest(".phone-comments")) return;
+      if (video.paused) video.play().catch(() => {});
+      else video.pause();
+    });
+
+    likeBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const res = await fetch("/api/like", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ public_id: item.public_id, gallery: currentGallery })
+      });
+      const data = await res.json();
+      if (data.success) likeBtn.querySelector("span").textContent = data.likes;
+    });
+
+    commentBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      comments.classList.toggle("active");
+      commentInput.focus();
+    });
+
+    postBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const txt = commentInput.value.trim();
+      if (!txt) return;
+      const row = document.createElement("div");
+      row.className = "phone-comment-item";
+      row.textContent = txt;
+      el.querySelector(".phone-comments-list").appendChild(row);
+      commentInput.value = "";
+    });
+
+    shareBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (navigator.share) {
+        try { await navigator.share({ title: "Video", url: item.url }); } catch {}
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(item.url);
+        alert("Video link copied!");
+      }
+    });
+
+    tagEditBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await addTagToItem(item.public_id);
+      await buildPhoneFeed();
+    });
+
+    captionEditBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await editCaption(item.public_id);
+      await buildPhoneFeed();
+    });
+
+    tagButtons.forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        activeTagFilter = btn.dataset.tag;
+        closePhoneOverlay();
+        render();
+        renderTags();
+      });
+    });
+
+    phoneFeed.appendChild(el);
+  });
+}
+
+function closePhoneOverlay() {
+  phoneOverlay.classList.remove("active");
+  phoneFeed.innerHTML = "";
 }
 
 function escapeHtml(text) {
