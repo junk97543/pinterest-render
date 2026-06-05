@@ -566,8 +566,8 @@ header {
 
 .phone-video-unmute {
   position: absolute;
-  right: 16px;
-  bottom: 188px;
+  right: 14px;
+  bottom: 18px;
   z-index: 6;
   border: none;
   border-radius: 999px;
@@ -656,4 +656,29 @@ header {
   color: #fff;
   font-weight: bold;
   cursor: pointer;
+}
+
+.phone-feed-nav {
+  position: fixed;
+  right: 14px;
+  bottom: 18px;
+  z-index: 5001;
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.phone-feed-nav.active {
+  display: flex;
+}
+
+.phone-feed-nav button {
+  width: 54px;
+  height: 54px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.9);
+  color: #111;
+  font-weight: bold;
+  font-size: 24px;
 }
