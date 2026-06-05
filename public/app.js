@@ -38,6 +38,11 @@ const galleryBadge = document.getElementById("gallery-badge");
 const mainRotatingLogo = document.getElementById("main-rotating-logo");
 const siteFavicon = document.getElementById("site-favicon");
 
+const phoneOverlay = document.getElementById("phone-overlay");
+const phoneFeed = document.getElementById("phone-feed");
+const phoneCloseBtn = document.getElementById("phone-close-btn");
+const phoneBackBtn = document.getElementById("phone-back-btn");
+
 let items = [];
 let isAdmin = false;
 let familyAccess = false;
@@ -46,6 +51,10 @@ let currentLayout = "masonry";
 let currentGallery = "family";
 let activeTagFilter = "";
 let lightboxIndex = -1;
+let phoneIndex = 0;
+let phoneVideos = [];
+let wheelLock = false;
+let familyLogoTimer = null;
 
 initTheme();
 initHandlers();
@@ -99,7 +108,11 @@ function initHandlers() {
   familyGalleryBtn.addEventListener("click", async () => {
     if (!isAdmin) return;
     currentGallery = "family";
-    await fetch("/api/switch-gallery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ gallery: "family" }) });
+    await fetch("/api/switch-gallery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gallery: "family" })
+    });
     await refreshStatus();
     await loadMedia();
   });
@@ -107,7 +120,11 @@ function initHandlers() {
   privateGalleryBtn.addEventListener("click", async () => {
     if (!isAdmin) return;
     currentGallery = "private";
-    await fetch("/api/switch-gallery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ gallery: "private" }) });
+    await fetch("/api/switch-gallery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gallery: "private" })
+    });
     await refreshStatus();
     await loadMedia();
   });
@@ -154,6 +171,10 @@ function initHandlers() {
   });
 
   fileInput.addEventListener("change", uploadFiles);
+  videoFeedBtn.addEventListener("click", openPhoneOverlay);
+  phoneCloseBtn.addEventListener("click", closePhoneOverlay);
+  phoneBackBtn.addEventListener("click", closePhoneOverlay);
+
   lightboxClose.addEventListener("click", closeLightbox);
 
   lightbox.addEventListener("click", e => {
@@ -161,10 +182,16 @@ function initHandlers() {
   });
 
   window.addEventListener("keydown", e => {
-    if (e.key === "Escape") closeLightbox();
+    if (e.key === "Escape") {
+      closeLightbox();
+      closePhoneOverlay();
+    }
     if (e.key === "ArrowLeft") stepLightbox(-1);
     if (e.key === "ArrowRight") stepLightbox(1);
   });
+
+  window.addEventListener("wheel", handleLightboxWheel, { passive: false });
+  window.addEventListener("click", enableAudioOnFirstGesture, { once: true });
 }
 
 function setSortActive(btn) {
@@ -189,9 +216,7 @@ async function unlockFamily() {
     sortButtons.style.display = "flex";
     await refreshStatus();
     await loadMedia();
-  } else {
-    gateMessage.textContent = "Wrong code. Try again.";
-  }
+  } else gateMessage.textContent = "Wrong code. Try again.";
 }
 
 async function refreshStatus() {
@@ -201,34 +226,75 @@ async function refreshStatus() {
   familyAccess = data.familyAccess;
   currentGallery = data.currentView || (isAdmin ? "private" : "family");
 
-  gateScreen.style.display = (familyAccess || isAdmin) ? "none" : "flex";
-  mainHeader.style.display = (familyAccess || isAdmin) ? "flex" : "none";
-  sortButtons.style.display = (familyAccess || isAdmin) ? "flex" : "none";
+  gateScreen.style.display = familyAccess || isAdmin ? "none" : "flex";
+  mainHeader.style.display = familyAccess || isAdmin ? "flex" : "none";
+  sortButtons.style.display = familyAccess || isAdmin ? "flex" : "none";
   adminBar.style.display = isAdmin ? "flex" : "none";
 
   deleteAllBtn.style.display = isAdmin ? "inline-block" : "none";
   familyGalleryBtn.style.display = isAdmin ? "inline-block" : "none";
   privateGalleryBtn.style.display = isAdmin ? "inline-block" : "none";
-  chatToggleBtn.style.display = (isAdmin && currentGallery === "private") ? "inline-block" : "none";
+  chatToggleBtn.style.display = isAdmin && currentGallery === "private" ? "inline-block" : "none";
 
   galleryTitle.textContent = currentGallery === "private" ? "Private Gallery" : "Family Gallery";
   galleryBadge.textContent = currentGallery === "private" ? "Private" : "Family";
 }
 
+function familyImages() {
+  return items.filter(item => item.gallery === "family" && item.type === "image");
+}
+
+function startFamilyLogoRotation() {
+  if (familyLogoTimer) clearInterval(familyLogoTimer);
+  const imgs = familyImages();
+  if (!imgs.length) {
+    mainRotatingLogo.removeAttribute("src");
+    return;
+  }
+  let idx = 0;
+  const show = () => {
+    mainRotatingLogo.style.opacity = "0";
+    setTimeout(() => {
+      mainRotatingLogo.src = imgs[idx % imgs.length].url;
+      mainRotatingLogo.style.opacity = "1";
+      idx = (idx + 1) % imgs.length;
+    }, 150);
+  };
+  show();
+  familyLogoTimer = setInterval(show, 3000);
+}
+
+function setFavicon(url) {
+  if (!siteFavicon) return;
+  siteFavicon.href = url || "";
+}
+
+function updateBrandLogo() {
+  startFamilyLogoRotation();
+}
+
+function updateFaviconFromFamily() {
+  const imgs = familyImages();
+  if (!imgs.length) {
+    setFavicon("");
+    return;
+  }
+  const best = [...imgs].sort((a, b) => (b.likes || 0) - (a.likes || 0))[0];
+  setFavicon(best.url);
+}
+
 async function loadMedia() {
   if (!familyAccess && !isAdmin) return;
   const res = await fetch(`/media?sort=${currentSort}&gallery=${currentGallery}`);
+  const text = await res.text();
   if (!res.ok) return alert("Could not load media");
-  items = await res.json();
+  items = JSON.parse(text);
   gallery.className = currentLayout === "grid" ? "grid-gallery" : "masonry";
   render();
   renderTags();
-}
-
-function getFilteredItems() {
-  const base = currentSort === "random" ? shuffleArray(items) : [...items];
-  if (!activeTagFilter) return base;
-  return base.filter(item => Array.isArray(item.tags) && item.tags.some(t => t.toLowerCase() === activeTagFilter.toLowerCase()));
+  updateBrandLogo();
+  updateFaviconFromFamily();
+  if (phoneOverlay.classList.contains("active")) await buildPhoneFeed();
 }
 
 function shuffleArray(arr) {
@@ -238,6 +304,12 @@ function shuffleArray(arr) {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+}
+
+function getFilteredItems() {
+  const base = currentSort === "random" ? shuffleArray(items) : [...items];
+  if (!activeTagFilter) return base;
+  return base.filter(item => Array.isArray(item.tags) && item.tags.some(t => t.toLowerCase() === activeTagFilter.toLowerCase()));
 }
 
 function render() {
@@ -270,7 +342,6 @@ function render() {
       div.appendChild(vid);
     }
 
-    // Tags
     const tagsWrap = document.createElement("div");
     tagsWrap.className = "media-tags";
     (item.tags || []).forEach(tag => {
@@ -300,56 +371,36 @@ function render() {
     const tagBtn = document.createElement("button");
     tagBtn.className = "add-tag-btn";
     tagBtn.textContent = "Add Tag";
-    tagBtn.addEventListener("click", async e => { e.stopPropagation(); await addTagToItem(item.public_id); });
+    tagBtn.addEventListener("click", async e => {
+      e.stopPropagation();
+      await addTagToItem(item.public_id);
+    });
     actions.appendChild(tagBtn);
-
-    // 🔥 Undress Button - ONLY in Private Gallery for Admin
-    if (isAdmin && currentGallery === "private" && item.type === "image") {
-      const undressBtn = document.createElement("button");
-      undressBtn.className = "add-tag-btn";
-      undressBtn.textContent = "🔥 Undress";
-      undressBtn.style.background = "#ff1493";
-      undressBtn.addEventListener("click", async e => {
-        e.stopPropagation();
-        if (!confirm("Send this image to ComfyUI to generate a nude version?")) return;
-
-        undressBtn.textContent = "Generating...";
-        undressBtn.disabled = true;
-
-        try {
-          const res = await fetch("/api/undress", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ imageUrl: item.url, public_id: item.public_id })
-          });
-          const data = await res.json();
-          if (data.success) {
-            alert(data.message || "Nude version added!");
-            await loadMedia();
-          } else {
-            alert("Failed: " + (data.error || "Unknown error"));
-          }
-        } catch (err) {
-          alert("Error: Make sure ComfyUI is running");
-        } finally {
-          undressBtn.textContent = "🔥 Undress";
-          undressBtn.disabled = false;
-        }
-      });
-      actions.appendChild(undressBtn);
-    }
 
     if (isAdmin) {
       const capBtn = document.createElement("button");
       capBtn.className = "add-tag-btn";
       capBtn.textContent = "Edit Caption";
-      capBtn.addEventListener("click", async e => { e.stopPropagation(); await editCaption(item.public_id); });
+      capBtn.addEventListener("click", async e => {
+        e.stopPropagation();
+        await editCaption(item.public_id);
+      });
       actions.appendChild(capBtn);
+    }
+
+    if (currentGallery === "private") {
+      const comfyBtn = document.createElement("button");
+      comfyBtn.className = "add-tag-btn";
+      comfyBtn.textContent = "Run ComfyUI";
+      comfyBtn.addEventListener("click", async e => {
+        e.stopPropagation();
+        await runComfyWorkflow(item.public_id);
+      });
+      actions.appendChild(comfyBtn);
     }
 
     div.appendChild(actions);
 
-    // Like button
     const likeDiv = document.createElement("div");
     likeDiv.className = "like-container";
     likeDiv.innerHTML = `<button class="like-btn">❤️ <span class="like-count">${item.likes || 0}</span></button>`;
@@ -365,12 +416,27 @@ function render() {
       const data = await res.json();
       if (data.success) {
         e.currentTarget.querySelector(".like-count").textContent = data.likes;
+        await loadMedia();
       }
     });
 
     div.addEventListener("click", () => openLightbox(originalIndex));
     gallery.appendChild(div);
   });
+}
+
+async function runComfyWorkflow(publicId) {
+  const res = await fetch("/api/run-comfy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ public_id: publicId, gallery: "private" })
+  });
+  const data = await res.json();
+  if (!data.success) {
+    alert(data.error || "ComfyUI workflow failed");
+    return;
+  }
+  await loadMedia();
 }
 
 async function addTagToItem(publicId) {
@@ -383,7 +449,8 @@ async function addTagToItem(publicId) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ public_id: publicId, tag: clean, gallery: currentGallery })
   });
-  if ((await res.json()).success) await loadMedia();
+  const data = await res.json();
+  if (data.success) await loadMedia();
 }
 
 async function editCaption(publicId) {
@@ -394,7 +461,8 @@ async function editCaption(publicId) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ public_id: publicId, caption, gallery: currentGallery })
   });
-  if ((await res.json()).success) await loadMedia();
+  const data = await res.json();
+  if (data.success) await loadMedia();
 }
 
 function renderTags() {
@@ -415,34 +483,4 @@ function renderTags() {
     });
     tagList.appendChild(btn);
   });
-}
-
-async function uploadFiles() { /* ... your original uploadFiles function ... */ 
-  // (I kept it short here — copy your original uploadFiles function if needed)
-  console.log("Upload function called");
-}
-
-function openLightbox(index) {
-  lightboxIndex = index;
-  showLightboxItem(index);
-  lightbox.classList.add("active");
-}
-
-function showLightboxItem(index) {
-  const item = items[index];
-  if (!item) return;
-  // ... your original lightbox code ...
-}
-
-function closeLightbox() {
-  lightbox.classList.remove("active");
-  lightboxImg.src = "";
-  lightboxVideo.pause();
-  lightboxVideo.src = "";
-}
-
-function stepLightbox(direction) {
-  if (!items.length) return;
-  lightboxIndex = (lightboxIndex + direction + items.length) % items.length;
-  showLightboxItem(lightboxIndex);
 }
