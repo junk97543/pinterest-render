@@ -39,8 +39,6 @@ const phoneOverlay = document.getElementById("phone-overlay");
 const phoneFeed = document.getElementById("phone-feed");
 const phoneCloseBtn = document.getElementById("phone-close-btn");
 const phoneBackBtn = document.getElementById("phone-back-btn");
-const familyUnlockForm = document.getElementById("familyUnlockForm");
-const familyUnlockMessage = document.getElementById("familyUnlockMessage");
 
 let items = [];
 let isAdmin = false;
@@ -62,52 +60,43 @@ refreshStatus();
 function initTheme() {
   const theme = localStorage.getItem("theme") || "light";
   document.body.className = theme;
-  if (themeToggle) {
-    themeToggle.textContent = theme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
-    themeToggle.addEventListener("click", () => {
-      const newTheme = document.body.classList.contains("dark") ? "light" : "dark";
-      document.body.className = newTheme;
-      localStorage.setItem("theme", newTheme);
-      themeToggle.textContent = newTheme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
-    });
-  }
+  themeToggle.textContent = theme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
+  themeToggle.addEventListener("click", () => {
+    const newTheme = document.body.classList.contains("dark") ? "light" : "dark";
+    document.body.className = newTheme;
+    localStorage.setItem("theme", newTheme);
+    themeToggle.textContent = newTheme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
+  });
 }
 
 function initHandlers() {
-  familyCodeBtn?.addEventListener("click", unlockFamily);
-  familyCodeInput?.addEventListener("keydown", e => {
+  familyCodeBtn.addEventListener("click", unlockFamily);
+  familyCodeInput.addEventListener("keydown", e => {
     if (e.key === "Enter") unlockFamily();
   });
 
-  if (familyUnlockForm) {
-    familyUnlockForm.addEventListener("submit", e => {
-      e.preventDefault();
-      unlockFamily();
-    });
-  }
-
-  sortNewestBtn?.addEventListener("click", async () => {
+  sortNewestBtn.addEventListener("click", async () => {
     currentSort = "newest";
     currentLayout = "grid";
     setSortActive(sortNewestBtn);
     await loadMedia();
   });
 
-  sortRandomBtn?.addEventListener("click", async () => {
+  sortRandomBtn.addEventListener("click", async () => {
     currentSort = "random";
     currentLayout = "masonry";
     setSortActive(sortRandomBtn);
     await loadMedia();
   });
 
-  sortPopularBtn?.addEventListener("click", async () => {
+  sortPopularBtn.addEventListener("click", async () => {
     currentSort = "popular";
     currentLayout = "grid";
     setSortActive(sortPopularBtn);
     await loadMedia();
   });
 
-  adminLoginBtn?.addEventListener("click", async () => {
+  adminLoginBtn.addEventListener("click", async () => {
     const password = prompt("Enter admin password:");
     if (!password) return;
     const res = await fetch("/api/admin-login", {
@@ -121,12 +110,10 @@ function initHandlers() {
       currentGallery = "private";
       await refreshStatus();
       await loadMedia();
-    } else {
-      alert(data.error || "Wrong admin password");
-    }
+    } else alert("Wrong admin password");
   });
 
-  adminLogoutBtn?.addEventListener("click", async () => {
+  adminLogoutBtn.addEventListener("click", async () => {
     await fetch("/api/admin-logout", { method: "POST" });
     isAdmin = false;
     currentGallery = "family";
@@ -134,7 +121,7 @@ function initHandlers() {
     await loadMedia();
   });
 
-  familyGalleryBtn?.addEventListener("click", async () => {
+  familyGalleryBtn.addEventListener("click", async () => {
     if (!isAdmin) return;
     currentGallery = "family";
     await fetch("/api/switch-gallery", {
@@ -146,7 +133,7 @@ function initHandlers() {
     await loadMedia();
   });
 
-  privateGalleryBtn?.addEventListener("click", async () => {
+  privateGalleryBtn.addEventListener("click", async () => {
     if (!isAdmin) return;
     currentGallery = "private";
     await fetch("/api/switch-gallery", {
@@ -158,7 +145,7 @@ function initHandlers() {
     await loadMedia();
   });
 
-  logoutFamilyBtn?.addEventListener("click", async () => {
+  logoutFamilyBtn.addEventListener("click", async () => {
     await fetch("/api/family-logout", { method: "POST" });
     familyAccess = false;
     currentGallery = isAdmin ? "private" : "family";
@@ -167,35 +154,34 @@ function initHandlers() {
   });
 
   document.getElementById("tags-tab-btn")?.addEventListener("click", () => {
-    if (!tagPanel) return;
     tagPanel.style.display = tagPanel.style.display === "none" ? "block" : "none";
   });
 
-  closeTagPanel?.addEventListener("click", () => {
-    if (tagPanel) tagPanel.style.display = "none";
+  closeTagPanel.addEventListener("click", () => {
+    tagPanel.style.display = "none";
   });
 
-  clearTagFilter?.addEventListener("click", () => {
+  clearTagFilter.addEventListener("click", () => {
     activeTagFilter = "";
     render();
     renderTags();
   });
 
-  chatToggleBtn?.addEventListener("click", () => {
-    if (chatSection) chatSection.style.display = "block";
-    if (chatToggleBtn) chatToggleBtn.style.display = "none";
-    if (chatCloseBtn) chatCloseBtn.style.display = "inline-block";
+  chatToggleBtn.addEventListener("click", () => {
+    chatSection.style.display = "block";
+    chatToggleBtn.style.display = "none";
+    chatCloseBtn.style.display = "inline-block";
   });
 
-  chatCloseBtn?.addEventListener("click", () => {
-    if (chatSection) chatSection.style.display = "none";
-    if (chatToggleBtn) chatToggleBtn.style.display = "inline-block";
-    if (chatCloseBtn) chatCloseBtn.style.display = "none";
+  chatCloseBtn.addEventListener("click", () => {
+    chatSection.style.display = "none";
+    chatToggleBtn.style.display = "inline-block";
+    chatCloseBtn.style.display = "none";
   });
 
-  backToTopBtn?.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+  backToTopBtn.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
 
-  deleteAllBtn?.addEventListener("click", async () => {
+  deleteAllBtn.addEventListener("click", async () => {
     if (!confirm(`Delete all items from ${currentGallery} gallery?`)) return;
     const res = await fetch("/delete-all", {
       method: "POST",
@@ -207,13 +193,12 @@ function initHandlers() {
     else alert(data.error || "Delete failed");
   });
 
-  fileInput?.addEventListener("change", uploadFiles);
-  videoFeedBtn?.addEventListener("click", openPhoneOverlay);
-  phoneCloseBtn?.addEventListener("click", closePhoneOverlay);
-  phoneBackBtn?.addEventListener("click", closePhoneOverlay);
-  lightboxClose?.addEventListener("click", closeLightbox);
-
-  lightbox?.addEventListener("click", e => {
+  fileInput.addEventListener("change", uploadFiles);
+  videoFeedBtn.addEventListener("click", openPhoneOverlay);
+  phoneCloseBtn.addEventListener("click", closePhoneOverlay);
+  phoneBackBtn.addEventListener("click", closePhoneOverlay);
+  lightboxClose.addEventListener("click", closeLightbox);
+  lightbox.addEventListener("click", e => {
     if (e.target === lightbox || e.target.classList.contains("lightbox-content")) closeLightbox();
   });
 
@@ -231,39 +216,28 @@ function initHandlers() {
 }
 
 function setSortActive(btn) {
-  [sortNewestBtn, sortRandomBtn, sortPopularBtn].forEach(b => b?.classList.remove("active"));
-  btn?.classList.add("active");
+  [sortNewestBtn, sortRandomBtn, sortPopularBtn].forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
 }
 
 async function unlockFamily() {
-  const code = String(familyCodeInput?.value || "").trim();
-  if (!code) {
-    if (familyUnlockMessage) familyUnlockMessage.textContent = "Enter the code.";
-    return;
-  }
-
-  if (familyUnlockMessage) familyUnlockMessage.textContent = "Checking code...";
-
+  const code = familyCodeInput.value.trim();
+  if (!code) return;
   const res = await fetch("/api/family-unlock", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code })
   });
-
-  const data = await res.json().catch(() => ({}));
-
+  const data = await res.json();
   if (data.success) {
     familyAccess = true;
     currentGallery = "family";
-    if (familyUnlockMessage) familyUnlockMessage.textContent = "Code accepted.";
-    if (gateScreen) gateScreen.style.display = "none";
-    if (mainHeader) mainHeader.style.display = "flex";
-    if (sortButtons) sortButtons.style.display = "flex";
+    gateScreen.style.display = "none";
+    mainHeader.style.display = "flex";
+    sortButtons.style.display = "flex";
     await refreshStatus();
     await loadMedia();
-  } else {
-    if (familyUnlockMessage) familyUnlockMessage.textContent = data.error || "Wrong code. Try again.";
-  }
+  } else gateMessage.textContent = "Wrong code. Try again.";
 }
 
 async function refreshStatus() {
@@ -272,18 +246,16 @@ async function refreshStatus() {
   isAdmin = data.isAdmin;
   familyAccess = data.familyAccess;
   currentGallery = data.currentView || (isAdmin ? "private" : "family");
-
-  const canSee = familyAccess || isAdmin;
-  if (gateScreen) gateScreen.style.display = canSee ? "none" : "flex";
-  if (mainHeader) mainHeader.style.display = canSee ? "flex" : "none";
-  if (sortButtons) sortButtons.style.display = canSee ? "flex" : "none";
-  if (adminBar) adminBar.style.display = isAdmin ? "flex" : "none";
-  if (deleteAllBtn) deleteAllBtn.style.display = isAdmin ? "inline-block" : "none";
-  if (familyGalleryBtn) familyGalleryBtn.style.display = isAdmin ? "inline-block" : "none";
-  if (privateGalleryBtn) privateGalleryBtn.style.display = isAdmin ? "inline-block" : "none";
-  if (chatToggleBtn) chatToggleBtn.style.display = isAdmin && currentGallery === "private" ? "inline-block" : "none";
-  if (galleryTitle) galleryTitle.textContent = currentGallery === "private" ? "Private Gallery" : "Family Gallery";
-  if (galleryBadge) galleryBadge.textContent = currentGallery === "private" ? "Private" : "Family";
+  gateScreen.style.display = familyAccess || isAdmin ? "none" : "flex";
+  mainHeader.style.display = familyAccess || isAdmin ? "flex" : "none";
+  sortButtons.style.display = familyAccess || isAdmin ? "flex" : "none";
+  adminBar.style.display = isAdmin ? "flex" : "none";
+  deleteAllBtn.style.display = isAdmin ? "inline-block" : "none";
+  familyGalleryBtn.style.display = isAdmin ? "inline-block" : "none";
+  privateGalleryBtn.style.display = isAdmin ? "inline-block" : "none";
+  chatToggleBtn.style.display = isAdmin && currentGallery === "private" ? "inline-block" : "none";
+  galleryTitle.textContent = currentGallery === "private" ? "Private Gallery" : "Family Gallery";
+  galleryBadge.textContent = currentGallery === "private" ? "Private" : "Family";
 }
 
 function familyImages() {
@@ -293,8 +265,8 @@ function familyImages() {
 function startFamilyLogoRotation() {
   if (familyLogoTimer) clearInterval(familyLogoTimer);
   const imgs = familyImages();
-  if (!imgs.length || !mainRotatingLogo) {
-    if (mainRotatingLogo) mainRotatingLogo.removeAttribute("src");
+  if (!imgs.length) {
+    mainRotatingLogo.removeAttribute("src");
     return;
   }
   let idx = 0;
@@ -335,12 +307,12 @@ async function loadMedia() {
   const text = await res.text();
   if (!res.ok) return alert("Could not load media");
   items = JSON.parse(text);
-  if (gallery) gallery.className = currentLayout === "grid" ? "grid-gallery" : "masonry";
+  gallery.className = currentLayout === "grid" ? "grid-gallery" : "masonry";
   render();
   renderTags();
   updateBrandLogo();
   updateFaviconFromFamily();
-  if (phoneOverlay && phoneOverlay.classList.contains("active")) await buildPhoneFeed();
+  if (phoneOverlay.classList.contains("active")) await buildPhoneFeed();
 }
 
 function shuffleArray(arr) {
@@ -359,12 +331,12 @@ function getFilteredItems() {
 }
 
 function render() {
-  if (!gallery) return;
   gallery.innerHTML = "";
   const displayItems = getFilteredItems();
-
   if (!displayItems.length) {
-    gallery.innerHTML = "<div class='empty-state'>No matching images or videos.</div>";
+    gallery.innerHTML = `
+      <div class="empty-state">No matching images or videos.</div>
+    `;
     return;
   }
 
@@ -417,7 +389,6 @@ function render() {
 
     const tagBtn = document.createElement("button");
     tagBtn.className = "add-tag-btn";
-    tagBtn.type = "button";
     tagBtn.textContent = "Add Tag";
     tagBtn.addEventListener("click", async e => {
       e.stopPropagation();
@@ -428,7 +399,6 @@ function render() {
     if (isAdmin) {
       const capBtn = document.createElement("button");
       capBtn.className = "add-tag-btn";
-      capBtn.type = "button";
       capBtn.textContent = "Edit Caption";
       capBtn.addEventListener("click", async e => {
         e.stopPropagation();
@@ -440,8 +410,7 @@ function render() {
     if (currentGallery === "private") {
       const comfyBtn = document.createElement("button");
       comfyBtn.className = "add-tag-btn";
-      comfyBtn.type = "button";
-      comfyBtn.textContent = "Run ComfyDeploy";
+      comfyBtn.textContent = "Run ComfyUI";
       comfyBtn.addEventListener("click", async e => {
         e.stopPropagation();
         await runComfyWorkflow(item.public_id);
@@ -453,7 +422,9 @@ function render() {
 
     const likeDiv = document.createElement("div");
     likeDiv.className = "like-container";
-    likeDiv.innerHTML = `<button class="like-btn" type="button">❤️ Like <span class="like-count">${item.likes || 0}</span></button>`;
+    likeDiv.innerHTML = `
+      <button class="like-btn">❤️ Like <span class="like-count">${item.likes || 0}</span></button>
+    `;
     div.appendChild(likeDiv);
 
     likeDiv.querySelector(".like-btn").addEventListener("click", async e => {
@@ -483,7 +454,7 @@ async function runComfyWorkflow(publicId) {
   });
   const data = await res.json();
   if (!data.success) {
-    alert(data.error || "ComfyDeploy workflow failed");
+    alert(data.error || "ComfyUI workflow failed");
     return;
   }
   await loadMedia();
@@ -516,17 +487,18 @@ async function editCaption(publicId) {
 }
 
 function renderTags() {
-  if (!tagList) return;
   const allTags = [...new Set(items.flatMap(item => item.tags || []))].sort((a, b) => a.localeCompare(b));
   tagList.innerHTML = "";
   if (!allTags.length) {
-    tagList.innerHTML = "<div class='empty-tags'>No tags yet.</div>";
+    tagList.innerHTML = `
+      <div class="empty-tags">No tags yet.</div>
+    `;
     return;
   }
+
   allTags.forEach(tag => {
     const btn = document.createElement("button");
     btn.className = "tag-chip" + (activeTagFilter === tag ? " active" : "");
-    btn.type = "button";
     btn.textContent = `#${tag}`;
     btn.addEventListener("click", () => {
       activeTagFilter = activeTagFilter === tag ? "" : tag;
@@ -538,7 +510,7 @@ function renderTags() {
 }
 
 async function uploadFiles() {
-  const files = fileInput?.files;
+  const files = fileInput.files;
   if (!files || !files.length) return;
 
   const fd = new FormData();
@@ -548,7 +520,7 @@ async function uploadFiles() {
   const res = await fetch("/upload", { method: "POST", body: fd });
   const data = await res.json();
   if (data.success) {
-    if (fileInput) fileInput.value = "";
+    fileInput.value = "";
     await loadMedia();
   } else {
     alert(data.error || "Upload failed");
@@ -558,24 +530,24 @@ async function uploadFiles() {
 function openLightbox(index) {
   lightboxIndex = index;
   showLightbox();
-  if (lightbox) lightbox.style.display = "flex";
+  lightbox.style.display = "flex";
 }
 
 function showLightbox() {
   const item = items[lightboxIndex];
   if (!item) return;
-  if (lightboxImg) lightboxImg.style.display = item.type === "image" ? "block" : "none";
-  if (lightboxVideo) lightboxVideo.style.display = item.type === "video" ? "block" : "none";
-  if (item.type === "image" && lightboxImg) lightboxImg.src = item.url;
-  if (item.type === "video" && lightboxVideo) {
+  lightboxImg.style.display = item.type === "image" ? "block" : "none";
+  lightboxVideo.style.display = item.type === "video" ? "block" : "none";
+  if (item.type === "image") lightboxImg.src = item.url;
+  if (item.type === "video") {
     lightboxVideo.src = item.url;
     lightboxVideo.load();
   }
-  if (lightboxCaption) lightboxCaption.textContent = item.caption || "";
+  lightboxCaption.textContent = item.caption || "";
 }
 
 function closeLightbox() {
-  if (lightbox) lightbox.style.display = "none";
+  lightbox.style.display = "none";
   if (lightboxVideo) {
     lightboxVideo.pause();
     lightboxVideo.removeAttribute("src");
@@ -590,7 +562,7 @@ function stepLightbox(dir) {
 }
 
 function handleLightboxWheel(e) {
-  if (!lightbox || lightbox.style.display === "none") return;
+  if (lightbox.style.display === "none") return;
   e.preventDefault();
   if (wheelLock) return;
   wheelLock = true;
@@ -601,22 +573,19 @@ function handleLightboxWheel(e) {
 function enableAudioOnFirstGesture() {}
 
 function openPhoneOverlay() {
-  if (!phoneOverlay) return;
   phoneOverlay.classList.add("active");
   buildPhoneFeed();
 }
 
 function closePhoneOverlay() {
-  if (!phoneOverlay) return;
   phoneOverlay.classList.remove("active");
-  if (phoneFeed) phoneFeed.innerHTML = "";
+  phoneFeed.innerHTML = "";
 }
 
 async function buildPhoneFeed() {
   phoneVideos = items.filter(item => item.type === "video");
-  if (!phoneFeed) return;
   phoneFeed.innerHTML = "";
-  phoneVideos.forEach((vidItem, idx) => {
+  phoneVideos.forEach(vidItem => {
     const wrap = document.createElement("div");
     wrap.className = "phone-card";
     const v = document.createElement("video");
