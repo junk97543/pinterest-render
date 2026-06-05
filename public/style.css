@@ -548,7 +548,7 @@ header {
 .phone-video-unmute {
   position: absolute;
   right: 14px;
-  bottom: 130px;
+  bottom: calc(18px + env(safe-area-inset-bottom));
   z-index: 6;
   border: none;
   border-radius: 999px;
@@ -558,7 +558,6 @@ header {
   font-weight: bold;
   cursor: pointer;
 }
-
 .phone-caption {
   max-width: 72%;
   font-size: 15px;

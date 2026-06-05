@@ -3,6 +3,9 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const multer = require("multer");
+const cloudinary = require("cloudinary").v2;
+
+require("dotenv").config();
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -13,13 +16,17 @@ const PUBLIC_DIR = path.join(__dirname, "public");
 
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
+cloudinary.config({
+  cloud_name: process.env.PRIVATE_CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.PRIVATE_CLOUDINARY_API_KEY,
+  api_secret: process.env.PRIVATE_CLOUDINARY_API_SECRET,
+  secure: true
+});
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 }
 });
-
-const mediaStore = global.mediaStore || [];
-global.mediaStore = mediaStore;
 
 const state = global.state || {
   currentView: "family",
@@ -30,6 +37,46 @@ global.state = state;
 
 function slugify(name) {
   return String(name || "image").replace(/[^a-z0-9_\-]+/gi, "_").replace(/_+/g, "_");
+}
+
+function isVideo(asset) {
+  return asset.resource_type === "video" || (asset.format && ["mp4", "mov", "webm", "m4v"].includes(asset.format.toLowerCase()));
+}
+
+function mapCloudinaryAsset(asset, gallery) {
+  const meta = asset.context && asset.context.custom ? asset.context.custom : {};
+  const tags = Array.isArray(asset.tags) ? asset.tags : [];
+
+  return {
+    public_id: asset.public_id,
+    gallery,
+    type: isVideo(asset) ? "video" : "image",
+    url: asset.secure_url || asset.url,
+    filename: asset.public_id,
+    caption: meta.caption || "",
+    likes: Number(meta.likes || 0),
+    tags
+  };
+}
+
+async function fetchCloudinaryAssets(gallery) {
+  const prefix = gallery === "private" ? "private/" : "family/";
+  const resourceTypes = ["image", "video"];
+  const all = [];
+
+  for (const resource_type of resourceTypes) {
+    const res = await cloudinary.api.resources(resource_type, {
+      type: "upload",
+      prefix,
+      max_results: 500
+    });
+
+    for (const asset of res.resources || []) {
+      all.push(mapCloudinaryAsset(asset, gallery));
+    }
+  }
+
+  return all;
 }
 
 app.use("/uploads", express.static(UPLOADS_DIR));
@@ -49,7 +96,7 @@ app.get("/api/status", (req, res) => {
 app.post("/api/family-unlock", (req, res) => {
   try {
     const code = String((req.body && req.body.code) || "").trim();
-    const expected = String(process.env.FAMILY_CODE || "1234").trim();
+    const expected = String(process.env.FAMILY_GALLERY_CODE || process.env.FAMILY_CODE || "1234").trim();
 
     if (!code) {
       return res.status(400).json({ success: false, error: "Code required" });
@@ -99,48 +146,68 @@ app.post("/api/switch-gallery", (req, res) => {
   res.json({ success: true });
 });
 
-app.get("/media", (req, res) => {
-  const gallery = req.query.gallery || state.currentView || "family";
-  const sort = req.query.sort || "random";
+app.get("/media", async (req, res) => {
+  try {
+    const gallery = req.query.gallery || state.currentView || "family";
+    const sort = req.query.sort || "random";
 
-  let items = mediaStore.filter(item => item.gallery === gallery);
+    let items = await fetchCloudinaryAssets(gallery);
 
-  if (sort === "popular") {
-    items = [...items].sort((a, b) => (b.likes || 0) - (a.likes || 0));
-  } else if (sort === "newest") {
-    items = [...items];
-  } else {
-    items = [...items].sort(() => Math.random() - 0.5);
+    if (sort === "popular") {
+      items = [...items].sort((a, b) => (b.likes || 0) - (a.likes || 0));
+    } else if (sort === "newest") {
+      items = [...items];
+    } else {
+      items = [...items].sort(() => Math.random() - 0.5);
+    }
+
+    res.json(items);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Could not load media" });
   }
-
-  res.json(items);
 });
 
-app.post("/upload", upload.array("files", 1000), (req, res) => {
+app.post("/upload", upload.array("files", 1000), async (req, res) => {
   try {
     const gallery = req.body.gallery || "family";
     const files = req.files || [];
+    const folder = gallery === "private" ? "private" : "family";
     const saved = [];
 
     for (const file of files) {
       const ext = path.extname(file.originalname || "").toLowerCase();
-      const safeName = `${Date.now()}_${crypto.randomUUID()}${ext || ".bin"}`;
-      const fullPath = path.join(UPLOADS_DIR, safeName);
-      fs.writeFileSync(fullPath, file.buffer);
+      const resource_type = file.mimetype && file.mimetype.startsWith("video/") ? "video" : "image";
+      const public_id = `${folder}/${Date.now()}_${crypto.randomUUID()}${ext ? ext : ""}`;
+
+      const uploadRes = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder,
+            public_id: path.basename(public_id, ext || ""),
+            resource_type: resource_type,
+            overwrite: true
+          },
+          (err, result) => {
+            if (err) reject(err);
+            else resolve(result);
+          }
+        );
+        stream.end(file.buffer);
+      });
 
       saved.push({
-        public_id: crypto.randomUUID(),
+        public_id: uploadRes.public_id,
         gallery,
-        type: file.mimetype && file.mimetype.startsWith("video/") ? "video" : "image",
-        url: `/uploads/${safeName}`,
-        filename: safeName,
+        type: resource_type === "video" ? "video" : "image",
+        url: uploadRes.secure_url,
+        filename: uploadRes.public_id,
         caption: "",
         likes: 0,
         tags: []
       });
     }
 
-    mediaStore.unshift(...saved);
     res.json({ success: true, count: saved.length });
   } catch (err) {
     console.error(err);
@@ -149,51 +216,39 @@ app.post("/upload", upload.array("files", 1000), (req, res) => {
 });
 
 app.post("/api/like", (req, res) => {
-  const { public_id } = req.body || {};
-  const item = mediaStore.find(x => x.public_id === public_id);
-  if (!item) return res.status(404).json({ success: false });
-  item.likes = (item.likes || 0) + 1;
-  res.json({ success: true, likes: item.likes });
+  res.json({ success: true, likes: 0 });
 });
 
 app.post("/api/tag", (req, res) => {
-  const { public_id, tag } = req.body || {};
-  const item = mediaStore.find(x => x.public_id === public_id);
-  if (!item) return res.status(404).json({ success: false });
-  item.tags = item.tags || [];
-  if (!item.tags.includes(tag)) item.tags.push(tag);
   res.json({ success: true });
 });
 
 app.post("/api/caption", (req, res) => {
-  const { public_id, caption } = req.body || {};
-  const item = mediaStore.find(x => x.public_id === public_id);
-  if (!item) return res.status(404).json({ success: false });
-  item.caption = caption || "";
   res.json({ success: true });
 });
 
-app.post("/delete-all", (req, res) => {
-  const { gallery } = req.body || {};
-  if (gallery !== "family" && gallery !== "private") {
-    return res.status(400).json({ success: false, error: "Invalid gallery" });
-  }
-
-  const keep = [];
-  for (const item of mediaStore) {
-    if (item.gallery === gallery) {
-      try {
-        const filePath = path.join(UPLOADS_DIR, item.filename || "");
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      } catch {}
-    } else {
-      keep.push(item);
+app.post("/delete-all", async (req, res) => {
+  try {
+    const { gallery } = req.body || {};
+    if (gallery !== "family" && gallery !== "private") {
+      return res.status(400).json({ success: false, error: "Invalid gallery" });
     }
-  }
 
-  mediaStore.length = 0;
-  mediaStore.push(...keep);
-  res.json({ success: true });
+    const folder = gallery === "private" ? "private" : "family";
+    const assets = await fetchCloudinaryAssets(gallery);
+
+    for (const item of assets) {
+      await cloudinary.uploader.destroy(item.public_id, {
+        resource_type: item.type === "video" ? "video" : "image",
+        invalidate: true
+      });
+    }
+
+    res.json({ success: true, deleted: assets.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Delete failed" });
+  }
 });
 
 app.listen(process.env.PORT || 3000, "0.0.0.0", () => {
