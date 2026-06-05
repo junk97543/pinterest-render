@@ -1,7 +1,7 @@
 {
   "1": {
     "inputs": {
-      "image": "0f805341713c688c235c6264a1e6b64a.jpg"
+      "image": "1b8ab9b4cee41d1e6e78d6f93eb78b1d.jpg"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -291,6 +291,18 @@
     "class_type": "SaveImage",
     "_meta": {
       "title": "Save Image"
+    }
+  },
+  "28": {
+    "inputs": {
+      "images": [
+        "13",
+        5
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
     }
   }
 }

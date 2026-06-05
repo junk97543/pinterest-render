@@ -77,12 +77,10 @@ async function waitForComfyResult(promptId, timeoutMs = 120000) {
         const history = await r.json();
         const entry = history?.[promptId] || history?.[String(promptId)];
         if (entry?.outputs) {
-          const outputs = entry.outputs;
-          for (const nodeId of Object.keys(outputs)) {
-            const out = outputs[nodeId];
-            if (out?.images?.length) {
-              return out.images[0];
-            }
+          if (entry.outputs["28"]?.images?.length) return entry.outputs["28"].images[0];
+          for (const nodeId of Object.keys(entry.outputs)) {
+            const out = entry.outputs[nodeId];
+            if (out?.images?.length) return out.images[0];
           }
         }
       }
@@ -298,7 +296,6 @@ app.post("/api/run-comfy", async (req, res) => {
 
     const uploadData = await uploadResp.json().catch(() => ({}));
     const uploadedName = uploadData.name || uploadData.filename || uploadData.path;
-
     if (!uploadedName) {
       return res.status(500).json({ success: false, error: "ComfyUI did not return an uploaded image name." });
     }
