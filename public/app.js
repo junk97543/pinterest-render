@@ -387,6 +387,17 @@ function render() {
       actions.appendChild(capBtn);
     }
 
+    if (currentGallery === "private") {
+      const comfyBtn = document.createElement("button");
+      comfyBtn.className = "add-tag-btn";
+      comfyBtn.textContent = "Run ComfyUI";
+      comfyBtn.addEventListener("click", async e => {
+        e.stopPropagation();
+        await runComfyWorkflow(item.public_id);
+      });
+      actions.appendChild(comfyBtn);
+    }
+
     div.appendChild(actions);
 
     const likeDiv = document.createElement("div");
@@ -411,6 +422,20 @@ function render() {
     div.addEventListener("click", () => openLightbox(originalIndex));
     gallery.appendChild(div);
   });
+}
+
+async function runComfyWorkflow(publicId) {
+  const res = await fetch("/api/run-comfy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ public_id: publicId, gallery: "private" })
+  });
+  const data = await res.json();
+  if (!data.success) {
+    alert(data.error || "ComfyUI workflow failed");
+    return;
+  }
+  await loadMedia();
 }
 
 async function addTagToItem(publicId) {
