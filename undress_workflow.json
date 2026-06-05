@@ -1,13 +1,4 @@
 {
-  "1": {
-    "inputs": {
-      "image": "1b8ab9b4cee41d1e6e78d6f93eb78b1d.jpg"
-    },
-    "class_type": "LoadImage",
-    "_meta": {
-      "title": "Load Image"
-    }
-  },
   "2": {
     "inputs": {
       "method": "selfie_multiclass_256x256",
@@ -15,7 +6,7 @@
       "crop_multi": 0,
       "mask_components": "4",
       "image": [
-        "1",
+        "49",
         0
       ]
     },
@@ -32,7 +23,7 @@
       "resolution": 512,
       "scale_stick_for_xinsr_cn": "enable",
       "image": [
-        "1",
+        "49",
         0
       ]
     },
@@ -203,7 +194,7 @@
     "inputs": {
       "grow_mask_by": 15,
       "pixels": [
-        "1",
+        "49",
         0
       ],
       "vae": [
@@ -259,7 +250,7 @@
       "background": "Alpha",
       "background_color": "#222222",
       "image": [
-        "1",
+        "49",
         0
       ]
     },
@@ -303,6 +294,34 @@
     "class_type": "PreviewImage",
     "_meta": {
       "title": "Preview Image"
+    }
+  },
+  "49": {
+    "inputs": {
+      "input_id": "input_image",
+      "display_name": "",
+      "description": "",
+      "default_value_url": ""
+    },
+    "class_type": "ComfyUIDeployExternalImage",
+    "_meta": {
+      "title": "External Image (ComfyUI Deploy)"
+    }
+  },
+  "51": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "file_type": "jpg",
+      "quality": 80,
+      "output_id": "output_images",
+      "images": [
+        "13",
+        5
+      ]
+    },
+    "class_type": "ComfyDeployOutputImage",
+    "_meta": {
+      "title": "Image Output (ComfyDeploy)"
     }
   }
 }

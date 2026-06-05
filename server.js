@@ -8,7 +8,7 @@ const session = require("express-session");
 
 const app = express();
 
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(session({
@@ -20,7 +20,6 @@ app.use(session({
 const UPLOADS_DIR = path.join(__dirname, "uploads");
 const PUBLIC_DIR = path.join(__dirname, "public");
 const WORKFLOW_PATH = path.join(__dirname, "undress_workflow.json");
-const COMFY_URL = process.env.COMFY_URL || "http://127.0.0.1:8188";
 
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
@@ -39,11 +38,25 @@ const state = global.state || {
 };
 global.state = state;
 
+const COMFYDEPLOY_API_KEY = process.env.COMFYDEPLOY_API_KEY || "";
+const COMFYDEPLOY_ENDPOINT_URL = process.env.COMFYDEPLOY_ENDPOINT_URL || "";
+const COMFYDEPLOY_DEPLOYMENT_ID = process.env.COMFYDEPLOY_DEPLOYMENT_ID || "";
+const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 function slugify(name) {
   return String(name || "image").replace(/[^a-z0-9_\-]+/gi, "_").replace(/_+/g, "_");
 }
 
-function saveImageToGallery({ buffer, filename, gallery, caption = "", source = "upload" }) {
+function fileUrl(filename) {
+  if (!PUBLIC_BASE_URL) return `/uploads/${encodeURIComponent(filename)}`;
+  return `${PUBLIC_BASE_URL}/uploads/${encodeURIComponent(filename)}`;
+}
+
+function saveBufferToGallery(buffer, filename, gallery, caption = "", source = "upload") {
   const safe = slugify(filename);
   fs.writeFileSync(path.join(UPLOADS_DIR, safe), buffer);
 
@@ -63,32 +76,79 @@ function saveImageToGallery({ buffer, filename, gallery, caption = "", source = 
   return item;
 }
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+function saveImageToGallery({ buffer, filename, gallery, caption = "", source = "upload" }) {
+  return saveBufferToGallery(buffer, filename, gallery, caption, source);
 }
 
-async function waitForComfyResult(promptId, timeoutMs = 120000) {
-  const start = Date.now();
+function getComfyOutputUrl(run) {
+  if (!run) return null;
+  return run.output_url || run.output?.url || run.result?.url || run.image_url || null;
+}
 
-  while (Date.now() - start < timeoutMs) {
-    try {
-      const r = await fetch(`${COMFY_URL}/history/${promptId}`);
-      if (r.ok) {
-        const history = await r.json();
-        const entry = history?.[promptId] || history?.[String(promptId)];
-        if (entry?.outputs) {
-          if (entry.outputs["28"]?.images?.length) return entry.outputs["28"].images[0];
-          for (const nodeId of Object.keys(entry.outputs)) {
-            const out = entry.outputs[nodeId];
-            if (out?.images?.length) return out.images[0];
-          }
-        }
-      }
-    } catch {}
-    await sleep(2000);
+async function createComfyDeployRun(imageUrl) {
+  if (!COMFYDEPLOY_API_KEY || !COMFYDEPLOY_ENDPOINT_URL || !COMFYDEPLOY_DEPLOYMENT_ID) {
+    throw new Error("Missing ComfyDeploy env vars");
   }
 
-  return null;
+  const body = {
+    deployment_id: COMFYDEPLOY_DEPLOYMENT_ID,
+    inputs: {
+      "49": imageUrl
+    }
+  };
+
+  const resp = await fetch(COMFYDEPLOY_ENDPOINT_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${COMFYDEPLOY_API_KEY}`
+    },
+    body: JSON.stringify(body)
+  });
+
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(`ComfyDeploy run failed: ${JSON.stringify(data)}`);
+  }
+
+  return data;
+}
+
+async function getComfyDeployRun(runId) {
+  const url = `${COMFYDEPLOY_ENDPOINT_URL.replace(/\/$/, "")}/${encodeURIComponent(runId)}`;
+  const resp = await fetch(url, {
+    headers: {
+      "Authorization": `Bearer ${COMFYDEPLOY_API_KEY}`
+    }
+  });
+
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(`ComfyDeploy status failed: ${JSON.stringify(data)}`);
+  }
+
+  return data;
+}
+
+async function waitForComfyDeployResult(runId, timeoutMs = 180000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const run = await getComfyDeployRun(runId);
+    const status = String(run.status || run.state || "").toLowerCase();
+    const outputUrl = getComfyOutputUrl(run);
+
+    if (outputUrl && (status === "completed" || status === "succeeded" || status === "success" || !status)) {
+      return outputUrl;
+    }
+
+    if (status === "failed" || status === "error" || status === "cancelled") {
+      throw new Error(`ComfyDeploy run failed: ${JSON.stringify(run)}`);
+    }
+
+    await sleep(3000);
+  }
+
+  throw new Error("Timed out waiting for ComfyDeploy result");
 }
 
 app.use("/uploads", express.static(UPLOADS_DIR));
@@ -97,21 +157,27 @@ app.use(express.static(PUBLIC_DIR));
 app.get("/", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
 app.get("/health", (req, res) => res.json({ ok: true }));
 
-app.get("/api/test-comfy", async (req, res) => {
-  try {
-    const r = await fetch(COMFY_URL);
-    res.json({ ok: true, comfyUrl: COMFY_URL, status: r.status });
-  } catch (err) {
-    res.status(500).json({ ok: false, comfyUrl: COMFY_URL, error: err.message });
-  }
-});
-
 app.get("/api/status", (req, res) => {
   res.json({
     isAdmin: state.isAdmin,
     familyAccess: state.familyAccess,
     currentView: state.currentView
   });
+});
+
+app.get("/api/test-comfydeploy", async (req, res) => {
+  try {
+    const ok = !!(COMFYDEPLOY_API_KEY && COMFYDEPLOY_ENDPOINT_URL && COMFYDEPLOY_DEPLOYMENT_ID);
+    res.json({
+      ok,
+      hasKey: !!COMFYDEPLOY_API_KEY,
+      hasEndpoint: !!COMFYDEPLOY_ENDPOINT_URL,
+      hasDeployment: !!COMFYDEPLOY_DEPLOYMENT_ID,
+      publicBaseUrl: PUBLIC_BASE_URL || null
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 app.post("/api/family-unlock", (req, res) => {
@@ -251,7 +317,6 @@ app.post("/delete-all", (req, res) => {
 
   mediaStore.length = 0;
   mediaStore.push(...keep);
-
   res.json({ success: true });
 });
 
@@ -268,94 +333,36 @@ app.post("/api/run-comfy", async (req, res) => {
       return res.status(404).json({ success: false, error: "Image not found." });
     }
 
-    if (!fs.existsSync(WORKFLOW_PATH)) {
-      return res.status(500).json({ success: false, error: "Workflow file not found." });
-    }
-
-    const workflow = JSON.parse(fs.readFileSync(WORKFLOW_PATH, "utf8"));
-
-    if (!workflow["1"] || !workflow["1"].inputs) {
-      return res.status(500).json({ success: false, error: "Workflow node 1 not found." });
-    }
-
     const localSourcePath = path.join(UPLOADS_DIR, item.filename || "");
     if (!fs.existsSync(localSourcePath)) {
       return res.status(500).json({ success: false, error: "Local source file not found." });
     }
 
-    const sourceBuffer = fs.readFileSync(localSourcePath);
-    const uploadForm = new FormData();
-    uploadForm.append("image", new Blob([sourceBuffer]), `${item.filename || public_id}.png`);
+    const publicImageUrl = fileUrl(item.filename);
+    const run = await createComfyDeployRun(publicImageUrl);
 
-    const uploadResp = await fetch(`${COMFY_URL}/upload/image`, {
-      method: "POST",
-      body: uploadForm
-    });
+    const runId = run.run_id || run.id || run.request_id || run.queue_id;
+    const finalOutputUrl = runId ? await waitForComfyDeployResult(runId) : getComfyOutputUrl(run);
 
-    if (!uploadResp.ok) {
-      const text = await uploadResp.text().catch(() => "");
-      return res.status(500).json({
-        success: false,
-        error: "Failed to upload image to ComfyUI.",
-        details: text
-      });
+    if (!finalOutputUrl) {
+      return res.status(500).json({ success: false, error: "No output returned from ComfyDeploy." });
     }
 
-    const uploadData = await uploadResp.json().catch(() => ({}));
-    const uploadedName = uploadData.name || uploadData.filename || uploadData.path;
-
-    if (!uploadedName) {
-      return res.status(500).json({ success: false, error: "ComfyUI did not return an uploaded image name." });
+    const outputResp = await fetch(finalOutputUrl);
+    if (!outputResp.ok) {
+      return res.status(500).json({ success: false, error: "Could not fetch ComfyDeploy output image." });
     }
 
-    workflow["1"].inputs.image = uploadedName;
-
-    const promptResp = await fetch(`${COMFY_URL}/prompt`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: workflow,
-        client_id: "gallery-app"
-      })
-    });
-
-    const promptData = await promptResp.json().catch(() => ({}));
-    if (!promptResp.ok) {
-      return res.status(500).json({
-        success: false,
-        error: "Failed to queue ComfyUI workflow.",
-        details: promptData
-      });
-    }
-
-    const promptId = promptData.prompt_id || promptData.promptId || promptData.id;
-    if (!promptId) {
-      return res.status(500).json({ success: false, error: "No prompt id returned." });
-    }
-
-    const resultImage = await waitForComfyResult(promptId, 120000);
-    if (!resultImage) {
-      return res.status(500).json({ success: false, error: "Workflow finished but no output image was found." });
-    }
-
-    const viewUrl = `${COMFY_URL}/view?filename=${encodeURIComponent(resultImage.filename)}&subfolder=${encodeURIComponent(resultImage.subfolder || "")}&type=${encodeURIComponent(resultImage.type || "output")}`;
-    const viewResp = await fetch(viewUrl);
-
-    if (!viewResp.ok) {
-      return res.status(500).json({ success: false, error: "Could not fetch ComfyUI output image." });
-    }
-
-    const outputBuffer = Buffer.from(await viewResp.arrayBuffer());
-
+    const outputBuffer = Buffer.from(await outputResp.arrayBuffer());
     const saved = saveImageToGallery({
       buffer: outputBuffer,
       filename: `comfy_${Date.now()}_${public_id}.png`,
       gallery: "private",
-      caption: "ComfyUI result",
-      source: "comfy"
+      caption: "ComfyDeploy result",
+      source: "comfydeploy"
     });
 
-    return res.json({ success: true, saved });
+    return res.json({ success: true, saved, finalOutputUrl });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: false, error: err.message || "Server error" });
