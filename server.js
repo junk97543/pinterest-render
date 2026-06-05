@@ -1,101 +1,227 @@
-const express = require('express');
-const multer = require('multer');
-const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
-require('dotenv').config();
+const express = require("express");
+const multer = require("multer");
+const path = require("path");
+const crypto = require("crypto");
+const cloudinary = require("cloudinary").v2;
+require("dotenv").config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, "public")));
 
-// Configure Cloudinary
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
-
-// Cloudinary storage for multer
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'pinterest-photos',
-    resource_type: 'auto', // images + videos
-    allowed_formats: ['jpg','jpeg','png','gif','webp','bmp','svg','mp4','webm','mov','avi','mkv']
-  }
+  cloud_name: process.env.PRIVATE_CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.PRIVATE_CLOUDINARY_API_KEY,
+  api_secret: process.env.PRIVATE_CLOUDINARY_API_SECRET,
+  secure: true
 });
 
 const upload = multer({
-  storage,
-  limits: { fileSize: 100 * 1024 * 1024, files: 1000 }
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }
 });
 
-app.use(express.json({ limit: '200mb' }));
-app.use(express.urlencoded({ limit: '200mb', extended: true }));
-app.use(express.static('public'));
+const state = global.state || {
+  isAdmin: false,
+  familyAccess: false,
+  currentView: "family"
+};
+global.state = state;
 
-// Upload endpoint
-app.post('/upload', upload.array('files', 1000), async (req, res) => {
-  try {
-    const files = req.files || [];
-    const result = files.map(f => ({
-      public_id: f.path.split('/').pop(), // Cloudinary public_id
-      url: f.path,
-      type: f.mimetype.startsWith('video/') ? 'video' : 'image',
-      mimetype: f.mimetype,
-      size: f.size
-    }));
-    res.json({ success: true, files: result });
-  } catch (err) {
-    console.error('Upload error:', err);
-    res.status(500).json({ success: false, error: 'Upload failed' });
+function mapAsset(asset) {
+  const ctx = asset.context && asset.context.custom ? asset.context.custom : {};
+  return {
+    public_id: asset.public_id,
+    type: asset.resource_type === "video" ? "video" : "image",
+    url: asset.secure_url,
+    filename: asset.public_id,
+    caption: ctx.caption || "",
+    likes: Number(ctx.likes || 0),
+    tags: Array.isArray(asset.tags) ? asset.tags : [],
+    gallery: asset.public_id.startsWith("private/") ? "private" : "family"
+  };
+}
+
+async function listAssetsForGallery(gallery) {
+  const prefix = gallery === "private" ? "private/" : "family/";
+  const [images, videos] = await Promise.all([
+    cloudinary.api.resources("image", {
+      type: "upload",
+      prefix,
+      max_results: 500
+    }),
+    cloudinary.api.resources("video", {
+      type: "upload",
+      prefix,
+      max_results: 500
+    })
+  ]);
+
+  return [
+    ...(images.resources || []).map(mapAsset),
+    ...(videos.resources || []).map(mapAsset)
+  ];
+}
+
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
+app.get("/health", (req, res) => res.json({ ok: true }));
+
+app.get("/api/status", (req, res) => {
+  res.json({
+    isAdmin: state.isAdmin,
+    familyAccess: state.familyAccess,
+    currentView: state.currentView
+  });
+});
+
+app.post("/api/family-unlock", (req, res) => {
+  const code = String((req.body && req.body.code) || "").trim();
+  const expected = String(process.env.FAMILY_GALLERY_CODE || process.env.FAMILY_CODE || "").trim();
+
+  if (!code) return res.status(400).json({ success: false, error: "Code required" });
+  if (code === expected) {
+    state.familyAccess = true;
+    state.currentView = "family";
+    return res.json({ success: true });
   }
+  return res.status(401).json({ success: false, error: "Wrong code" });
 });
 
-// List all media
-app.get('/media', async (req, res) => {
-  try {
-    const result = await cloudinary.search
-      .expression('folder:pinterest-photos')
-      .sort_by('created_at', 'desc')
-      .max_results(500)
-      .execute();
+app.post("/api/family-logout", (req, res) => {
+  state.familyAccess = false;
+  if (!state.isAdmin) state.currentView = "family";
+  res.json({ success: true });
+});
 
-    const media = result.resources.map(r => ({
-      public_id: r.public_id,
-      url: r.secure_url,
-      type: r.resource_type === 'video' ? 'video' : 'image',
-      mimetype: r.format ? (r.resource_type === 'video' ? 'video/mp4' : `image/${r.format}`) : 'image/jpeg',
-      size: r.bytes,
-      createdAt: r.created_at
-    }));
+app.post("/api/admin-login", (req, res) => {
+  const { password } = req.body || {};
+  const expected = process.env.ADMIN_PASSWORD || "admin";
 
-    res.json(media);
-  } catch (err) {
-    console.error('Media list error:', err);
-    res.status(500).json([]);
+  if (String(password || "") === String(expected)) {
+    state.isAdmin = true;
+    state.familyAccess = true;
+    state.currentView = "family";
+    return res.json({ success: true });
   }
+
+  return res.status(401).json({ success: false, error: "Wrong password" });
 });
 
-// Delete all media
-app.post('/delete-all', async (req, res) => {
-  try {
-    const result = await cloudinary.search
-      .expression('folder:pinterest-photos')
-      .max_results(500)
-      .execute();
+app.post("/api/admin-logout", (req, res) => {
+  state.isAdmin = false;
+  state.currentView = "family";
+  res.json({ success: true });
+});
 
-    const publicIds = result.resources.map(r => r.public_id);
-    if (publicIds.length > 0) {
-      await cloudinary.api.delete_resources(publicIds, { resource_type: 'auto' });
+app.post("/api/switch-gallery", (req, res) => {
+  const { gallery } = req.body || {};
+  if (gallery !== "family" && gallery !== "private") {
+    return res.status(400).json({ success: false, error: "Invalid gallery" });
+  }
+  state.currentView = gallery;
+  res.json({ success: true });
+});
+
+app.get("/media", async (req, res) => {
+  try {
+    const gallery = req.query.gallery || state.currentView || "family";
+    const sort = req.query.sort || "random";
+    let items = await listAssetsForGallery(gallery);
+
+    if (sort === "popular") {
+      items.sort((a, b) => (b.likes || 0) - (a.likes || 0));
+    } else if (sort === "newest") {
+      items.sort((a, b) => b.public_id.localeCompare(a.public_id));
+    } else {
+      items.sort(() => Math.random() - 0.5);
     }
 
-    res.json({ success: true });
+    res.json(items);
   } catch (err) {
-    console.error('Delete all error:', err);
-    res.status(500).json({ success: false, error: 'Delete failed' });
+    console.error("MEDIA ERROR:", err);
+    res.json([]);
   }
 });
 
-app.listen(PORT, () => {
-  console.log('Server running on port ' + PORT);
+app.post("/upload", upload.array("files", 1000), async (req, res) => {
+  try {
+    const gallery = req.body.gallery || "family";
+    const folder = gallery === "private" ? "private" : "family";
+    const files = req.files || [];
+    const uploaded = [];
+
+    for (const file of files) {
+      const resource_type = file.mimetype && file.mimetype.startsWith("video/") ? "video" : "image";
+      const name = `${Date.now()}_${crypto.randomUUID()}`;
+
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder,
+            public_id: name,
+            resource_type,
+            overwrite: true,
+            unique_filename: false
+          },
+          (err, data) => {
+            if (err) reject(err);
+            else resolve(data);
+          }
+        );
+        stream.end(file.buffer);
+      });
+
+      uploaded.push(mapAsset({
+        public_id: result.public_id,
+        resource_type,
+        secure_url: result.secure_url,
+        context: {},
+        tags: []
+      }));
+    }
+
+    res.json({ success: true, count: uploaded.length });
+  } catch (err) {
+    console.error("UPLOAD ERROR:", err);
+    res.status(500).json({ success: false, error: "Upload failed" });
+  }
+});
+
+app.post("/api/like", (req, res) => {
+  res.json({ success: true, likes: 0 });
+});
+
+app.post("/api/tag", (req, res) => {
+  res.json({ success: true });
+});
+
+app.post("/api/caption", (req, res) => {
+  res.json({ success: true });
+});
+
+app.post("/delete-all", async (req, res) => {
+  try {
+    const { gallery } = req.body || {};
+    if (gallery !== "family" && gallery !== "private") {
+      return res.status(400).json({ success: false, error: "Invalid gallery" });
+    }
+
+    const assets = await listAssetsForGallery(gallery);
+    for (const item of assets) {
+      await cloudinary.uploader.destroy(item.public_id, {
+        resource_type: item.type === "video" ? "video" : "image",
+        invalidate: true
+      });
+    }
+
+    res.json({ success: true, deleted: assets.length });
+  } catch (err) {
+    console.error("DELETE ERROR:", err);
+    res.status(500).json({ success: false, error: "Delete failed" });
+  }
+});
+
+app.listen(process.env.PORT || 3000, "0.0.0.0", () => {
+  console.log("Server started");
 });

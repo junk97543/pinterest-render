@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Video Feed</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="light feed-page">
+  <div id="feed-modal" class="feed-modal active">
+    <div class="feed-modal-bar">
+      <div class="feed-modal-title">Video Feed</div>
+      <div class="feed-switches">
+        <button id="feed-phone-btn" class="feed-mode-btn active">Phone</button>
+        <button id="feed-desktop-btn" class="feed-mode-btn">Desktop</button>
+      </div>
+      <button id="feed-close" class="feed-close">✕</button>
+    </div>
+    <div id="feed-scroller" class="feed-scroller"></div>
+  </div>
+  <script src="feed.js"></script>
+</body>
+</html>

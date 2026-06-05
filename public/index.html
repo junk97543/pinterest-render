@@ -2,26 +2,91 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>My Pinterest (Simple)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Family Gallery</title>
   <link rel="stylesheet" href="style.css" />
+  <link id="site-favicon" rel="icon" href="" />
 </head>
 <body class="light">
-  <header>
-    <h1>My Pinterest (Simple)</h1>
-    <label for="file-input" class="upload-btn">Upload Photos & Videos</label>
-    <input id="file-input" type="file" accept="image/*,video/*" multiple />
-    <button id="theme-toggle" class="theme-toggle">🌙 Dark Mode</button>
-    <button id="delete-all-btn" class="delete-btn">Delete All</button>
+  <div id="gate-screen" class="gate-screen">
+    <div class="gate-card">
+      <div class="gate-title">Enter Family Code</div>
+      <input id="family-code-input" type="password" placeholder="Family code" />
+      <button id="family-code-btn" class="primary-btn">Enter Gallery</button>
+      <div id="gate-message" class="gate-message"></div>
+    </div>
+  </div>
+
+  <header id="main-header" class="main-header" style="display:none;">
+    <div class="brand">
+      <img id="main-rotating-logo" alt="Gallery logo" />
+      <div class="brand-text">
+        <div id="gallery-title" class="gallery-title">Family Gallery</div>
+        <div id="gallery-badge" class="gallery-badge">Family</div>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <button id="theme-toggle" class="top-btn">🌙 Dark Mode</button>
+      <button id="back-to-top" class="top-btn">↑ Top</button>
+      <button id="video-feed-btn" class="top-btn">Video Feed</button>
+    </div>
   </header>
+
+  <div id="admin-bar" class="admin-bar" style="display:none;">
+    <button id="admin-login-btn" class="secondary-btn">Admin Sign In</button>
+    <button id="admin-logout-btn" class="secondary-btn">Admin Sign Out</button>
+    <button id="family-gallery-btn" class="secondary-btn">Family Gallery</button>
+    <button id="private-gallery-btn" class="secondary-btn">Private Gallery</button>
+    <button id="logout-family-btn" class="secondary-btn">Lock Family</button>
+    <button id="delete-all-btn" class="danger-btn">Delete All</button>
+  </div>
+
+  <div id="sort-buttons" class="sort-buttons" style="display:none;">
+    <button id="sort-random" class="sort-btn active">Random</button>
+    <button id="sort-newest" class="sort-btn">Newest</button>
+    <button id="sort-popular" class="sort-btn">Popular</button>
+  </div>
+
+  <section class="upload-section">
+    <label class="upload-btn">
+      Upload Photos & Videos
+      <input id="file-input" type="file" accept="image/*,video/*" multiple hidden />
+    </label>
+  </section>
+
+  <section id="tag-panel" class="tag-panel" style="display:none;">
+    <div class="tag-panel-header">
+      <div class="tag-panel-title">Tags</div>
+      <button id="close-tag-panel" class="tag-close-btn">✕</button>
+    </div>
+    <div id="tag-list" class="tag-list"></div>
+    <button id="clear-tag-filter" class="clear-tag-btn">Clear Tag Filter</button>
+  </section>
+
+  <button id="tags-tab-btn" class="tags-tab-btn">Tags</button>
 
   <main id="gallery" class="masonry"></main>
 
   <div id="lightbox" class="lightbox">
-    <button id="lightbox-close" class="lightbox-close" title="Close (Esc)">✕</button>
     <div class="lightbox-content">
+      <button id="lightbox-close" class="lightbox-close">✕</button>
       <img id="lightbox-img" alt="" />
-      <video id="lightbox-video" controls></video>
+      <video id="lightbox-video" controls playsinline></video>
+      <div id="lightbox-caption" class="lightbox-caption"></div>
     </div>
+  </div>
+
+  <div id="phone-overlay" class="phone-overlay">
+    <div class="phone-overlay-bar">
+      <button id="phone-back-btn" class="phone-nav-btn">Back</button>
+      <div class="phone-overlay-title">Video Feed</div>
+      <button id="phone-close-btn" class="phone-nav-btn">✕</button>
+    </div>
+    <div id="phone-feed" class="phone-feed"></div>
   </div>
 
   <script src="app.js"></script>
