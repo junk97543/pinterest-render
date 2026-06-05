@@ -19,6 +19,7 @@ app.use(session({
 
 const UPLOADS_DIR = path.join(__dirname, "uploads");
 const PUBLIC_DIR = path.join(__dirname, "public");
+const WORKFLOW_PATH = path.join(__dirname, "undress_workflow.json");
 
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
@@ -107,7 +108,8 @@ async function createComfyDeployRun(imageUrl) {
 }
 
 async function getComfyDeployRun(runId) {
-  const url = `${COMFYDEPLOY_ENDPOINT_URL.replace(/\/$/, "")}/${encodeURIComponent(runId)}`;
+  const base = COMFYDEPLOY_ENDPOINT_URL.replace(/\/+$/, "");
+  const url = `${base}/${encodeURIComponent(runId)}`;
   const resp = await fetch(url, {
     headers: {
       "Authorization": `Bearer ${COMFYDEPLOY_API_KEY}`
@@ -159,10 +161,7 @@ app.post("/api/family-unlock", (req, res) => {
     const code = String((req.body && req.body.code) || "").trim();
     const expected = String(process.env.FAMILY_CODE || "1234").trim();
 
-    if (!code) {
-      return res.status(400).json({ success: false, error: "Code required" });
-    }
-
+    if (!code) return res.status(400).json({ success: false, error: "Code required" });
     if (code === expected) {
       state.familyAccess = true;
       state.currentView = "family";
@@ -233,8 +232,7 @@ app.post("/upload", upload.array("files", 1000), (req, res) => {
     for (const file of files) {
       const ext = path.extname(file.originalname || "").toLowerCase();
       const safeName = `${Date.now()}_${crypto.randomUUID()}${ext || ".bin"}`;
-      const fullPath = path.join(UPLOADS_DIR, safeName);
-      fs.writeFileSync(fullPath, file.buffer);
+      fs.writeFileSync(path.join(UPLOADS_DIR, safeName), file.buffer);
 
       saved.push({
         public_id: crypto.randomUUID(),
@@ -307,6 +305,7 @@ app.post("/delete-all", (req, res) => {
 app.post("/api/run-comfy", async (req, res) => {
   try {
     const { public_id, gallery } = req.body || {};
+
     if (gallery !== "private") {
       return res.status(400).json({ success: false, error: "Only private gallery items can run this workflow." });
     }
@@ -314,11 +313,6 @@ app.post("/api/run-comfy", async (req, res) => {
     const item = mediaStore.find(x => x.public_id === public_id && x.gallery === "private");
     if (!item) {
       return res.status(404).json({ success: false, error: "Image not found." });
-    }
-
-    const localSourcePath = path.join(UPLOADS_DIR, item.filename || "");
-    if (!fs.existsSync(localSourcePath)) {
-      return res.status(500).json({ success: false, error: "Local source file not found." });
     }
 
     const publicImageUrl = fileUrl(item.filename);
