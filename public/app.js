@@ -24,6 +24,9 @@ const lightboxCaption = document.getElementById("lightbox-caption");
 const sortNewestBtn = document.getElementById("sort-newest");
 const sortRandomBtn = document.getElementById("sort-random");
 const sortPopularBtn = document.getElementById("sort-popular");
+const chatToggleBtn = document.getElementById("chat-toggle-btn");
+const chatCloseBtn = document.getElementById("chat-close-btn");
+const chatSection = document.getElementById("chat-section");
 const backToTopBtn = document.getElementById("back-to-top");
 const videoFeedBtn = document.getElementById("video-feed-btn");
 const tagPanel = document.getElementById("tag-panel");
@@ -34,6 +37,7 @@ const galleryTitle = document.getElementById("gallery-title");
 const galleryBadge = document.getElementById("gallery-badge");
 const mainRotatingLogo = document.getElementById("main-rotating-logo");
 const siteFavicon = document.getElementById("site-favicon");
+
 const phoneOverlay = document.getElementById("phone-overlay");
 const phoneFeed = document.getElementById("phone-feed");
 const phoneCloseBtn = document.getElementById("phone-close-btn");
@@ -47,9 +51,10 @@ let currentLayout = "masonry";
 let currentGallery = "family";
 let activeTagFilter = "";
 let lightboxIndex = -1;
+let phoneIndex = 0;
+let phoneVideos = [];
 let wheelLock = false;
 let familyLogoTimer = null;
-let phoneObserver = null;
 
 initTheme();
 initHandlers();
@@ -86,7 +91,7 @@ function initHandlers() {
     const data = await res.json();
     if (data.success) {
       isAdmin = true;
-      currentGallery = "family";
+      currentGallery = "private";
       await refreshStatus();
       await loadMedia();
     } else alert("Wrong admin password");
@@ -127,7 +132,7 @@ function initHandlers() {
   logoutFamilyBtn.addEventListener("click", async () => {
     await fetch("/api/family-logout", { method: "POST" });
     familyAccess = false;
-    currentGallery = "family";
+    currentGallery = isAdmin ? "private" : "family";
     await refreshStatus();
     await loadMedia();
   });
@@ -138,6 +143,18 @@ function initHandlers() {
 
   closeTagPanel.addEventListener("click", () => { tagPanel.style.display = "none"; });
   clearTagFilter.addEventListener("click", () => { activeTagFilter = ""; render(); renderTags(); });
+
+  chatToggleBtn.addEventListener("click", () => {
+    chatSection.style.display = "block";
+    chatToggleBtn.style.display = "none";
+    chatCloseBtn.style.display = "inline-block";
+  });
+
+  chatCloseBtn.addEventListener("click", () => {
+    chatSection.style.display = "none";
+    chatToggleBtn.style.display = "inline-block";
+    chatCloseBtn.style.display = "none";
+  });
 
   backToTopBtn.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
 
@@ -159,6 +176,7 @@ function initHandlers() {
   phoneBackBtn.addEventListener("click", closePhoneOverlay);
 
   lightboxClose.addEventListener("click", closeLightbox);
+
   lightbox.addEventListener("click", e => {
     if (e.target === lightbox || e.target.classList.contains("lightbox-content")) closeLightbox();
   });
@@ -206,7 +224,7 @@ async function refreshStatus() {
   const data = await res.json();
   isAdmin = data.isAdmin;
   familyAccess = data.familyAccess;
-  currentGallery = data.currentView || "family";
+  currentGallery = data.currentView || (isAdmin ? "private" : "family");
 
   gateScreen.style.display = familyAccess || isAdmin ? "none" : "flex";
   mainHeader.style.display = familyAccess || isAdmin ? "flex" : "none";
@@ -216,13 +234,14 @@ async function refreshStatus() {
   deleteAllBtn.style.display = isAdmin ? "inline-block" : "none";
   familyGalleryBtn.style.display = isAdmin ? "inline-block" : "none";
   privateGalleryBtn.style.display = isAdmin ? "inline-block" : "none";
+  chatToggleBtn.style.display = isAdmin && currentGallery === "private" ? "inline-block" : "none";
 
-  galleryTitle.textContent = isAdmin && currentGallery === "private" ? "Private Gallery" : "Family Gallery";
+  galleryTitle.textContent = currentGallery === "private" ? "Private Gallery" : "Family Gallery";
   galleryBadge.textContent = currentGallery === "private" ? "Private" : "Family";
 }
 
 function familyImages() {
-  return items.filter(item => item.type === "image");
+  return items.filter(item => item.gallery === "family" && item.type === "image");
 }
 
 function startFamilyLogoRotation() {
@@ -268,11 +287,7 @@ async function loadMedia() {
   if (!familyAccess && !isAdmin) return;
   const res = await fetch(`/media?sort=${currentSort}&gallery=${currentGallery}`);
   const text = await res.text();
-  if (!res.ok) {
-    items = [];
-    gallery.innerHTML = "<p style='padding:20px;'>No media yet.</p>";
-    return;
-  }
+  if (!res.ok) return alert("Could not load media");
   items = JSON.parse(text);
   gallery.className = currentLayout === "grid" ? "grid-gallery" : "masonry";
   render();
@@ -385,10 +400,13 @@ function render() {
       const res = await fetch("/api/like", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ public_id: item.public_id })
+        body: JSON.stringify({ public_id: item.public_id, gallery: currentGallery })
       });
       const data = await res.json();
-      if (data.success) e.currentTarget.querySelector(".like-count").textContent = data.likes;
+      if (data.success) {
+        e.currentTarget.querySelector(".like-count").textContent = data.likes;
+        await loadMedia();
+      }
     });
 
     div.addEventListener("click", () => openLightbox(originalIndex));
@@ -404,7 +422,7 @@ async function addTagToItem(publicId) {
   const res = await fetch("/api/tag", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ public_id: publicId, tag: clean })
+    body: JSON.stringify({ public_id: publicId, tag: clean, gallery: currentGallery })
   });
   const data = await res.json();
   if (data.success) await loadMedia();
@@ -416,7 +434,7 @@ async function editCaption(publicId) {
   const res = await fetch("/api/caption", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ public_id: publicId, caption })
+    body: JSON.stringify({ public_id: publicId, caption, gallery: currentGallery })
   });
   const data = await res.json();
   if (data.success) await loadMedia();
@@ -445,6 +463,9 @@ function renderTags() {
 async function uploadFiles() {
   const files = Array.from(fileInput.files || []);
   if (!files.length) return;
+  if (files.length > 1000) return alert("Maximum 1000 files per upload.");
+  if (currentGallery === "private" && !isAdmin) return alert("Admin only for private gallery.");
+  if (currentGallery === "family" && !familyAccess && !isAdmin) return alert("Family access required.");
 
   const fd = new FormData();
   files.forEach(f => fd.append("files", f));
@@ -460,6 +481,7 @@ async function uploadFiles() {
     const data = await res.json();
     if (res.ok && data.success) {
       await loadMedia();
+      if (data.errors && data.errors.length) alert(`Uploaded ${data.count || 0} files. Some files failed:\n${data.errors.join("\n")}`);
     } else {
       alert(data.error || "Upload failed");
     }
@@ -537,29 +559,41 @@ function enableAudioOnFirstGesture() {
 
 async function openPhoneOverlay() {
   phoneOverlay.classList.add("active");
-  document.body.classList.add("phone-open");
   await buildPhoneFeed();
 }
 
 function closePhoneOverlay() {
   phoneOverlay.classList.remove("active");
-  document.body.classList.remove("phone-open");
   phoneFeed.innerHTML = "";
-  if (phoneObserver) phoneObserver.disconnect();
+  removePhoneNav();
+}
+
+function removePhoneNav() {
+  const nav = document.querySelector(".phone-feed-nav");
+  if (nav) nav.remove();
 }
 
 async function buildPhoneFeed() {
-  const videos = items.filter(item => item.type === "video");
-  phoneFeed.innerHTML = "";
-
-  if (!videos.length) {
-    phoneFeed.innerHTML = "<div class='phone-empty'>No videos uploaded yet.</div>";
+  const res = await fetch(`/media?sort=newest&gallery=${currentGallery}`);
+  if (!res.ok) {
+    phoneFeed.innerHTML = "<div class='phone-item'><div class='phone-overlay-ui'><div class='phone-caption'>No access or no videos.</div></div></div>";
     return;
   }
 
-  videos.forEach((item) => {
+  const data = await res.json();
+  phoneVideos = data.filter(item => item.type === "video");
+  phoneIndex = 0;
+  phoneFeed.innerHTML = "";
+
+  if (!phoneVideos.length) {
+    phoneFeed.innerHTML = "<div class='phone-item'><div class='phone-overlay-ui'><div class='phone-caption'>No videos uploaded yet.</div></div></div>";
+    return;
+  }
+
+  phoneVideos.forEach((item, idx) => {
     const el = document.createElement("section");
     el.className = "phone-item";
+    el.dataset.index = idx;
     el.innerHTML = `
       <video class="phone-video" muted playsinline loop preload="metadata" src="${item.url}"></video>
       <button class="phone-video-unmute">Unmute</button>
@@ -572,8 +606,16 @@ async function buildPhoneFeed() {
         <div class="phone-tags">
           ${(item.tags || []).map(tag => `<button class="phone-tag" data-tag="${escapeHtml(tag)}">#${escapeHtml(tag)}</button>`).join("")}
         </div>
+        <div class="phone-comments">
+          <div class="phone-comments-list"></div>
+          <div class="phone-comment-form">
+            <input type="text" placeholder="Write a comment..." />
+            <button type="button">Post</button>
+          </div>
+        </div>
         <div class="phone-actions">
           <button class="phone-like">❤️ <span>${item.likes || 0}</span></button>
+          <button class="phone-comment">💬</button>
           <button class="phone-share">↗</button>
         </div>
       </div>
@@ -582,29 +624,62 @@ async function buildPhoneFeed() {
     const video = el.querySelector(".phone-video");
     const unmuteBtn = el.querySelector(".phone-video-unmute");
     const likeBtn = el.querySelector(".phone-like");
+    const commentBtn = el.querySelector(".phone-comment");
     const shareBtn = el.querySelector(".phone-share");
+    const comments = el.querySelector(".phone-comments");
+    const commentInput = el.querySelector(".phone-comment-form input");
+    const postBtn = el.querySelector(".phone-comment-form button");
+    const tagButtons = el.querySelectorAll(".phone-tag");
     const tagEditBtn = el.querySelector(".phone-tag-edit");
     const captionEditBtn = el.querySelector(".phone-caption-edit");
-    const tagButtons = el.querySelectorAll(".phone-tag");
 
-    unmuteBtn.addEventListener("click", async e => {
+    video.autoplay = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.muted = true;
+    video.play().catch(() => {});
+
+    unmuteBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
       video.muted = false;
-      try { await video.play(); } catch {}
+      try { await video.play(); } catch { video.muted = true; }
     });
 
-    likeBtn.addEventListener("click", async e => {
+    el.addEventListener("click", (e) => {
+      if (e.target.closest("button") || e.target.closest("input") || e.target.closest(".phone-comments")) return;
+      if (video.paused) video.play().catch(() => {});
+      else video.pause();
+    });
+
+    likeBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
       const res = await fetch("/api/like", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ public_id: item.public_id })
+        body: JSON.stringify({ public_id: item.public_id, gallery: currentGallery })
       });
       const data = await res.json();
       if (data.success) likeBtn.querySelector("span").textContent = data.likes;
     });
 
-    shareBtn.addEventListener("click", async e => {
+    commentBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      comments.classList.toggle("active");
+      commentInput.focus();
+    });
+
+    postBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const txt = commentInput.value.trim();
+      if (!txt) return;
+      const row = document.createElement("div");
+      row.className = "phone-comment-item";
+      row.textContent = txt;
+      el.querySelector(".phone-comments-list").appendChild(row);
+      commentInput.value = "";
+    });
+
+    shareBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
       if (navigator.share) {
         try { await navigator.share({ title: "Video", url: item.url }); } catch {}
@@ -614,20 +689,20 @@ async function buildPhoneFeed() {
       }
     });
 
-    tagEditBtn.addEventListener("click", async e => {
+    tagEditBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
       await addTagToItem(item.public_id);
       await buildPhoneFeed();
     });
 
-    captionEditBtn.addEventListener("click", async e => {
+    captionEditBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
       await editCaption(item.public_id);
       await buildPhoneFeed();
     });
 
     tagButtons.forEach(btn => {
-      btn.addEventListener("click", e => {
+      btn.addEventListener("click", (e) => {
         e.stopPropagation();
         activeTagFilter = btn.dataset.tag;
         closePhoneOverlay();
@@ -636,32 +711,15 @@ async function buildPhoneFeed() {
       });
     });
 
-    el.addEventListener("click", e => {
-      if (e.target.closest("button") || e.target.closest("input")) return;
-      if (video.paused) video.play().catch(() => {});
-      else video.pause();
-    });
-
     phoneFeed.appendChild(el);
   });
 
-  setupPhoneObserver();
+  await jumpToPhoneItem(0);
 }
 
-function setupPhoneObserver() {
-  const videos = document.querySelectorAll(".phone-video");
-  if (!videos.length) return;
-
-  if (phoneObserver) phoneObserver.disconnect();
-  phoneObserver = new IntersectionObserver(entries => {
-    entries.forEach(entry => {
-      const video = entry.target;
-      if (entry.isIntersecting) video.play().catch(() => {});
-      else video.pause();
-    });
-  }, { root: phoneFeed, threshold: 0.6 });
-
-  videos.forEach(v => phoneObserver.observe(v));
+async function jumpToPhoneItem(idx) {
+  const target = phoneFeed.querySelector(`.phone-item[data-index="${idx}"]`);
+  if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function escapeHtml(text) {

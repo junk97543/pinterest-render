@@ -23,27 +23,31 @@ const upload = multer({
 });
 
 const state = global.state || {
-  isAdmin: false,
+  currentView: "family",
   familyAccess: false,
-  currentView: "family"
+  isAdmin: false
 };
 global.state = state;
 
-function mapAsset(asset) {
+function isVideoAsset(asset) {
+  return asset.resource_type === "video";
+}
+
+function mapAsset(asset, gallery) {
   const ctx = asset.context && asset.context.custom ? asset.context.custom : {};
   return {
     public_id: asset.public_id,
-    type: asset.resource_type === "video" ? "video" : "image",
+    gallery,
+    type: isVideoAsset(asset) ? "video" : "image",
     url: asset.secure_url,
     filename: asset.public_id,
     caption: ctx.caption || "",
     likes: Number(ctx.likes || 0),
-    tags: Array.isArray(asset.tags) ? asset.tags : [],
-    gallery: asset.public_id.startsWith("private/") ? "private" : "family"
+    tags: Array.isArray(asset.tags) ? asset.tags : []
   };
 }
 
-async function listAssetsForGallery(gallery) {
+async function listCloudinaryAssets(gallery) {
   const prefix = gallery === "private" ? "private/" : "family/";
   const [images, videos] = await Promise.all([
     cloudinary.api.resources("image", {
@@ -59,8 +63,8 @@ async function listAssetsForGallery(gallery) {
   ]);
 
   return [
-    ...(images.resources || []).map(mapAsset),
-    ...(videos.resources || []).map(mapAsset)
+    ...(images.resources || []).map(a => mapAsset(a, gallery)),
+    ...(videos.resources || []).map(a => mapAsset(a, gallery))
   ];
 }
 
@@ -78,7 +82,6 @@ app.get("/api/status", (req, res) => {
 app.post("/api/family-unlock", (req, res) => {
   const code = String((req.body && req.body.code) || "").trim();
   const expected = String(process.env.FAMILY_GALLERY_CODE || process.env.FAMILY_CODE || "").trim();
-
   if (!code) return res.status(400).json({ success: false, error: "Code required" });
   if (code === expected) {
     state.familyAccess = true;
@@ -97,14 +100,11 @@ app.post("/api/family-logout", (req, res) => {
 app.post("/api/admin-login", (req, res) => {
   const { password } = req.body || {};
   const expected = process.env.ADMIN_PASSWORD || "admin";
-
   if (String(password || "") === String(expected)) {
     state.isAdmin = true;
-    state.familyAccess = true;
-    state.currentView = "family";
+    state.currentView = "private";
     return res.json({ success: true });
   }
-
   return res.status(401).json({ success: false, error: "Wrong password" });
 });
 
@@ -127,7 +127,7 @@ app.get("/media", async (req, res) => {
   try {
     const gallery = req.query.gallery || state.currentView || "family";
     const sort = req.query.sort || "random";
-    let items = await listAssetsForGallery(gallery);
+    let items = await listCloudinaryAssets(gallery);
 
     if (sort === "popular") {
       items.sort((a, b) => (b.likes || 0) - (a.likes || 0));
@@ -140,7 +140,7 @@ app.get("/media", async (req, res) => {
     res.json(items);
   } catch (err) {
     console.error("MEDIA ERROR:", err);
-    res.json([]);
+    res.status(500).json({ success: false, error: "Could not load media" });
   }
 });
 
@@ -172,13 +172,12 @@ app.post("/upload", upload.array("files", 1000), async (req, res) => {
         stream.end(file.buffer);
       });
 
-      uploaded.push(mapAsset({
+      uploaded.push({
         public_id: result.public_id,
-        resource_type,
-        secure_url: result.secure_url,
-        context: {},
-        tags: []
-      }));
+        url: result.secure_url,
+        type: resource_type,
+        gallery
+      });
     }
 
     res.json({ success: true, count: uploaded.length });
@@ -207,7 +206,7 @@ app.post("/delete-all", async (req, res) => {
       return res.status(400).json({ success: false, error: "Invalid gallery" });
     }
 
-    const assets = await listAssetsForGallery(gallery);
+    const assets = await listCloudinaryAssets(gallery);
     for (const item of assets) {
       await cloudinary.uploader.destroy(item.public_id, {
         resource_type: item.type === "video" ? "video" : "image",
