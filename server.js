@@ -7,20 +7,33 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const { v2: cloudinary } = require("cloudinary");
+const { MongoClient } = require("mongodb");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const DATA_DIR = path.join(__dirname, "data");
-const STATE_FILE = path.join(DATA_DIR, "state.json");
-const CHAT_FILE = path.join(DATA_DIR, "chat.json");
-const PUBLIC_DIR = path.join(__dirname, "public");
 const TEMP_UPLOAD_DIR = path.join(__dirname, "tmp-uploads");
+const PUBLIC_DIR = path.join(__dirname, "public");
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(TEMP_UPLOAD_DIR)) fs.mkdirSync(TEMP_UPLOAD_DIR, { recursive: true });
-if (!fs.existsSync(STATE_FILE)) fs.writeFileSync(STATE_FILE, JSON.stringify({ family: [], private: [] }, null, 2));
-if (!fs.existsSync(CHAT_FILE)) fs.writeFileSync(CHAT_FILE, JSON.stringify([], null, 2));
+
+// MongoDB Setup
+const client = new MongoClient(process.env.MONGODB_URI);
+let db;
+
+async function connectDB() {
+  if (!db) {
+    await client.connect();
+    db = client.db("family_gallery");
+    console.log("✅ Connected to MongoDB");
+  }
+  return db;
+}
+
+// Run connection on startup
+connectDB().catch(console.error);
 
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -41,25 +54,56 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin";
 const FAMILY_GALLERY_CODE = process.env.FAMILY_GALLERY_CODE || "1234";
 let activeGallery = "family";
 
-function readJSON(file) {
-  try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return []; }
-}
-function writeJSON(file, data) { fs.writeFileSync(file, JSON.stringify(data, null, 2)); }
-
-function loadState() {
+async function loadState() {
   try {
-    const raw = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
-    return {
-      family: Array.isArray(raw.family) ? raw.family : [],
-      private: Array.isArray(raw.private) ? raw.private : []
-    };
-  } catch {
+    const database = await connectDB();
+    const state = await database.collection("state").findOne({ _id: "main" });
+    return state ? {
+      family: Array.isArray(state.family) ? state.family : [],
+      private: Array.isArray(state.private) ? state.private : []
+    } : { family: [], private: [] };
+  } catch (err) {
+    console.error("DB loadState error:", err);
     return { family: [], private: [] };
   }
 }
-function saveState(state) { writeJSON(STATE_FILE, state); }
-function loadChat() { return readJSON(CHAT_FILE); }
-function saveChat(chat) { writeJSON(CHAT_FILE, chat); }
+
+async function saveState(state) {
+  try {
+    const database = await connectDB();
+    await database.collection("state").updateOne(
+      { _id: "main" },
+      { $set: { family: state.family || [], private: state.private || [] } },
+      { upsert: true }
+    );
+  } catch (err) {
+    console.error("DB saveState error:", err);
+  }
+}
+
+async function loadChat() {
+  try {
+    const database = await connectDB();
+    const chatDoc = await database.collection("chat").findOne({ _id: "main" });
+    return chatDoc && Array.isArray(chatDoc.messages) ? chatDoc.messages : [];
+  } catch (err) {
+    console.error("DB loadChat error:", err);
+    return [];
+  }
+}
+
+async function saveChat(chat) {
+  try {
+    const database = await connectDB();
+    await database.collection("chat").updateOne(
+      { _id: "main" },
+      { $set: { messages: chat.slice(-200) } },
+      { upsert: true }
+    );
+  } catch (err) {
+    console.error("DB saveChat error:", err);
+  }
+}
 
 function isAdmin(req) { return !!req.session?.isAdmin; }
 function hasFamilyAccess(req) { return !!req.session?.familyAccess; }
@@ -100,6 +144,8 @@ async function uploadToCloudinary(filePath, originalName, gallery) {
     folder: gallery === "private" ? "private_gallery" : "family_gallery"
   });
 }
+
+// ======================== ROUTES ========================
 
 app.get("/api/status", (req, res) => {
   res.json({
@@ -150,13 +196,13 @@ app.post("/api/switch-gallery", (req, res) => {
   res.json({ success: true, activeGallery });
 });
 
-app.get("/media", (req, res) => {
+app.get("/media", async (req, res) => {
   const gallery = getTargetGallery(req);
   if (!canAccessGallery(req, gallery)) return res.status(403).json({ success: false, error: "Access denied" });
 
   const sort = String(req.query.sort || "random");
-  const state = loadState();
-  const media = [...state[gallery]];
+  const state = await loadState();
+  let media = [...state[gallery]];
 
   if (sort === "newest") media.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   if (sort === "popular") media.sort((a, b) => (b.likes || 0) - (a.likes || 0));
@@ -178,7 +224,7 @@ app.post("/upload", upload.array("files", 1000), async (req, res) => {
     if (!files.length) return res.status(400).json({ success: false, error: "No files uploaded" });
     if (files.length > 1000) return res.status(400).json({ success: false, error: "Maximum 1000 files per upload" });
 
-    const state = loadState();
+    const state = await loadState();
     const uploaded = [];
     const errors = [];
 
@@ -203,7 +249,7 @@ app.post("/upload", upload.array("files", 1000), async (req, res) => {
     }
 
     state[gallery].push(...uploaded);
-    saveState(state);
+    await saveState(state);
 
     res.json({ success: true, count: uploaded.length, errors, activeGallery: gallery });
   } catch (err) {
@@ -212,18 +258,18 @@ app.post("/upload", upload.array("files", 1000), async (req, res) => {
   }
 });
 
-app.post("/api/like", (req, res) => {
+app.post("/api/like", async (req, res) => {
   try {
     const { public_id, gallery } = req.body || {};
     const targetGallery = gallery === "private" ? "private" : "family";
     if (!canAccessGallery(req, targetGallery)) return res.status(403).json({ success: false, error: "Access denied" });
 
-    const state = loadState();
+    const state = await loadState();
     const item = state[targetGallery].find(m => m.public_id === public_id);
     if (!item) return res.status(404).json({ success: false, error: "Media not found" });
 
     item.likes = (item.likes || 0) + 1;
-    saveState(state);
+    await saveState(state);
     res.json({ success: true, likes: item.likes });
   } catch (err) {
     console.error(err);
@@ -231,7 +277,7 @@ app.post("/api/like", (req, res) => {
   }
 });
 
-app.post("/api/tag", (req, res) => {
+app.post("/api/tag", async (req, res) => {
   try {
     const { public_id, tag, gallery } = req.body || {};
     const targetGallery = gallery === "private" ? "private" : "family";
@@ -240,13 +286,13 @@ app.post("/api/tag", (req, res) => {
     const cleanTag = normalizeTag(tag);
     if (!public_id || !cleanTag) return res.status(400).json({ success: false, error: "Missing public_id or tag" });
 
-    const state = loadState();
+    const state = await loadState();
     const item = state[targetGallery].find(m => m.public_id === public_id);
     if (!item) return res.status(404).json({ success: false, error: "Media not found" });
 
     if (!Array.isArray(item.tags)) item.tags = [];
     if (!item.tags.includes(cleanTag)) item.tags.push(cleanTag);
-    saveState(state);
+    await saveState(state);
 
     res.json({ success: true, tags: item.tags });
   } catch (err) {
@@ -255,16 +301,18 @@ app.post("/api/tag", (req, res) => {
   }
 });
 
-app.post("/api/caption", (req, res) => {
+app.post("/api/caption", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
     const { public_id, caption, gallery } = req.body || {};
     const targetGallery = gallery === "private" ? "private" : "family";
-    const state = loadState();
+
+    const state = await loadState();
     const item = state[targetGallery].find(m => m.public_id === public_id);
     if (!item) return res.status(404).json({ success: false, error: "Media not found" });
+
     item.caption = String(caption || "").slice(0, 200);
-    saveState(state);
+    await saveState(state);
     res.json({ success: true, caption: item.caption });
   } catch (err) {
     console.error(err);
@@ -279,7 +327,7 @@ app.post("/delete-all", async (req, res) => {
     const targetGallery = gallery === "private" ? "private" : "family";
 
     configureCloudinary(targetGallery);
-    const state = loadState();
+    const state = await loadState();
 
     for (const item of state[targetGallery]) {
       try {
@@ -288,7 +336,7 @@ app.post("/delete-all", async (req, res) => {
     }
 
     state[targetGallery] = [];
-    saveState(state);
+    await saveState(state);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -296,25 +344,25 @@ app.post("/delete-all", async (req, res) => {
   }
 });
 
-app.get("/api/chat", (req, res) => {
+app.get("/api/chat", async (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ success: false, error: "Admin only" });
-  res.json(loadChat());
+  res.json(await loadChat());
 });
 
-app.post("/api/chat", (req, res) => {
+app.post("/api/chat", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(403).json({ success: false, error: "Admin only" });
     const { name, message } = req.body || {};
     if (!name || !message) return res.status(400).json({ success: false, error: "Missing name or message" });
 
-    const chat = loadChat();
+    const chat = await loadChat();
     chat.push({
       name: String(name).slice(0, 40),
       message: String(message).slice(0, 500),
       timestamp: new Date().toISOString()
     });
 
-    saveChat(chat.slice(-200));
+    await saveChat(chat);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
