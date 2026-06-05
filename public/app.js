@@ -20,13 +20,10 @@ const lightbox = document.getElementById("lightbox");
 const lightboxClose = document.getElementById("lightbox-close");
 const lightboxImg = document.getElementById("lightbox-img");
 const lightboxVideo = document.getElementById("lightbox-video");
+const lightboxCaption = document.getElementById("lightbox-caption");
 const sortNewestBtn = document.getElementById("sort-newest");
 const sortRandomBtn = document.getElementById("sort-random");
 const sortPopularBtn = document.getElementById("sort-popular");
-const chatMessages = document.getElementById("chat-messages");
-const chatName = document.getElementById("chat-name");
-const chatMessage = document.getElementById("chat-message");
-const sendChat = document.getElementById("send-chat");
 const chatToggleBtn = document.getElementById("chat-toggle-btn");
 const chatCloseBtn = document.getElementById("chat-close-btn");
 const chatSection = document.getElementById("chat-section");
@@ -46,7 +43,6 @@ const phoneCloseBtn = document.getElementById("phone-close-btn");
 const phoneBackBtn = document.getElementById("phone-back-btn");
 
 let items = [];
-let zoom = 1, x = 0, y = 0, dragging = false, startX = 0, startY = 0;
 let isAdmin = false;
 let familyAccess = false;
 let currentSort = "random";
@@ -55,6 +51,7 @@ let currentGallery = "family";
 let activeTagFilter = "";
 let mainLogoTimer = null;
 let mainLogoIndex = 0;
+let lightboxIndex = -1;
 
 initTheme();
 initHandlers();
@@ -186,6 +183,9 @@ function initHandlers() {
       closePhoneOverlay();
     }
   });
+
+  window.addEventListener("wheel", handleLightboxWheel, { passive: false });
+  window.addEventListener("click", enableAudioOnFirstGesture, { once: true });
 }
 
 function setSortActive(btn) {
@@ -236,21 +236,13 @@ async function refreshStatus() {
 
 function startMainLogoRotation() {
   if (mainLogoTimer) clearInterval(mainLogoTimer);
-  if (!mainRotatingLogo) return;
-
-  const familyImages = items
-    .filter(item => item.gallery === "family" && item.type === "image")
-    .sort((a, b) => (b.likes || 0) - (a.likes || 0));
-
+  const familyImages = items.filter(item => item.gallery === "family" && item.type === "image");
   if (!familyImages.length) {
     mainRotatingLogo.removeAttribute("src");
-    mainRotatingLogo.style.opacity = "0";
     return;
   }
-
-  const best = familyImages[0];
+  const best = [...familyImages].sort((a, b) => (b.likes || 0) - (a.likes || 0))[0];
   mainRotatingLogo.src = best.url;
-  mainRotatingLogo.style.opacity = "1";
 }
 
 async function loadMedia() {
@@ -326,6 +318,11 @@ function render() {
     });
     div.appendChild(tagsWrap);
 
+    const captionLine = document.createElement("div");
+    captionLine.className = "caption-inline";
+    captionLine.textContent = item.caption ? item.caption : "";
+    if (item.caption) div.appendChild(captionLine);
+
     const actions = document.createElement("div");
     actions.className = "media-actions";
 
@@ -349,7 +346,6 @@ function render() {
       actions.appendChild(capBtn);
     }
 
-    div.addEventListener("click", () => openLightbox(originalIndex));
     div.appendChild(actions);
 
     const likeDiv = document.createElement("div");
@@ -365,9 +361,13 @@ function render() {
         body: JSON.stringify({ public_id: item.public_id, gallery: currentGallery })
       });
       const data = await res.json();
-      if (data.success) e.currentTarget.querySelector(".like-count").textContent = data.likes;
+      if (data.success) {
+        e.currentTarget.querySelector(".like-count").textContent = data.likes;
+        await loadMedia();
+      }
     });
 
+    div.addEventListener("click", () => openLightbox(originalIndex));
     gallery.appendChild(div);
   });
 }
@@ -436,9 +436,7 @@ async function uploadFiles() {
 
   try {
     const res = await fetch("/upload", { method: "POST", body: fd });
-    const text = await res.text();
-    let data = {};
-    try { data = JSON.parse(text); } catch {}
+    const data = await res.json();
     if (res.ok && data.success) {
       await loadMedia();
       if (data.errors && data.errors.length) alert(`Uploaded ${data.count || 0} files. Some files failed:\n${data.errors.join("\n")}`);
@@ -456,36 +454,62 @@ async function uploadFiles() {
 }
 
 function openLightbox(index) {
+  lightboxIndex = index;
+  showLightboxItem(index);
+  lightbox.classList.add("active");
+}
+
+function showLightboxItem(index) {
   const item = items[index];
   if (!item) return;
-  lightbox.classList.add("active");
-  zoom = 1;
-  x = 0;
-  y = 0;
-  updateTransform();
+
+  lightboxImg.style.display = "none";
+  lightboxVideo.style.display = "none";
+  lightboxCaption.classList.remove("show");
+  lightboxCaption.textContent = item.caption || "";
+
+  if (item.caption) lightboxCaption.classList.add("show");
+
   if (item.type === "image") {
     lightboxImg.src = item.url;
     lightboxImg.style.display = "block";
-    lightboxVideo.style.display = "none";
-    lightboxVideo.pause();
   } else {
     lightboxVideo.src = item.url;
     lightboxVideo.style.display = "block";
-    lightboxImg.style.display = "none";
-    lightboxImg.src = "";
-    lightboxVideo.play().catch(() => {});
+    lightboxVideo.muted = false;
+    lightboxVideo.controls = true;
+    lightboxVideo.play().catch(() => {
+      lightboxVideo.muted = true;
+      lightboxVideo.play().catch(() => {});
+    });
   }
 }
 
 function closeLightbox() {
   lightbox.classList.remove("active");
   lightboxImg.src = "";
-  lightboxVideo.src = "";
   lightboxVideo.pause();
+  lightboxVideo.src = "";
+  lightboxCaption.classList.remove("show");
+  lightboxCaption.textContent = "";
 }
 
-function updateTransform() {
-  lightboxImg.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
+function handleLightboxWheel(e) {
+  if (!lightbox.classList.contains("active")) return;
+  e.preventDefault();
+  if (e.deltaY > 0) {
+    lightboxIndex = (lightboxIndex + 1) % items.length;
+  } else {
+    lightboxIndex = (lightboxIndex - 1 + items.length) % items.length;
+  }
+  showLightboxItem(lightboxIndex);
+}
+
+function enableAudioOnFirstGesture() {
+  if (!lightbox.classList.contains("active")) return;
+  if (lightboxVideo && !lightboxVideo.src) return;
+  lightboxVideo.muted = false;
+  lightboxVideo.play().catch(() => {});
 }
 
 async function openPhoneOverlay() {
@@ -519,6 +543,7 @@ async function buildPhoneFeed() {
     el.className = "phone-item";
     el.innerHTML = `
       <video class="phone-video" muted playsinline loop preload="metadata" src="${item.url}"></video>
+      <button class="phone-video-unmute">Unmute</button>
       <div class="phone-overlay-ui">
         <div class="phone-edit-bar">
           <button class="phone-tag-edit">Add Tag</button>
@@ -544,6 +569,7 @@ async function buildPhoneFeed() {
     `;
 
     const video = el.querySelector(".phone-video");
+    const unmuteBtn = el.querySelector(".phone-video-unmute");
     const likeBtn = el.querySelector(".phone-like");
     const commentBtn = el.querySelector(".phone-comment");
     const shareBtn = el.querySelector(".phone-share");
@@ -559,6 +585,16 @@ async function buildPhoneFeed() {
     video.playsInline = true;
     video.muted = true;
     video.play().catch(() => {});
+
+    unmuteBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      video.muted = false;
+      try {
+        await video.play();
+      } catch {
+        video.muted = true;
+      }
+    });
 
     el.addEventListener("click", (e) => {
       if (e.target.closest("button") || e.target.closest("input") || e.target.closest(".phone-comments")) return;

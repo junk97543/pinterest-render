@@ -24,6 +24,56 @@
 .phone-item video {
   object-fit: contain;
 }
+.lightbox-content {
+  position: relative;
+}
+
+.lightbox-caption {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  max-width: min(90vw, 700px);
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: center;
+  pointer-events: none;
+  display: none;
+}
+
+.lightbox-caption.show {
+  display: block;
+}
+
+.phone-video-unmute {
+  position: absolute;
+  left: 16px;
+  bottom: 120px;
+  z-index: 6;
+  border: none;
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.92);
+  color: #111;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.caption-inline {
+  padding: 0 10px 10px 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+  opacity: 0.9;
+}
+
+.media-actions {
+  align-items: center;
+}
 body.dark {
   --bg: #121212;
   --text: #e0e0e0;
