@@ -95,6 +95,16 @@ function configureCloudinary(gallery) {
   }
 }
 
+async function uploadToCloudinary(filePath, originalName, gallery) {
+  const ext = path.extname(originalName).toLowerCase();
+  const isVideo = [".mp4", ".mov", ".webm", ".m4v", ".avi", ".ogg"].includes(ext);
+  configureCloudinary(gallery);
+  return await cloudinary.uploader.upload(filePath, {
+    resource_type: isVideo ? "video" : "image",
+    folder: gallery === "private" ? "private_gallery" : "family_gallery"
+  });
+}
+
 // ==================== ROUTES ====================
 
 app.get("/api/status", (req, res) => {
@@ -148,9 +158,7 @@ app.post("/api/switch-gallery", (req, res) => {
 
 // ==================== UNDRESS ENDPOINT ====================
 app.post('/api/undress', async (req, res) => {
-  if (!isAdmin(req)) {
-    return res.status(403).json({ success: false, error: 'Admin only' });
-  }
+  if (!isAdmin(req)) return res.status(403).json({ success: false, error: 'Admin only' });
 
   const { imageUrl } = req.body;
   if (!imageUrl) return res.status(400).json({ error: "No image URL provided" });
@@ -165,11 +173,7 @@ app.post('/api/undress', async (req, res) => {
 
     let workflow = JSON.parse(fs.readFileSync(path.join(__dirname, 'undress_workflow.json'), 'utf8'));
 
-    if (workflow["1"]) {
-      workflow["1"].inputs.image = path.basename(tempInput);
-    } else {
-      throw new Error("Input node 1 not found in workflow");
-    }
+    if (workflow["1"]) workflow["1"].inputs.image = path.basename(tempInput);
 
     const promptRes = await fetch('http://127.0.0.1:8188/prompt', {
       method: 'POST',
@@ -184,7 +188,6 @@ app.post('/api/undress', async (req, res) => {
       await new Promise(r => setTimeout(r, 3000));
       const historyRes = await fetch(`http://127.0.0.1:8188/history/${prompt_id}`);
       const history = await historyRes.json();
-
       if (history[prompt_id] && history[prompt_id].outputs && history[prompt_id].outputs["28"]) {
         const imgData = history[prompt_id].outputs["28"].images[0];
         if (imgData) {
@@ -194,7 +197,7 @@ app.post('/api/undress', async (req, res) => {
       }
     }
 
-    if (!outputUrl) throw new Error("Generation timed out. Make sure ComfyUI is running on port 8188.");
+    if (!outputUrl) throw new Error("Generation timed out.");
 
     const resultRes = await fetch(outputUrl);
     const resultBuffer = await resultRes.buffer();
@@ -203,7 +206,7 @@ app.post('/api/undress', async (req, res) => {
     configureCloudinary("private");
     const cloudinaryRes = await cloudinary.uploader.upload(tempOutput, {
       folder: "private_gallery",
-      tags: ['ai-nude', 'undressed'],
+      tags: ['ai-nude'],
     });
 
     const state = loadState();
@@ -220,31 +223,71 @@ app.post('/api/undress', async (req, res) => {
     saveState(state);
 
     fs.unlinkSync(tempInput);
-    fs.unlinkSync(tempOutput);
+    if (fs.existsSync(tempOutput)) fs.unlinkSync(tempOutput);
 
-    res.json({
-      success: true,
-      url: cloudinaryRes.secure_url,
-      message: "✅ Nude version created and added to Private Gallery!"
-    });
-
+    res.json({ success: true, message: "✅ Nude version added to Private Gallery!" });
   } catch (err) {
-    console.error("Undress error:", err);
+    console.error(err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Keep your other existing routes (upload, media, like, tag, caption, delete-all, chat, etc.)
-// ... (I kept them short for brevity - make sure they are still in your file)
+// Upload Route
+app.post("/upload", upload.array("files", 1000), async (req, res) => {
+  const gallery = String(req.body.gallery || "family").toLowerCase() === "private" ? "private" : "family";
 
-app.get("/media", (req, res) => { /* your original code */ });
-app.post("/upload", upload.array("files", 1000), async (req, res) => { /* your original code */ });
-app.post("/api/like", (req, res) => { /* your original code */ });
-app.post("/api/tag", (req, res) => { /* your original code */ });
-app.post("/api/caption", (req, res) => { /* your original code */ });
-app.post("/delete-all", async (req, res) => { /* your original code */ });
-app.get("/api/chat", (req, res) => { /* your original code */ });
-app.post("/api/chat", (req, res) => { /* your original code */ });
+  try {
+    if (!canAccessGallery(req, gallery)) return res.status(403).json({ success: false, error: "Access denied" });
+    if (gallery === "private" && !isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
+    if (gallery === "family" && !hasFamilyAccess(req) && !isAdmin(req)) {
+      return res.status(401).json({ success: false, error: "Family access required" });
+    }
+
+    const files = req.files || [];
+    if (!files.length) return res.status(400).json({ success: false, error: "No files uploaded" });
+
+    const state = loadState();
+    const uploaded = [];
+    const errors = [];
+
+    for (const file of files) {
+      try {
+        const result = await uploadToCloudinary(file.path, file.originalname, gallery);
+        uploaded.push({
+          public_id: result.public_id,
+          url: result.secure_url,
+          type: result.resource_type === "video" ? "video" : "image",
+          likes: 0,
+          tags: [],
+          caption: "",
+          createdAt: new Date().toISOString(),
+          gallery
+        });
+      } catch (err) {
+        errors.push(`${file.originalname}: ${err.message}`);
+      } finally {
+        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+      }
+    }
+
+    state[gallery].push(...uploaded);
+    saveState(state);
+
+    res.json({ success: true, count: uploaded.length, errors, activeGallery: gallery });
+  } catch (err) {
+    console.error("UPLOAD ERROR:", err);
+    res.status(500).json({ success: false, error: "Upload failed" });
+  }
+});
+
+// Other routes (like, tag, etc.)
+app.get("/media", (req, res) => { /* your original media route */ });
+app.post("/api/like", (req, res) => { /* your original */ });
+app.post("/api/tag", (req, res) => { /* your original */ });
+app.post("/api/caption", (req, res) => { /* your original */ });
+app.post("/delete-all", async (req, res) => { /* your original */ });
+app.get("/api/chat", (req, res) => { /* your original */ });
+app.post("/api/chat", (req, res) => { /* your original */ });
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
