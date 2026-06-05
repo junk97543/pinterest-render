@@ -277,21 +277,14 @@ app.post("/api/run-comfy", async (req, res) => {
     }
 
     const localSourcePath = path.join(UPLOADS_DIR, item.filename || "");
-    let sourceBuffer;
-
-    if (fs.existsSync(localSourcePath)) {
-      sourceBuffer = fs.readFileSync(localSourcePath);
-    } else {
-      const host = process.env.PUBLIC_BASE_URL || `http://127.0.0.1:${process.env.PORT || 3000}`;
-      const imageResp = await fetch(`${host}${item.url}`);
-      if (!imageResp.ok) {
-        return res.status(500).json({ success: false, error: "Could not fetch source image." });
-      }
-      sourceBuffer = Buffer.from(await imageResp.arrayBuffer());
+    if (!fs.existsSync(localSourcePath)) {
+      return res.status(500).json({ success: false, error: "Local source file not found." });
     }
 
+    const sourceBuffer = fs.readFileSync(localSourcePath);
+
     const uploadForm = new FormData();
-    uploadForm.append("image", new Blob([sourceBuffer]), `${public_id}.png`);
+    uploadForm.append("image", new Blob([sourceBuffer]), `${item.filename || public_id}.png`);
 
     const uploadResp = await fetch(`${COMFY_URL}/upload/image`, {
       method: "POST",
@@ -299,11 +292,13 @@ app.post("/api/run-comfy", async (req, res) => {
     });
 
     if (!uploadResp.ok) {
-      return res.status(500).json({ success: false, error: "Failed to upload image to ComfyUI." });
+      const text = await uploadResp.text().catch(() => "");
+      return res.status(500).json({ success: false, error: `Failed to upload image to ComfyUI. ${text}` });
     }
 
     const uploadData = await uploadResp.json().catch(() => ({}));
     const uploadedName = uploadData.name || uploadData.filename || uploadData.path;
+
     if (!uploadedName) {
       return res.status(500).json({ success: false, error: "ComfyUI did not return an uploaded image name." });
     }
