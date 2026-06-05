@@ -3,7 +3,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const uploadInput = document.getElementById("uploadInput");
   const galleryEl = document.getElementById("gallery");
   const statusEl = document.getElementById("status");
-  const runButton = document.getElementById("runButton");
+  const familyUnlockForm = document.getElementById("familyUnlockForm");
+  const familyCodeInput = document.getElementById("familyCodeInput");
+  const familyUnlockMessage = document.getElementById("familyUnlockMessage");
+  const familyPanel = document.getElementById("familyPanel");
+  const appPanel = document.getElementById("appPanel");
 
   let currentGallery = "family";
 
@@ -20,14 +24,22 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       data = await res.json();
     } catch {}
+
     if (!res.ok) {
       throw new Error(data.error || `Request failed: ${res.status}`);
     }
+
     return data;
   }
 
   function setStatus(text) {
     if (statusEl) statusEl.textContent = text;
+  }
+
+  function showFamilyMessage(text, ok = false) {
+    if (!familyUnlockMessage) return;
+    familyUnlockMessage.textContent = text;
+    familyUnlockMessage.style.color = ok ? "green" : "red";
   }
 
   function mediaCard(item) {
@@ -96,12 +108,49 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const res = await fetch(`/media?gallery=${encodeURIComponent(currentGallery)}&sort=newest`);
       const items = await res.json();
-      galleryEl.innerHTML = "";
-      items.forEach(item => galleryEl.appendChild(mediaCard(item)));
+      if (galleryEl) {
+        galleryEl.innerHTML = "";
+        items.forEach(item => galleryEl.appendChild(mediaCard(item)));
+      }
     } catch (err) {
       console.error(err);
       setStatus("Failed to load gallery");
     }
+  }
+
+  async function refreshStatus() {
+    try {
+      const res = await fetch("/api/status");
+      const data = await res.json();
+      const unlocked = !!data.familyAccess;
+      if (familyPanel) familyPanel.style.display = unlocked ? "none" : "block";
+      if (appPanel) appPanel.style.display = unlocked ? "block" : "none";
+    } catch {}
+  }
+
+  if (familyUnlockForm) {
+    familyUnlockForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        showFamilyMessage("Checking code...");
+        const code = String(familyCodeInput.value || "").trim();
+        const data = await api("/api/family-unlock", {
+          method: "POST",
+          body: JSON.stringify({ code })
+        });
+
+        if (data.success) {
+          showFamilyMessage("Code accepted", true);
+          await refreshStatus();
+          await loadMedia();
+          return;
+        }
+
+        showFamilyMessage("Wrong code");
+      } catch (err) {
+        showFamilyMessage(err.message || "Wrong code");
+      }
+    });
   }
 
   if (uploadForm) {
@@ -135,5 +184,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  refreshStatus();
   loadMedia();
 });

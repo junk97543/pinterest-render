@@ -19,7 +19,6 @@ app.use(session({
 
 const UPLOADS_DIR = path.join(__dirname, "uploads");
 const PUBLIC_DIR = path.join(__dirname, "public");
-const WORKFLOW_PATH = path.join(__dirname, "undress_workflow.json");
 
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
@@ -56,7 +55,7 @@ function fileUrl(filename) {
   return `${PUBLIC_BASE_URL}/uploads/${encodeURIComponent(filename)}`;
 }
 
-function saveBufferToGallery(buffer, filename, gallery, caption = "", source = "upload") {
+function saveImageToGallery({ buffer, filename, gallery, caption = "", source = "upload" }) {
   const safe = slugify(filename);
   fs.writeFileSync(path.join(UPLOADS_DIR, safe), buffer);
 
@@ -74,10 +73,6 @@ function saveBufferToGallery(buffer, filename, gallery, caption = "", source = "
 
   mediaStore.unshift(item);
   return item;
-}
-
-function saveImageToGallery({ buffer, filename, gallery, caption = "", source = "upload" }) {
-  return saveBufferToGallery(buffer, filename, gallery, caption, source);
 }
 
 function getComfyOutputUrl(run) {
@@ -107,10 +102,7 @@ async function createComfyDeployRun(imageUrl) {
   });
 
   const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) {
-    throw new Error(`ComfyDeploy run failed: ${JSON.stringify(data)}`);
-  }
-
+  if (!resp.ok) throw new Error(`ComfyDeploy run failed: ${JSON.stringify(data)}`);
   return data;
 }
 
@@ -123,10 +115,7 @@ async function getComfyDeployRun(runId) {
   });
 
   const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) {
-    throw new Error(`ComfyDeploy status failed: ${JSON.stringify(data)}`);
-  }
-
+  if (!resp.ok) throw new Error(`ComfyDeploy status failed: ${JSON.stringify(data)}`);
   return data;
 }
 
@@ -166,29 +155,34 @@ app.get("/api/status", (req, res) => {
 });
 
 app.get("/api/test-comfydeploy", async (req, res) => {
-  try {
-    const ok = !!(COMFYDEPLOY_API_KEY && COMFYDEPLOY_ENDPOINT_URL && COMFYDEPLOY_DEPLOYMENT_ID);
-    res.json({
-      ok,
-      hasKey: !!COMFYDEPLOY_API_KEY,
-      hasEndpoint: !!COMFYDEPLOY_ENDPOINT_URL,
-      hasDeployment: !!COMFYDEPLOY_DEPLOYMENT_ID,
-      publicBaseUrl: PUBLIC_BASE_URL || null
-    });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
+  res.json({
+    ok: true,
+    hasKey: !!COMFYDEPLOY_API_KEY,
+    hasEndpoint: !!COMFYDEPLOY_ENDPOINT_URL,
+    hasDeployment: !!COMFYDEPLOY_DEPLOYMENT_ID,
+    publicBaseUrl: PUBLIC_BASE_URL || null
+  });
 });
 
 app.post("/api/family-unlock", (req, res) => {
-  const { code } = req.body || {};
-  const expected = process.env.FAMILY_CODE || "1234";
-  if (String(code || "") === String(expected)) {
-    state.familyAccess = true;
-    state.currentView = "family";
-    return res.json({ success: true });
+  try {
+    const code = String((req.body && req.body.code) || "").trim();
+    const expected = String(process.env.FAMILY_CODE || "1234").trim();
+
+    if (!code) {
+      return res.status(400).json({ success: false, error: "Code required" });
+    }
+
+    if (code === expected) {
+      state.familyAccess = true;
+      state.currentView = "family";
+      return res.json({ success: true });
+    }
+
+    return res.status(401).json({ success: false, error: "Wrong code" });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message || "Unlock failed" });
   }
-  return res.json({ success: false });
 });
 
 app.post("/api/family-logout", (req, res) => {
@@ -205,7 +199,7 @@ app.post("/api/admin-login", (req, res) => {
     state.currentView = "private";
     return res.json({ success: true });
   }
-  return res.json({ success: false });
+  return res.status(401).json({ success: false, error: "Wrong password" });
 });
 
 app.post("/api/admin-logout", (req, res) => {
@@ -323,7 +317,6 @@ app.post("/delete-all", (req, res) => {
 app.post("/api/run-comfy", async (req, res) => {
   try {
     const { public_id, gallery } = req.body || {};
-
     if (gallery !== "private") {
       return res.status(400).json({ success: false, error: "Only private gallery items can run this workflow." });
     }
@@ -340,7 +333,6 @@ app.post("/api/run-comfy", async (req, res) => {
 
     const publicImageUrl = fileUrl(item.filename);
     const run = await createComfyDeployRun(publicImageUrl);
-
     const runId = run.run_id || run.id || run.request_id || run.queue_id;
     const finalOutputUrl = runId ? await waitForComfyDeployResult(runId) : getComfyOutputUrl(run);
 
