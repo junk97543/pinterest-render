@@ -52,11 +52,11 @@ let currentSort = "random";
 let currentLayout = "masonry";
 let currentGallery = "family";
 let activeTagFilter = "";
-let mainLogoTimer = null;
 let lightboxIndex = -1;
 let phoneIndex = 0;
 let phoneVideos = [];
 let wheelLock = false;
+let mainLogoTimer = null;
 
 initTheme();
 initHandlers();
@@ -173,7 +173,6 @@ function initHandlers() {
   });
 
   fileInput.addEventListener("change", uploadFiles);
-
   videoFeedBtn.addEventListener("click", openPhoneOverlay);
   phoneCloseBtn.addEventListener("click", closePhoneOverlay);
   phoneBackBtn.addEventListener("click", closePhoneOverlay);
@@ -260,11 +259,7 @@ function startMainLogoRotation() {
 
 function setFavicon(url) {
   if (!siteFavicon) return;
-  if (!url) {
-    siteFavicon.href = "";
-    return;
-  }
-  siteFavicon.href = url;
+  siteFavicon.href = url || "";
 }
 
 async function loadMedia() {
@@ -487,11 +482,11 @@ function openLightbox(index) {
 function showLightboxItem(index) {
   const item = items[index];
   if (!item) return;
+
   lightboxImg.style.display = "none";
   lightboxVideo.style.display = "none";
   lightboxCaption.classList.remove("show");
   lightboxCaption.textContent = item.caption || "";
-
   if (item.caption) lightboxCaption.classList.add("show");
 
   if (item.type === "image") {
@@ -529,9 +524,8 @@ function handleLightboxWheel(e) {
   e.preventDefault();
   if (wheelLock) return;
   wheelLock = true;
-  const direction = e.deltaY > 0 ? 1 : -1;
-  stepLightbox(direction);
-  setTimeout(() => { wheelLock = false; }, 350);
+  stepLightbox(e.deltaY > 0 ? 1 : -1);
+  setTimeout(() => { wheelLock = false; }, 550);
 }
 
 function enableAudioOnFirstGesture() {
