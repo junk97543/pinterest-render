@@ -94,12 +94,16 @@ async function waitForComfyResult(promptId, timeoutMs = 120000) {
 app.use("/uploads", express.static(UPLOADS_DIR));
 app.use(express.static(PUBLIC_DIR));
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, "index.html"));
-});
+app.get("/", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
+app.get("/health", (req, res) => res.json({ ok: true }));
 
-app.get("/health", (req, res) => {
-  res.json({ ok: true });
+app.get("/api/test-comfy", async (req, res) => {
+  try {
+    const r = await fetch(COMFY_URL);
+    res.json({ ok: true, comfyUrl: COMFY_URL, status: r.status });
+  } catch (err) {
+    res.status(500).json({ ok: false, comfyUrl: COMFY_URL, error: err.message });
+  }
 });
 
 app.get("/api/status", (req, res) => {
@@ -269,7 +273,6 @@ app.post("/api/run-comfy", async (req, res) => {
     }
 
     const workflow = JSON.parse(fs.readFileSync(WORKFLOW_PATH, "utf8"));
-
     if (!workflow["1"] || !workflow["1"].inputs) {
       return res.status(500).json({ success: false, error: "Workflow node 1 not found." });
     }
@@ -280,7 +283,6 @@ app.post("/api/run-comfy", async (req, res) => {
     }
 
     const sourceBuffer = fs.readFileSync(localSourcePath);
-
     const uploadForm = new FormData();
     uploadForm.append("image", new Blob([sourceBuffer]), `${item.filename || public_id}.png`);
 
@@ -305,19 +307,12 @@ app.post("/api/run-comfy", async (req, res) => {
     const promptResp = await fetch(`${COMFY_URL}/prompt`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: workflow,
-        client_id: "gallery-app"
-      })
+      body: JSON.stringify({ prompt: workflow, client_id: "gallery-app" })
     });
 
     const promptData = await promptResp.json().catch(() => ({}));
     if (!promptResp.ok) {
-      return res.status(500).json({
-        success: false,
-        error: "Failed to queue ComfyUI workflow.",
-        details: promptData
-      });
+      return res.status(500).json({ success: false, error: "Failed to queue ComfyUI workflow.", details: promptData });
     }
 
     const promptId = promptData.prompt_id || promptData.promptId || promptData.id;
