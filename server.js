@@ -85,7 +85,7 @@ async function waitForComfyResult(promptId, timeoutMs = 120000) {
         }
       }
     } catch {}
-    await sleep(2500);
+    await sleep(2000);
   }
 
   return null;
@@ -273,6 +273,7 @@ app.post("/api/run-comfy", async (req, res) => {
     }
 
     const workflow = JSON.parse(fs.readFileSync(WORKFLOW_PATH, "utf8"));
+
     if (!workflow["1"] || !workflow["1"].inputs) {
       return res.status(500).json({ success: false, error: "Workflow node 1 not found." });
     }
@@ -293,11 +294,16 @@ app.post("/api/run-comfy", async (req, res) => {
 
     if (!uploadResp.ok) {
       const text = await uploadResp.text().catch(() => "");
-      return res.status(500).json({ success: false, error: `Failed to upload image to ComfyUI. ${text}` });
+      return res.status(500).json({
+        success: false,
+        error: "Failed to upload image to ComfyUI.",
+        details: text
+      });
     }
 
     const uploadData = await uploadResp.json().catch(() => ({}));
     const uploadedName = uploadData.name || uploadData.filename || uploadData.path;
+
     if (!uploadedName) {
       return res.status(500).json({ success: false, error: "ComfyUI did not return an uploaded image name." });
     }
@@ -307,12 +313,19 @@ app.post("/api/run-comfy", async (req, res) => {
     const promptResp = await fetch(`${COMFY_URL}/prompt`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: workflow, client_id: "gallery-app" })
+      body: JSON.stringify({
+        prompt: workflow,
+        client_id: "gallery-app"
+      })
     });
 
     const promptData = await promptResp.json().catch(() => ({}));
     if (!promptResp.ok) {
-      return res.status(500).json({ success: false, error: "Failed to queue ComfyUI workflow.", details: promptData });
+      return res.status(500).json({
+        success: false,
+        error: "Failed to queue ComfyUI workflow.",
+        details: promptData
+      });
     }
 
     const promptId = promptData.prompt_id || promptData.promptId || promptData.id;
