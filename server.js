@@ -1,20 +1,14 @@
 const express = require("express");
-const fs = require("fs");
+const multer = require("multer");
 const path = require("path");
 const crypto = require("crypto");
-const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
-
 require("dotenv").config();
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
-
-const UPLOADS_DIR = path.join(__dirname, "uploads");
-const PUBLIC_DIR = path.join(__dirname, "public");
-
-if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+app.use(express.static(path.join(__dirname, "public")));
 
 cloudinary.config({
   cloud_name: process.env.PRIVATE_CLOUDINARY_CLOUD_NAME,
@@ -35,54 +29,46 @@ const state = global.state || {
 };
 global.state = state;
 
-function slugify(name) {
-  return String(name || "image").replace(/[^a-z0-9_\-]+/gi, "_").replace(/_+/g, "_");
+function isVideoAsset(asset) {
+  return asset.resource_type === "video";
 }
 
-function isVideo(asset) {
-  return asset.resource_type === "video" || (asset.format && ["mp4", "mov", "webm", "m4v"].includes(asset.format.toLowerCase()));
-}
-
-function mapCloudinaryAsset(asset, gallery) {
-  const meta = asset.context && asset.context.custom ? asset.context.custom : {};
-  const tags = Array.isArray(asset.tags) ? asset.tags : [];
-
+function mapAsset(asset, gallery) {
+  const ctx = asset.context && asset.context.custom ? asset.context.custom : {};
   return {
     public_id: asset.public_id,
     gallery,
-    type: isVideo(asset) ? "video" : "image",
-    url: asset.secure_url || asset.url,
+    type: isVideoAsset(asset) ? "video" : "image",
+    url: asset.secure_url,
     filename: asset.public_id,
-    caption: meta.caption || "",
-    likes: Number(meta.likes || 0),
-    tags
+    caption: ctx.caption || "",
+    likes: Number(ctx.likes || 0),
+    tags: Array.isArray(asset.tags) ? asset.tags : []
   };
 }
 
-async function fetchCloudinaryAssets(gallery) {
+async function listCloudinaryAssets(gallery) {
   const prefix = gallery === "private" ? "private/" : "family/";
-  const resourceTypes = ["image", "video"];
-  const all = [];
-
-  for (const resource_type of resourceTypes) {
-    const res = await cloudinary.api.resources(resource_type, {
+  const [images, videos] = await Promise.all([
+    cloudinary.api.resources("image", {
       type: "upload",
       prefix,
       max_results: 500
-    });
+    }),
+    cloudinary.api.resources("video", {
+      type: "upload",
+      prefix,
+      max_results: 500
+    })
+  ]);
 
-    for (const asset of res.resources || []) {
-      all.push(mapCloudinaryAsset(asset, gallery));
-    }
-  }
-
-  return all;
+  return [
+    ...(images.resources || []).map(a => mapAsset(a, gallery)),
+    ...(videos.resources || []).map(a => mapAsset(a, gallery))
+  ];
 }
 
-app.use("/uploads", express.static(UPLOADS_DIR));
-app.use(express.static(PUBLIC_DIR));
-
-app.get("/", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
 app.get("/health", (req, res) => res.json({ ok: true }));
 
 app.get("/api/status", (req, res) => {
@@ -94,24 +80,15 @@ app.get("/api/status", (req, res) => {
 });
 
 app.post("/api/family-unlock", (req, res) => {
-  try {
-    const code = String((req.body && req.body.code) || "").trim();
-    const expected = String(process.env.FAMILY_GALLERY_CODE || process.env.FAMILY_CODE || "1234").trim();
-
-    if (!code) {
-      return res.status(400).json({ success: false, error: "Code required" });
-    }
-
-    if (code === expected) {
-      state.familyAccess = true;
-      state.currentView = "family";
-      return res.json({ success: true });
-    }
-
-    return res.status(401).json({ success: false, error: "Wrong code" });
-  } catch (err) {
-    return res.status(500).json({ success: false, error: err.message || "Unlock failed" });
+  const code = String((req.body && req.body.code) || "").trim();
+  const expected = String(process.env.FAMILY_GALLERY_CODE || process.env.FAMILY_CODE || "").trim();
+  if (!code) return res.status(400).json({ success: false, error: "Code required" });
+  if (code === expected) {
+    state.familyAccess = true;
+    state.currentView = "family";
+    return res.json({ success: true });
   }
+  return res.status(401).json({ success: false, error: "Wrong code" });
 });
 
 app.post("/api/family-logout", (req, res) => {
@@ -150,20 +127,19 @@ app.get("/media", async (req, res) => {
   try {
     const gallery = req.query.gallery || state.currentView || "family";
     const sort = req.query.sort || "random";
-
-    let items = await fetchCloudinaryAssets(gallery);
+    let items = await listCloudinaryAssets(gallery);
 
     if (sort === "popular") {
-      items = [...items].sort((a, b) => (b.likes || 0) - (a.likes || 0));
+      items.sort((a, b) => (b.likes || 0) - (a.likes || 0));
     } else if (sort === "newest") {
-      items = [...items];
+      items.sort((a, b) => b.public_id.localeCompare(a.public_id));
     } else {
-      items = [...items].sort(() => Math.random() - 0.5);
+      items.sort(() => Math.random() - 0.5);
     }
 
     res.json(items);
   } catch (err) {
-    console.error(err);
+    console.error("MEDIA ERROR:", err);
     res.status(500).json({ success: false, error: "Could not load media" });
   }
 });
@@ -171,46 +147,42 @@ app.get("/media", async (req, res) => {
 app.post("/upload", upload.array("files", 1000), async (req, res) => {
   try {
     const gallery = req.body.gallery || "family";
-    const files = req.files || [];
     const folder = gallery === "private" ? "private" : "family";
-    const saved = [];
+    const files = req.files || [];
+    const uploaded = [];
 
     for (const file of files) {
-      const ext = path.extname(file.originalname || "").toLowerCase();
       const resource_type = file.mimetype && file.mimetype.startsWith("video/") ? "video" : "image";
-      const public_id = `${folder}/${Date.now()}_${crypto.randomUUID()}${ext ? ext : ""}`;
+      const name = `${Date.now()}_${crypto.randomUUID()}`;
 
-      const uploadRes = await new Promise((resolve, reject) => {
+      const result = await new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
           {
             folder,
-            public_id: path.basename(public_id, ext || ""),
-            resource_type: resource_type,
-            overwrite: true
+            public_id: name,
+            resource_type,
+            overwrite: true,
+            unique_filename: false
           },
-          (err, result) => {
+          (err, data) => {
             if (err) reject(err);
-            else resolve(result);
+            else resolve(data);
           }
         );
         stream.end(file.buffer);
       });
 
-      saved.push({
-        public_id: uploadRes.public_id,
-        gallery,
-        type: resource_type === "video" ? "video" : "image",
-        url: uploadRes.secure_url,
-        filename: uploadRes.public_id,
-        caption: "",
-        likes: 0,
-        tags: []
+      uploaded.push({
+        public_id: result.public_id,
+        url: result.secure_url,
+        type: resource_type,
+        gallery
       });
     }
 
-    res.json({ success: true, count: saved.length });
+    res.json({ success: true, count: uploaded.length });
   } catch (err) {
-    console.error(err);
+    console.error("UPLOAD ERROR:", err);
     res.status(500).json({ success: false, error: "Upload failed" });
   }
 });
@@ -234,9 +206,7 @@ app.post("/delete-all", async (req, res) => {
       return res.status(400).json({ success: false, error: "Invalid gallery" });
     }
 
-    const folder = gallery === "private" ? "private" : "family";
-    const assets = await fetchCloudinaryAssets(gallery);
-
+    const assets = await listCloudinaryAssets(gallery);
     for (const item of assets) {
       await cloudinary.uploader.destroy(item.public_id, {
         resource_type: item.type === "video" ? "video" : "image",
@@ -246,7 +216,7 @@ app.post("/delete-all", async (req, res) => {
 
     res.json({ success: true, deleted: assets.length });
   } catch (err) {
-    console.error(err);
+    console.error("DELETE ERROR:", err);
     res.status(500).json({ success: false, error: "Delete failed" });
   }
 });
