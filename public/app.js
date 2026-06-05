@@ -21,6 +21,8 @@ const lightboxClose = document.getElementById("lightbox-close");
 const lightboxImg = document.getElementById("lightbox-img");
 const lightboxVideo = document.getElementById("lightbox-video");
 const lightboxCaption = document.getElementById("lightbox-caption");
+const lightboxPrev = document.getElementById("lightbox-prev");
+const lightboxNext = document.getElementById("lightbox-next");
 const sortNewestBtn = document.getElementById("sort-newest");
 const sortRandomBtn = document.getElementById("sort-random");
 const sortPopularBtn = document.getElementById("sort-popular");
@@ -36,6 +38,7 @@ const clearTagFilter = document.getElementById("clear-tag-filter");
 const galleryTitle = document.getElementById("gallery-title");
 const galleryBadge = document.getElementById("gallery-badge");
 const mainRotatingLogo = document.getElementById("main-rotating-logo");
+const siteFavicon = document.getElementById("site-favicon");
 
 const phoneOverlay = document.getElementById("phone-overlay");
 const phoneFeed = document.getElementById("phone-feed");
@@ -50,8 +53,10 @@ let currentLayout = "masonry";
 let currentGallery = "family";
 let activeTagFilter = "";
 let mainLogoTimer = null;
-let mainLogoIndex = 0;
 let lightboxIndex = -1;
+let phoneIndex = 0;
+let phoneVideos = [];
+let wheelLock = false;
 
 initTheme();
 initHandlers();
@@ -168,11 +173,15 @@ function initHandlers() {
   });
 
   fileInput.addEventListener("change", uploadFiles);
+
   videoFeedBtn.addEventListener("click", openPhoneOverlay);
   phoneCloseBtn.addEventListener("click", closePhoneOverlay);
   phoneBackBtn.addEventListener("click", closePhoneOverlay);
 
   lightboxClose.addEventListener("click", closeLightbox);
+  lightboxPrev.addEventListener("click", () => stepLightbox(-1));
+  lightboxNext.addEventListener("click", () => stepLightbox(1));
+
   lightbox.addEventListener("click", e => {
     if (e.target === lightbox || e.target.classList.contains("lightbox-content")) closeLightbox();
   });
@@ -182,6 +191,8 @@ function initHandlers() {
       closeLightbox();
       closePhoneOverlay();
     }
+    if (e.key === "ArrowLeft") stepLightbox(-1);
+    if (e.key === "ArrowRight") stepLightbox(1);
   });
 
   window.addEventListener("wheel", handleLightboxWheel, { passive: false });
@@ -239,10 +250,21 @@ function startMainLogoRotation() {
   const familyImages = items.filter(item => item.gallery === "family" && item.type === "image");
   if (!familyImages.length) {
     mainRotatingLogo.removeAttribute("src");
+    setFavicon("");
     return;
   }
   const best = [...familyImages].sort((a, b) => (b.likes || 0) - (a.likes || 0))[0];
   mainRotatingLogo.src = best.url;
+  setFavicon(best.url);
+}
+
+function setFavicon(url) {
+  if (!siteFavicon) return;
+  if (!url) {
+    siteFavicon.href = "";
+    return;
+  }
+  siteFavicon.href = url;
 }
 
 async function loadMedia() {
@@ -255,6 +277,7 @@ async function loadMedia() {
   render();
   renderTags();
   startMainLogoRotation();
+  if (phoneOverlay.classList.contains("active")) await buildPhoneFeed();
 }
 
 function shuffleArray(arr) {
@@ -318,10 +341,12 @@ function render() {
     });
     div.appendChild(tagsWrap);
 
-    const captionLine = document.createElement("div");
-    captionLine.className = "caption-inline";
-    captionLine.textContent = item.caption ? item.caption : "";
-    if (item.caption) div.appendChild(captionLine);
+    if (item.caption) {
+      const captionLine = document.createElement("div");
+      captionLine.className = "caption-inline";
+      captionLine.textContent = item.caption;
+      div.appendChild(captionLine);
+    }
 
     const actions = document.createElement("div");
     actions.className = "media-actions";
@@ -462,7 +487,6 @@ function openLightbox(index) {
 function showLightboxItem(index) {
   const item = items[index];
   if (!item) return;
-
   lightboxImg.style.display = "none";
   lightboxVideo.style.display = "none";
   lightboxCaption.classList.remove("show");
@@ -494,20 +518,25 @@ function closeLightbox() {
   lightboxCaption.textContent = "";
 }
 
+function stepLightbox(direction) {
+  if (!items.length) return;
+  lightboxIndex = (lightboxIndex + direction + items.length) % items.length;
+  showLightboxItem(lightboxIndex);
+}
+
 function handleLightboxWheel(e) {
   if (!lightbox.classList.contains("active")) return;
   e.preventDefault();
-  if (e.deltaY > 0) {
-    lightboxIndex = (lightboxIndex + 1) % items.length;
-  } else {
-    lightboxIndex = (lightboxIndex - 1 + items.length) % items.length;
-  }
-  showLightboxItem(lightboxIndex);
+  if (wheelLock) return;
+  wheelLock = true;
+  const direction = e.deltaY > 0 ? 1 : -1;
+  stepLightbox(direction);
+  setTimeout(() => { wheelLock = false; }, 350);
 }
 
 function enableAudioOnFirstGesture() {
   if (!lightbox.classList.contains("active")) return;
-  if (lightboxVideo && !lightboxVideo.src) return;
+  if (!lightboxVideo || !lightboxVideo.src) return;
   lightboxVideo.muted = false;
   lightboxVideo.play().catch(() => {});
 }
@@ -520,6 +549,24 @@ async function openPhoneOverlay() {
 function closePhoneOverlay() {
   phoneOverlay.classList.remove("active");
   phoneFeed.innerHTML = "";
+  removePhoneNav();
+}
+
+function ensurePhoneNav() {
+  let nav = document.querySelector(".phone-feed-nav");
+  if (!nav) {
+    nav = document.createElement("div");
+    nav.className = "phone-feed-nav active";
+    nav.innerHTML = `<button id="phone-prev">‹</button><button id="phone-next">›</button>`;
+    document.body.appendChild(nav);
+    nav.querySelector("#phone-prev").addEventListener("click", () => stepPhone(-1));
+    nav.querySelector("#phone-next").addEventListener("click", () => stepPhone(1));
+  }
+}
+
+function removePhoneNav() {
+  const nav = document.querySelector(".phone-feed-nav");
+  if (nav) nav.remove();
 }
 
 async function buildPhoneFeed() {
@@ -530,17 +577,19 @@ async function buildPhoneFeed() {
   }
 
   const data = await res.json();
-  const videos = data.filter(item => item.type === "video");
+  phoneVideos = data.filter(item => item.type === "video");
+  phoneIndex = 0;
   phoneFeed.innerHTML = "";
 
-  if (!videos.length) {
+  if (!phoneVideos.length) {
     phoneFeed.innerHTML = "<div class='phone-item'><div class='phone-overlay-ui'><div class='phone-caption'>No videos uploaded yet.</div></div></div>";
     return;
   }
 
-  videos.forEach(item => {
+  phoneVideos.forEach((item, idx) => {
     const el = document.createElement("section");
     el.className = "phone-item";
+    el.dataset.index = idx;
     el.innerHTML = `
       <video class="phone-video" muted playsinline loop preload="metadata" src="${item.url}"></video>
       <button class="phone-video-unmute">Unmute</button>
@@ -589,11 +638,7 @@ async function buildPhoneFeed() {
     unmuteBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
       video.muted = false;
-      try {
-        await video.play();
-      } catch {
-        video.muted = true;
-      }
+      try { await video.play(); } catch { video.muted = true; }
     });
 
     el.addEventListener("click", (e) => {
@@ -664,6 +709,20 @@ async function buildPhoneFeed() {
 
     phoneFeed.appendChild(el);
   });
+
+  ensurePhoneNav();
+  await jumpToPhoneItem(0);
+}
+
+async function jumpToPhoneItem(idx) {
+  const target = phoneFeed.querySelector(`.phone-item[data-index="${idx}"]`);
+  if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function stepPhone(direction) {
+  if (!phoneVideos.length) return;
+  phoneIndex = (phoneIndex + direction + phoneVideos.length) % phoneVideos.length;
+  jumpToPhoneItem(phoneIndex);
 }
 
 function escapeHtml(text) {
