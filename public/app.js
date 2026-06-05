@@ -21,8 +21,6 @@ const lightboxClose = document.getElementById("lightbox-close");
 const lightboxImg = document.getElementById("lightbox-img");
 const lightboxVideo = document.getElementById("lightbox-video");
 const lightboxCaption = document.getElementById("lightbox-caption");
-const lightboxPrev = document.getElementById("lightbox-prev");
-const lightboxNext = document.getElementById("lightbox-next");
 const sortNewestBtn = document.getElementById("sort-newest");
 const sortRandomBtn = document.getElementById("sort-random");
 const sortPopularBtn = document.getElementById("sort-popular");
@@ -57,7 +55,6 @@ let phoneIndex = 0;
 let phoneVideos = [];
 let wheelLock = false;
 let mainLogoTimer = null;
-let privateLogoIndex = 0;
 let privateLogoTimer = null;
 
 initTheme();
@@ -180,8 +177,6 @@ function initHandlers() {
   phoneBackBtn.addEventListener("click", closePhoneOverlay);
 
   lightboxClose.addEventListener("click", closeLightbox);
-  lightboxPrev.addEventListener("click", () => stepLightbox(-1));
-  lightboxNext.addEventListener("click", () => stepLightbox(1));
   lightbox.addEventListener("click", e => {
     if (e.target === lightbox || e.target.classList.contains("lightbox-content")) closeLightbox();
   });
@@ -245,10 +240,18 @@ async function refreshStatus() {
   galleryBadge.textContent = currentGallery === "private" ? "Private" : "Family";
 }
 
+function familyImages() {
+  return items.filter(item => item.gallery === "family" && item.type === "image");
+}
+
+function privateImages() {
+  return items.filter(item => item.gallery === "private" && item.type === "image");
+}
+
 function startFamilyLogoRotation() {
   if (mainLogoTimer) clearInterval(mainLogoTimer);
-  const familyImages = items.filter(item => item.gallery === "family" && item.type === "image");
-  if (!familyImages.length) {
+  const imgs = familyImages();
+  if (!imgs.length) {
     mainRotatingLogo.removeAttribute("src");
     return;
   }
@@ -256,9 +259,9 @@ function startFamilyLogoRotation() {
   const show = () => {
     mainRotatingLogo.style.opacity = "0";
     setTimeout(() => {
-      mainRotatingLogo.src = familyImages[idx % familyImages.length].url;
+      mainRotatingLogo.src = imgs[idx % imgs.length].url;
       mainRotatingLogo.style.opacity = "1";
-      idx = (idx + 1) % familyImages.length;
+      idx = (idx + 1) % imgs.length;
     }, 150);
   };
   show();
@@ -267,18 +270,18 @@ function startFamilyLogoRotation() {
 
 function startPrivateLogoRotation() {
   if (privateLogoTimer) clearInterval(privateLogoTimer);
-  const privateImages = items.filter(item => item.gallery === "private" && item.type === "image");
-  if (!privateImages.length) {
+  const imgs = privateImages();
+  if (!imgs.length) {
+    mainRotatingLogo.removeAttribute("src");
     return;
   }
-  privateLogoIndex = 0;
-  const brandImg = mainRotatingLogo;
+  let idx = 0;
   const show = () => {
-    brandImg.style.opacity = "0";
+    mainRotatingLogo.style.opacity = "0";
     setTimeout(() => {
-      brandImg.src = privateImages[privateLogoIndex % privateImages.length].url;
-      brandImg.style.opacity = "1";
-      privateLogoIndex = (privateLogoIndex + 1) % privateImages.length;
+      mainRotatingLogo.src = imgs[idx % imgs.length].url;
+      mainRotatingLogo.style.opacity = "1";
+      idx = (idx + 1) % imgs.length;
     }, 150);
   };
   show();
@@ -291,13 +294,18 @@ function setFavicon(url) {
 }
 
 function updateBrandLogo() {
-  if (currentGallery === "family") {
-    startFamilyLogoRotation();
+  if (currentGallery === "family") startFamilyLogoRotation();
+  if (currentGallery === "private") startPrivateLogoRotation();
+}
+
+function updateFaviconFromFamily() {
+  const imgs = familyImages();
+  if (!imgs.length) {
+    setFavicon("");
     return;
   }
-  if (currentGallery === "private") {
-    startPrivateLogoRotation();
-  }
+  const best = [...imgs].sort((a, b) => (b.likes || 0) - (a.likes || 0))[0];
+  setFavicon(best.url);
 }
 
 async function loadMedia() {
@@ -312,16 +320,6 @@ async function loadMedia() {
   updateBrandLogo();
   updateFaviconFromFamily();
   if (phoneOverlay.classList.contains("active")) await buildPhoneFeed();
-}
-
-function updateFaviconFromFamily() {
-  const familyImages = items.filter(item => item.gallery === "family" && item.type === "image");
-  if (!familyImages.length) {
-    setFavicon("");
-    return;
-  }
-  const best = [...familyImages].sort((a, b) => (b.likes || 0) - (a.likes || 0))[0];
-  setFavicon(best.url);
 }
 
 function shuffleArray(arr) {
@@ -562,12 +560,6 @@ function closeLightbox() {
   lightboxCaption.textContent = "";
 }
 
-function stepLightbox(direction) {
-  if (!items.length) return;
-  lightboxIndex = (lightboxIndex + direction + items.length) % items.length;
-  showLightboxItem(lightboxIndex);
-}
-
 function handleLightboxWheel(e) {
   if (!lightbox.classList.contains("active")) return;
   e.preventDefault();
@@ -575,6 +567,12 @@ function handleLightboxWheel(e) {
   wheelLock = true;
   stepLightbox(e.deltaY > 0 ? 1 : -1);
   setTimeout(() => { wheelLock = false; }, 550);
+}
+
+function stepLightbox(direction) {
+  if (!items.length) return;
+  lightboxIndex = (lightboxIndex + direction + items.length) % items.length;
+  showLightboxItem(lightboxIndex);
 }
 
 function enableAudioOnFirstGesture() {
