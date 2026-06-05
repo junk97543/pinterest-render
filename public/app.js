@@ -51,7 +51,6 @@ let currentLayout = "masonry";
 let currentGallery = "family";
 let activeTagFilter = "";
 let lightboxIndex = -1;
-let phoneIndex = 0;
 let phoneVideos = [];
 let wheelLock = false;
 let familyLogoTimer = null;

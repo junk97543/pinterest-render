@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const multer = require("multer");
 
 const app = express();
+
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -28,12 +29,10 @@ function slugify(name) {
 
 function saveImageToGallery({ buffer, filename, gallery, caption = "", source = "comfy" }) {
   const safe = slugify(filename);
-  const filePath = path.join(UPLOADS_DIR, safe);
-  fs.writeFileSync(filePath, buffer);
+  fs.writeFileSync(path.join(UPLOADS_DIR, safe), buffer);
 
-  const publicId = crypto.randomUUID();
   const item = {
-    public_id: publicId,
+    public_id: crypto.randomUUID(),
     gallery,
     type: "image",
     url: `/uploads/${safe}`,
@@ -53,29 +52,33 @@ function sleep(ms) {
 }
 
 async function waitForComfyResult(promptId, timeoutMs = 120000) {
-  const started = Date.now();
+  const start = Date.now();
 
-  while (Date.now() - started < timeoutMs) {
+  while (Date.now() - start < timeoutMs) {
     try {
       const r = await fetch(`${COMFY_URL}/history/${promptId}`);
       if (r.ok) {
         const history = await r.json();
         const entry = history?.[promptId] || history?.[String(promptId)];
-        if (entry && entry.outputs) {
+        if (entry?.outputs) {
           for (const nodeId of Object.keys(entry.outputs)) {
             const out = entry.outputs[nodeId];
-            if (out && out.images && out.images.length) {
+            if (out?.images?.length) {
               return { output: out.images[0], nodeId };
             }
           }
         }
       }
-    } catch (e) {}
+    } catch {}
     await sleep(2500);
   }
 
   return null;
 }
+
+app.get("/health", (req, res) => res.json({ ok: true }));
+
+app.use("/uploads", express.static(UPLOADS_DIR));
 
 app.post("/api/run-comfy", async (req, res) => {
   try {
@@ -106,7 +109,7 @@ app.post("/api/run-comfy", async (req, res) => {
     if (fs.existsSync(localSourcePath)) {
       sourceBuffer = fs.readFileSync(localSourcePath);
     } else {
-      const host = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+      const host = process.env.PUBLIC_BASE_URL || `http://127.0.0.1:${process.env.PORT || 3000}`;
       const imageResp = await fetch(`${host}${item.url}`);
       if (!imageResp.ok) {
         return res.status(500).json({ success: false, error: "Could not fetch source image." });
@@ -128,6 +131,7 @@ app.post("/api/run-comfy", async (req, res) => {
 
     const uploadData = await uploadResp.json().catch(() => ({}));
     const uploadedName = uploadData.name || uploadData.filename || uploadData.path;
+
     if (!uploadedName) {
       return res.status(500).json({ success: false, error: "ComfyUI did not return an uploaded image name." });
     }
@@ -158,7 +162,7 @@ app.post("/api/run-comfy", async (req, res) => {
     }
 
     const result = await waitForComfyResult(promptId, 120000);
-    if (!result || !result.output) {
+    if (!result?.output) {
       return res.status(500).json({ success: false, error: "Workflow finished but no output image was found." });
     }
 
@@ -187,6 +191,6 @@ app.post("/api/run-comfy", async (req, res) => {
   }
 });
 
-app.use("/uploads", express.static(UPLOADS_DIR));
-
-module.exports = app;
+app.listen(process.env.PORT || 3000, "0.0.0.0", () => {
+  console.log("Server started");
+});
