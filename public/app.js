@@ -40,11 +40,6 @@ const galleryTitle = document.getElementById("gallery-title");
 const galleryBadge = document.getElementById("gallery-badge");
 const mainRotatingLogo = document.getElementById("main-rotating-logo");
 
-const videoModal = document.getElementById("video-modal");
-const videoModalClose = document.getElementById("video-modal-close");
-const videoModalPhone = document.getElementById("video-modal-phone");
-const videoModalScroller = document.getElementById("video-modal-scroller");
-
 const phoneOverlay = document.getElementById("phone-overlay");
 const phoneFeed = document.getElementById("phone-feed");
 const phoneCloseBtn = document.getElementById("phone-close-btn");
@@ -176,21 +171,9 @@ function initHandlers() {
   });
 
   fileInput.addEventListener("change", uploadFiles);
-
-  videoFeedBtn.addEventListener("click", openVideoModal);
-  videoModalClose.addEventListener("click", closeVideoModal);
-  videoModalPhone.addEventListener("click", async () => {
-    if (!videoModal.classList.contains("active")) return;
-    videoModal.classList.remove("active");
-    phoneOverlay.classList.add("active");
-    await buildPhoneFeed();
-  });
-
+  videoFeedBtn.addEventListener("click", openPhoneOverlay);
   phoneCloseBtn.addEventListener("click", closePhoneOverlay);
-  phoneBackBtn.addEventListener("click", () => {
-    phoneOverlay.classList.remove("active");
-    videoModal.classList.add("active");
-  });
+  phoneBackBtn.addEventListener("click", closePhoneOverlay);
 
   lightboxClose.addEventListener("click", closeLightbox);
   lightbox.addEventListener("click", e => {
@@ -200,13 +183,8 @@ function initHandlers() {
   window.addEventListener("keydown", e => {
     if (e.key === "Escape") {
       closeLightbox();
-      closeVideoModal();
       closePhoneOverlay();
     }
-  });
-
-  window.addEventListener("scroll", () => {
-    backToTopBtn.style.display = window.scrollY > 300 ? "inline-block" : "none";
   });
 }
 
@@ -259,23 +237,20 @@ async function refreshStatus() {
 function startMainLogoRotation() {
   if (mainLogoTimer) clearInterval(mainLogoTimer);
   if (!mainRotatingLogo) return;
-  if (currentGallery !== "family") {
+
+  const familyImages = items
+    .filter(item => item.gallery === "family" && item.type === "image")
+    .sort((a, b) => (b.likes || 0) - (a.likes || 0));
+
+  if (!familyImages.length) {
     mainRotatingLogo.removeAttribute("src");
     mainRotatingLogo.style.opacity = "0";
     return;
   }
-  const familyImages = items.filter(item => item.type === "image");
-  if (!familyImages.length) return;
-  const update = () => {
-    mainRotatingLogo.style.opacity = "0";
-    setTimeout(() => {
-      mainRotatingLogo.src = familyImages[mainLogoIndex % familyImages.length].url;
-      mainRotatingLogo.style.opacity = "1";
-    }, 180);
-    mainLogoIndex = (mainLogoIndex + 1) % familyImages.length;
-  };
-  update();
-  mainLogoTimer = setInterval(update, 3500);
+
+  const best = familyImages[0];
+  mainRotatingLogo.src = best.url;
+  mainRotatingLogo.style.opacity = "1";
 }
 
 async function loadMedia() {
@@ -513,89 +488,14 @@ function updateTransform() {
   lightboxImg.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
 }
 
-async function openVideoModal() {
-  videoModal.classList.add("active");
-  await buildComputerFeed();
+async function openPhoneOverlay() {
+  phoneOverlay.classList.add("active");
+  await buildPhoneFeed();
 }
 
-function closeVideoModal() {
-  videoModal.classList.remove("active");
-  videoModalScroller.innerHTML = "";
-}
-
-async function buildComputerFeed() {
-  const res = await fetch(`/media?sort=newest&gallery=${currentGallery}`);
-  if (!res.ok) {
-    videoModalScroller.innerHTML = "<p style='color:#fff;text-align:center;padding:30px;'>No access or no videos.</p>";
-    return;
-  }
-
-  const data = await res.json();
-  const videos = data.filter(item => item.type === "video");
-  videoModalScroller.innerHTML = "";
-
-  if (!videos.length) {
-    videoModalScroller.innerHTML = "<p style='color:#fff;text-align:center;padding:30px;'>No videos uploaded yet.</p>";
-    return;
-  }
-
-  videos.forEach(item => {
-    const card = document.createElement("div");
-    card.className = "video-feed-card";
-    card.innerHTML = `
-      <video class="video-feed-player" muted playsinline loop preload="metadata" src="${item.url}"></video>
-      <div class="card-actions">
-        <button class="card-like">❤️ <span>${item.likes || 0}</span></button>
-        <button class="card-comment">💬 Comment</button>
-        <button class="card-tag">🏷 Tag</button>
-        <button class="card-caption">✏ Caption</button>
-        <button class="card-share">↗ Share</button>
-      </div>
-    `;
-
-    const video = card.querySelector("video");
-    const likeBtn = card.querySelector(".card-like");
-    const commentBtn = card.querySelector(".card-comment");
-    const tagBtn = card.querySelector(".card-tag");
-    const captionBtn = card.querySelector(".card-caption");
-    const shareBtn = card.querySelector(".card-share");
-
-    video.autoplay = true;
-    video.muted = true;
-    video.loop = true;
-    video.playsInline = true;
-    video.play().catch(() => {});
-
-    video.addEventListener("click", () => {
-      if (video.paused) video.play().catch(() => {});
-      else video.pause();
-    });
-
-    likeBtn.addEventListener("click", async () => {
-      const res = await fetch("/api/like", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ public_id: item.public_id, gallery: currentGallery })
-      });
-      const data = await res.json();
-      if (data.success) likeBtn.querySelector("span").textContent = data.likes;
-    });
-
-    commentBtn.addEventListener("click", () => { prompt("Comment here:"); });
-    tagBtn.addEventListener("click", async () => { await addTagToItem(item.public_id); await buildComputerFeed(); });
-    captionBtn.addEventListener("click", async () => { await editCaption(item.public_id); await buildComputerFeed(); });
-
-    shareBtn.addEventListener("click", async () => {
-      if (navigator.share) {
-        try { await navigator.share({ title: "Video", url: item.url }); } catch {}
-      } else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(item.url);
-        alert("Video link copied!");
-      }
-    });
-
-    videoModalScroller.appendChild(card);
-  });
+function closePhoneOverlay() {
+  phoneOverlay.classList.remove("active");
+  phoneFeed.innerHTML = "";
 }
 
 async function buildPhoneFeed() {
@@ -728,11 +628,6 @@ async function buildPhoneFeed() {
 
     phoneFeed.appendChild(el);
   });
-}
-
-function closePhoneOverlay() {
-  phoneOverlay.classList.remove("active");
-  phoneFeed.innerHTML = "";
 }
 
 function escapeHtml(text) {
