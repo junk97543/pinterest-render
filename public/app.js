@@ -58,11 +58,8 @@ let currentSort = "random";
 let currentLayout = "masonry";
 let currentGallery = "family";
 let activeTagFilter = "";
-let galleryLogoTimer = null;
 let mainLogoTimer = null;
-let galleryLogoIndex = 0;
 let mainLogoIndex = 0;
-let videoMode = "computer";
 
 initTheme();
 initHandlers();
@@ -145,7 +142,10 @@ function initHandlers() {
     await loadMedia();
   });
 
-  tagsTabBtn?.addEventListener("click", () => { tagPanel.style.display = tagPanel.style.display === "none" ? "block" : "none"; });
+  document.getElementById("tags-tab-btn")?.addEventListener("click", () => {
+    tagPanel.style.display = tagPanel.style.display === "none" ? "block" : "none";
+  });
+
   closeTagPanel.addEventListener("click", () => { tagPanel.style.display = "none"; });
   clearTagFilter.addEventListener("click", () => { activeTagFilter = ""; render(); renderTags(); });
 
@@ -177,13 +177,10 @@ function initHandlers() {
 
   fileInput.addEventListener("change", uploadFiles);
 
-  videoFeedBtn.addEventListener("click", async () => {
-    await openVideoModal();
-  });
-
+  videoFeedBtn.addEventListener("click", openVideoModal);
   videoModalClose.addEventListener("click", closeVideoModal);
   videoModalPhone.addEventListener("click", async () => {
-    videoMode = "phone";
+    if (!videoModal.classList.contains("active")) return;
     videoModal.classList.remove("active");
     phoneOverlay.classList.add("active");
     await buildPhoneFeed();
@@ -208,36 +205,8 @@ function initHandlers() {
     }
   });
 
-  lightboxImg.addEventListener("mousedown", e => {
-    if (e.button !== 0) return;
-    dragging = true;
-    startX = e.clientX - x;
-    startY = e.clientY - y;
-  });
-
-  window.addEventListener("mousemove", e => {
-    if (!dragging) return;
-    x = e.clientX - startX;
-    y = e.clientY - startY;
-    updateTransform();
-  });
-
-  window.addEventListener("mouseup", () => { dragging = false; });
-
-  lightboxImg.addEventListener("wheel", e => {
-    e.preventDefault();
-    const delta = -e.deltaY;
-    const oldZoom = zoom;
-    if (delta > 0) zoom *= 1.1;
-    else zoom /= 1.1;
-    zoom = Math.max(1, Math.min(zoom, 5));
-    const rect = lightboxImg.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    const ratio = zoom / oldZoom;
-    x -= (mx - rect.width / 2) * (ratio - 1);
-    y -= (my - rect.height / 2) * (ratio - 1);
-    updateTransform();
+  window.addEventListener("scroll", () => {
+    backToTopBtn.style.display = window.scrollY > 300 ? "inline-block" : "none";
   });
 }
 
@@ -546,7 +515,6 @@ function updateTransform() {
 
 async function openVideoModal() {
   videoModal.classList.add("active");
-  videoModalPhone.textContent = "Phone View";
   await buildComputerFeed();
 }
 
@@ -556,10 +524,9 @@ function closeVideoModal() {
 }
 
 async function buildComputerFeed() {
-  videoMode = "computer";
   const res = await fetch(`/media?sort=newest&gallery=${currentGallery}`);
   if (!res.ok) {
-    videoModalScroller.innerHTML = "<p style='color:#fff;text-align:center;padding:30px;'>No access to this feed.</p>";
+    videoModalScroller.innerHTML = "<p style='color:#fff;text-align:center;padding:30px;'>No access or no videos.</p>";
     return;
   }
 
@@ -614,20 +581,9 @@ async function buildComputerFeed() {
       if (data.success) likeBtn.querySelector("span").textContent = data.likes;
     });
 
-    commentBtn.addEventListener("click", () => {
-      const note = prompt("Comment here:");
-      if (!note) return;
-    });
-
-    tagBtn.addEventListener("click", async () => {
-      await addTagToItem(item.public_id);
-      await buildComputerFeed();
-    });
-
-    captionBtn.addEventListener("click", async () => {
-      await editCaption(item.public_id);
-      await buildComputerFeed();
-    });
+    commentBtn.addEventListener("click", () => { prompt("Comment here:"); });
+    tagBtn.addEventListener("click", async () => { await addTagToItem(item.public_id); await buildComputerFeed(); });
+    captionBtn.addEventListener("click", async () => { await editCaption(item.public_id); await buildComputerFeed(); });
 
     shareBtn.addEventListener("click", async () => {
       if (navigator.share) {
@@ -636,10 +592,6 @@ async function buildComputerFeed() {
         await navigator.clipboard.writeText(item.url);
         alert("Video link copied!");
       }
-    });
-
-    card.addEventListener("click", () => {
-      if (!video.paused) video.pause();
     });
 
     videoModalScroller.appendChild(card);
