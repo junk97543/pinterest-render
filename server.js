@@ -3,15 +3,13 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const multer = require("multer");
-const FormData = require("form-data");
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-const COMFY_URL = "http://127.0.0.1:8188";
+const COMFY_URL = process.env.COMFY_URL || "http://127.0.0.1:8188";
 const WORKFLOW_PATH = path.join(__dirname, "undress_workflow.json");
-const COMFY_OUTPUT_DIR = path.join(__dirname, "ComfyUI", "output");
 const UPLOADS_DIR = path.join(__dirname, "uploads");
 
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -50,28 +48,30 @@ function saveImageToGallery({ buffer, filename, gallery, caption = "", source = 
   return item;
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function waitForComfyResult(promptId, timeoutMs = 120000) {
   const started = Date.now();
 
   while (Date.now() - started < timeoutMs) {
-    const r = await fetch(`${COMFY_URL}/history/${promptId}`);
-    if (r.ok) {
-      const history = await r.json();
-      const entry = history[promptId];
-      if (entry && entry.outputs) {
-        for (const nodeId of Object.keys(entry.outputs)) {
-          const out = entry.outputs[nodeId];
-          if (out && out.images && out.images.length) {
-            const img = out.images[0];
-            const outPath = path.join(COMFY_OUTPUT_DIR, img.filename);
-            if (fs.existsSync(outPath)) {
-              return { outputPath: outPath, image: img };
+    try {
+      const r = await fetch(`${COMFY_URL}/history/${promptId}`);
+      if (r.ok) {
+        const history = await r.json();
+        const entry = history?.[promptId] || history?.[String(promptId)];
+        if (entry && entry.outputs) {
+          for (const nodeId of Object.keys(entry.outputs)) {
+            const out = entry.outputs[nodeId];
+            if (out && out.images && out.images.length) {
+              return { output: out.images[0], nodeId };
             }
           }
         }
       }
-    }
-    await new Promise(r => setTimeout(r, 2500));
+    } catch (e) {}
+    await sleep(2500);
   }
 
   return null;
@@ -79,7 +79,7 @@ async function waitForComfyResult(promptId, timeoutMs = 120000) {
 
 app.post("/api/run-comfy", async (req, res) => {
   try {
-    const { public_id, gallery } = req.body;
+    const { public_id, gallery } = req.body || {};
 
     if (gallery !== "private") {
       return res.status(400).json({ success: false, error: "Only private gallery items can run this workflow." });
@@ -96,37 +96,40 @@ app.post("/api/run-comfy", async (req, res) => {
 
     const workflow = JSON.parse(fs.readFileSync(WORKFLOW_PATH, "utf8"));
 
-    const imageResp = await fetch(`http://localhost:${process.env.PORT || 3000}${item.url}`);
-    if (!imageResp.ok) {
-      return res.status(500).json({ success: false, error: "Could not fetch source image." });
+    if (!workflow["1"] || !workflow["1"].inputs) {
+      return res.status(500).json({ success: false, error: "Workflow node 1 not found." });
     }
 
-    const sourceBuffer = Buffer.from(await imageResp.arrayBuffer());
+    const localSourcePath = path.join(UPLOADS_DIR, item.filename || "");
+    let sourceBuffer;
+
+    if (fs.existsSync(localSourcePath)) {
+      sourceBuffer = fs.readFileSync(localSourcePath);
+    } else {
+      const host = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+      const imageResp = await fetch(`${host}${item.url}`);
+      if (!imageResp.ok) {
+        return res.status(500).json({ success: false, error: "Could not fetch source image." });
+      }
+      sourceBuffer = Buffer.from(await imageResp.arrayBuffer());
+    }
 
     const uploadForm = new FormData();
-    uploadForm.append("image", sourceBuffer, {
-      filename: `${public_id}.png`,
-      contentType: "image/png"
-    });
+    uploadForm.append("image", new Blob([sourceBuffer]), `${public_id}.png`);
 
     const uploadResp = await fetch(`${COMFY_URL}/upload/image`, {
       method: "POST",
-      body: uploadForm,
-      headers: uploadForm.getHeaders()
+      body: uploadForm
     });
 
     if (!uploadResp.ok) {
       return res.status(500).json({ success: false, error: "Failed to upload image to ComfyUI." });
     }
 
-    const uploadData = await uploadResp.json();
-    const uploadedName = uploadData.name || uploadData.filename;
+    const uploadData = await uploadResp.json().catch(() => ({}));
+    const uploadedName = uploadData.name || uploadData.filename || uploadData.path;
     if (!uploadedName) {
       return res.status(500).json({ success: false, error: "ComfyUI did not return an uploaded image name." });
-    }
-
-    if (!workflow["1"] || !workflow["1"].inputs) {
-      return res.status(500).json({ success: false, error: "Workflow node 1 not found." });
     }
 
     workflow["1"].inputs.image = uploadedName;
@@ -140,22 +143,35 @@ app.post("/api/run-comfy", async (req, res) => {
       })
     });
 
-    const promptData = await promptResp.json();
+    const promptData = await promptResp.json().catch(() => ({}));
     if (!promptResp.ok) {
-      return res.status(500).json({ success: false, error: "Failed to queue ComfyUI workflow.", details: promptData });
+      return res.status(500).json({
+        success: false,
+        error: "Failed to queue ComfyUI workflow.",
+        details: promptData
+      });
     }
 
-    const promptId = promptData.prompt_id || promptData.id;
+    const promptId = promptData.prompt_id || promptData.promptId || promptData.id;
     if (!promptId) {
       return res.status(500).json({ success: false, error: "No prompt id returned." });
     }
 
     const result = await waitForComfyResult(promptId, 120000);
-    if (!result || !result.outputPath) {
+    if (!result || !result.output) {
       return res.status(500).json({ success: false, error: "Workflow finished but no output image was found." });
     }
 
-    const outputBuffer = fs.readFileSync(result.outputPath);
+    const out = result.output;
+    const viewUrl = `${COMFY_URL}/view?filename=${encodeURIComponent(out.filename)}&subfolder=${encodeURIComponent(out.subfolder || "")}&type=${encodeURIComponent(out.type || "output")}`;
+    const viewResp = await fetch(viewUrl);
+
+    if (!viewResp.ok) {
+      return res.status(500).json({ success: false, error: "Could not fetch ComfyUI output image." });
+    }
+
+    const outputBuffer = Buffer.from(await viewResp.arrayBuffer());
+
     const saved = saveImageToGallery({
       buffer: outputBuffer,
       filename: `comfy_${Date.now()}_${public_id}.png`,
@@ -172,3 +188,5 @@ app.post("/api/run-comfy", async (req, res) => {
 });
 
 app.use("/uploads", express.static(UPLOADS_DIR));
+
+module.exports = app;
