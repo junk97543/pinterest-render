@@ -386,6 +386,46 @@ function render() {
         await editCaption(item.public_id);
       });
       actions.appendChild(capBtn);
+// Inside render() function, inside the if (isAdmin) block:
+
+if (isAdmin && currentGallery === "private" && item.type === "image") {
+  const undressBtn = document.createElement("button");
+  undressBtn.className = "add-tag-btn";
+  undressBtn.textContent = "🔥 Undress";
+  undressBtn.style.background = "#ff1493";
+  undressBtn.addEventListener("click", async e => {
+    e.stopPropagation();
+    if (!confirm("Send this image to ComfyUI for undressing?")) return;
+
+    const btnText = undressBtn.textContent;
+    undressBtn.textContent = "Generating...";
+    undressBtn.disabled = true;
+
+    try {
+      const res = await fetch("/api/undress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          imageUrl: item.url, 
+          public_id: item.public_id 
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message);
+        await loadMedia();
+      } else {
+        alert("Failed: " + (data.error || "Unknown error"));
+      }
+    } catch (err) {
+      alert("Error contacting ComfyUI");
+    } finally {
+      undressBtn.textContent = btnText;
+      undressBtn.disabled = false;
+    }
+  });
+  actions.appendChild(undressBtn);
+}
     }
 
     div.appendChild(actions);
