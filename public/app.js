@@ -2,9 +2,11 @@ const gateScreen = document.getElementById("gate-screen");
 const familyCodeInput = document.getElementById("family-code-input");
 const familyCodeBtn = document.getElementById("family-code-btn");
 const gateMessage = document.getElementById("gate-message");
+
 const mainHeader = document.getElementById("main-header");
 const adminBar = document.getElementById("admin-bar");
 const sortButtons = document.getElementById("sort-buttons");
+
 const fileInput = document.getElementById("file-input");
 const gallery = document.getElementById("gallery");
 const deleteAllBtn = document.getElementById("delete-all-btn");
@@ -35,6 +37,7 @@ const galleryTitle = document.getElementById("gallery-title");
 const galleryBadge = document.getElementById("gallery-badge");
 const mainRotatingLogo = document.getElementById("main-rotating-logo");
 const siteFavicon = document.getElementById("site-favicon");
+
 const phoneOverlay = document.getElementById("phone-overlay");
 const phoneFeed = document.getElementById("phone-feed");
 const phoneCloseBtn = document.getElementById("phone-close-btn");
@@ -71,30 +74,11 @@ function initTheme() {
 
 function initHandlers() {
   familyCodeBtn.addEventListener("click", unlockFamily);
-  familyCodeInput.addEventListener("keydown", e => {
-    if (e.key === "Enter") unlockFamily();
-  });
+  familyCodeInput.addEventListener("keydown", e => { if (e.key === "Enter") unlockFamily(); });
 
-  sortNewestBtn.addEventListener("click", async () => {
-    currentSort = "newest";
-    currentLayout = "grid";
-    setSortActive(sortNewestBtn);
-    await loadMedia();
-  });
-
-  sortRandomBtn.addEventListener("click", async () => {
-    currentSort = "random";
-    currentLayout = "masonry";
-    setSortActive(sortRandomBtn);
-    await loadMedia();
-  });
-
-  sortPopularBtn.addEventListener("click", async () => {
-    currentSort = "popular";
-    currentLayout = "grid";
-    setSortActive(sortPopularBtn);
-    await loadMedia();
-  });
+  sortNewestBtn.addEventListener("click", async () => { currentSort = "newest"; currentLayout = "grid"; setSortActive(sortNewestBtn); await loadMedia(); });
+  sortRandomBtn.addEventListener("click", async () => { currentSort = "random"; currentLayout = "masonry"; setSortActive(sortRandomBtn); await loadMedia(); });
+  sortPopularBtn.addEventListener("click", async () => { currentSort = "popular"; currentLayout = "grid"; setSortActive(sortPopularBtn); await loadMedia(); });
 
   adminLoginBtn.addEventListener("click", async () => {
     const password = prompt("Enter admin password:");
@@ -157,15 +141,8 @@ function initHandlers() {
     tagPanel.style.display = tagPanel.style.display === "none" ? "block" : "none";
   });
 
-  closeTagPanel.addEventListener("click", () => {
-    tagPanel.style.display = "none";
-  });
-
-  clearTagFilter.addEventListener("click", () => {
-    activeTagFilter = "";
-    render();
-    renderTags();
-  });
+  closeTagPanel.addEventListener("click", () => { tagPanel.style.display = "none"; });
+  clearTagFilter.addEventListener("click", () => { activeTagFilter = ""; render(); renderTags(); });
 
   chatToggleBtn.addEventListener("click", () => {
     chatSection.style.display = "block";
@@ -197,7 +174,9 @@ function initHandlers() {
   videoFeedBtn.addEventListener("click", openPhoneOverlay);
   phoneCloseBtn.addEventListener("click", closePhoneOverlay);
   phoneBackBtn.addEventListener("click", closePhoneOverlay);
+
   lightboxClose.addEventListener("click", closeLightbox);
+
   lightbox.addEventListener("click", e => {
     if (e.target === lightbox || e.target.classList.contains("lightbox-content")) closeLightbox();
   });
@@ -246,14 +225,17 @@ async function refreshStatus() {
   isAdmin = data.isAdmin;
   familyAccess = data.familyAccess;
   currentGallery = data.currentView || (isAdmin ? "private" : "family");
+
   gateScreen.style.display = familyAccess || isAdmin ? "none" : "flex";
   mainHeader.style.display = familyAccess || isAdmin ? "flex" : "none";
   sortButtons.style.display = familyAccess || isAdmin ? "flex" : "none";
   adminBar.style.display = isAdmin ? "flex" : "none";
+
   deleteAllBtn.style.display = isAdmin ? "inline-block" : "none";
   familyGalleryBtn.style.display = isAdmin ? "inline-block" : "none";
   privateGalleryBtn.style.display = isAdmin ? "inline-block" : "none";
   chatToggleBtn.style.display = isAdmin && currentGallery === "private" ? "inline-block" : "none";
+
   galleryTitle.textContent = currentGallery === "private" ? "Private Gallery" : "Family Gallery";
   galleryBadge.textContent = currentGallery === "private" ? "Private" : "Family";
 }
@@ -333,10 +315,9 @@ function getFilteredItems() {
 function render() {
   gallery.innerHTML = "";
   const displayItems = getFilteredItems();
+
   if (!displayItems.length) {
-    gallery.innerHTML = `
-      <div class="empty-state">No matching images or videos.</div>
-    `;
+    gallery.innerHTML = "<p style='padding:20px;'>No matching images or videos.</p>";
     return;
   }
 
@@ -407,24 +388,11 @@ function render() {
       actions.appendChild(capBtn);
     }
 
-    if (currentGallery === "private") {
-      const comfyBtn = document.createElement("button");
-      comfyBtn.className = "add-tag-btn";
-      comfyBtn.textContent = "Run ComfyUI";
-      comfyBtn.addEventListener("click", async e => {
-        e.stopPropagation();
-        await runComfyWorkflow(item.public_id);
-      });
-      actions.appendChild(comfyBtn);
-    }
-
     div.appendChild(actions);
 
     const likeDiv = document.createElement("div");
     likeDiv.className = "like-container";
-    likeDiv.innerHTML = `
-      <button class="like-btn">❤️ Like <span class="like-count">${item.likes || 0}</span></button>
-    `;
+    likeDiv.innerHTML = `<button class="like-btn">❤️ <span class="like-count">${item.likes || 0}</span></button>`;
     div.appendChild(likeDiv);
 
     likeDiv.querySelector(".like-btn").addEventListener("click", async e => {
@@ -444,20 +412,6 @@ function render() {
     div.addEventListener("click", () => openLightbox(originalIndex));
     gallery.appendChild(div);
   });
-}
-
-async function runComfyWorkflow(publicId) {
-  const res = await fetch("/api/run-comfy", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ public_id: publicId, gallery: "private" })
-  });
-  const data = await res.json();
-  if (!data.success) {
-    alert(data.error || "ComfyUI workflow failed");
-    return;
-  }
-  await loadMedia();
 }
 
 async function addTagToItem(publicId) {
@@ -490,12 +444,9 @@ function renderTags() {
   const allTags = [...new Set(items.flatMap(item => item.tags || []))].sort((a, b) => a.localeCompare(b));
   tagList.innerHTML = "";
   if (!allTags.length) {
-    tagList.innerHTML = `
-      <div class="empty-tags">No tags yet.</div>
-    `;
+    tagList.innerHTML = "<p>No tags yet.</p>";
     return;
   }
-
   allTags.forEach(tag => {
     const btn = document.createElement("button");
     btn.className = "tag-chip" + (activeTagFilter === tag ? " active" : "");
@@ -510,92 +461,269 @@ function renderTags() {
 }
 
 async function uploadFiles() {
-  const files = fileInput.files;
-  if (!files || !files.length) return;
+  const files = Array.from(fileInput.files || []);
+  if (!files.length) return;
+  if (files.length > 1000) return alert("Maximum 1000 files per upload.");
+  if (currentGallery === "private" && !isAdmin) return alert("Admin only for private gallery.");
+  if (currentGallery === "family" && !familyAccess && !isAdmin) return alert("Family access required.");
 
   const fd = new FormData();
-  for (const f of files) fd.append("files", f);
+  files.forEach(f => fd.append("files", f));
   fd.append("gallery", currentGallery);
 
-  const res = await fetch("/upload", { method: "POST", body: fd });
-  const data = await res.json();
-  if (data.success) {
+  const btn = document.querySelector(".upload-btn");
+  const originalLabel = "Upload Photos & Videos";
+  btn.textContent = `Uploading ${files.length} file${files.length === 1 ? "" : "s"}...`;
+  btn.disabled = true;
+
+  try {
+    const res = await fetch("/upload", { method: "POST", body: fd });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      await loadMedia();
+      if (data.errors && data.errors.length) alert(`Uploaded ${data.count || 0} files. Some files failed:\n${data.errors.join("\n")}`);
+    } else {
+      alert(data.error || "Upload failed");
+    }
+  } catch (err) {
+    console.error(err);
+    alert("Upload failed");
+  } finally {
+    btn.textContent = originalLabel;
+    btn.disabled = false;
     fileInput.value = "";
-    await loadMedia();
-  } else {
-    alert(data.error || "Upload failed");
   }
 }
 
 function openLightbox(index) {
   lightboxIndex = index;
-  showLightbox();
-  lightbox.style.display = "flex";
+  showLightboxItem(index);
+  lightbox.classList.add("active");
 }
 
-function showLightbox() {
-  const item = items[lightboxIndex];
+function showLightboxItem(index) {
+  const item = items[index];
   if (!item) return;
-  lightboxImg.style.display = item.type === "image" ? "block" : "none";
-  lightboxVideo.style.display = item.type === "video" ? "block" : "none";
-  if (item.type === "image") lightboxImg.src = item.url;
-  if (item.type === "video") {
-    lightboxVideo.src = item.url;
-    lightboxVideo.load();
-  }
+
+  lightboxImg.style.display = "none";
+  lightboxVideo.style.display = "none";
+  lightboxCaption.classList.remove("show");
   lightboxCaption.textContent = item.caption || "";
+  if (item.caption) lightboxCaption.classList.add("show");
+
+  if (item.type === "image") {
+    lightboxImg.src = item.url;
+    lightboxImg.style.display = "block";
+  } else {
+    lightboxVideo.src = item.url;
+    lightboxVideo.style.display = "block";
+    lightboxVideo.muted = false;
+    lightboxVideo.controls = true;
+    lightboxVideo.play().catch(() => {
+      lightboxVideo.muted = true;
+      lightboxVideo.play().catch(() => {});
+    });
+  }
 }
 
 function closeLightbox() {
-  lightbox.style.display = "none";
-  if (lightboxVideo) {
-    lightboxVideo.pause();
-    lightboxVideo.removeAttribute("src");
-    lightboxVideo.load();
-  }
-}
-
-function stepLightbox(dir) {
-  if (lightboxIndex < 0 || !items.length) return;
-  lightboxIndex = (lightboxIndex + dir + items.length) % items.length;
-  showLightbox();
+  lightbox.classList.remove("active");
+  lightboxImg.src = "";
+  lightboxVideo.pause();
+  lightboxVideo.src = "";
+  lightboxCaption.classList.remove("show");
+  lightboxCaption.textContent = "";
 }
 
 function handleLightboxWheel(e) {
-  if (lightbox.style.display === "none") return;
+  if (!lightbox.classList.contains("active")) return;
   e.preventDefault();
   if (wheelLock) return;
   wheelLock = true;
   stepLightbox(e.deltaY > 0 ? 1 : -1);
-  setTimeout(() => wheelLock = false, 250);
+  setTimeout(() => { wheelLock = false; }, 550);
 }
 
-function enableAudioOnFirstGesture() {}
+function stepLightbox(direction) {
+  if (!items.length) return;
+  lightboxIndex = (lightboxIndex + direction + items.length) % items.length;
+  showLightboxItem(lightboxIndex);
+}
 
-function openPhoneOverlay() {
+function enableAudioOnFirstGesture() {
+  if (!lightbox.classList.contains("active")) return;
+  if (!lightboxVideo || !lightboxVideo.src) return;
+  lightboxVideo.muted = false;
+  lightboxVideo.play().catch(() => {});
+}
+
+async function openPhoneOverlay() {
   phoneOverlay.classList.add("active");
-  buildPhoneFeed();
+  await buildPhoneFeed();
 }
 
 function closePhoneOverlay() {
   phoneOverlay.classList.remove("active");
   phoneFeed.innerHTML = "";
+  removePhoneNav();
+}
+
+function removePhoneNav() {
+  const nav = document.querySelector(".phone-feed-nav");
+  if (nav) nav.remove();
 }
 
 async function buildPhoneFeed() {
-  phoneVideos = items.filter(item => item.type === "video");
+  const res = await fetch(`/media?sort=newest&gallery=${currentGallery}`);
+  if (!res.ok) {
+    phoneFeed.innerHTML = "<div class='phone-item'><div class='phone-overlay-ui'><div class='phone-caption'>No access or no videos.</div></div></div>";
+    return;
+  }
+
+  const data = await res.json();
+  phoneVideos = data.filter(item => item.type === "video");
+  phoneIndex = 0;
   phoneFeed.innerHTML = "";
-  phoneVideos.forEach(vidItem => {
-    const wrap = document.createElement("div");
-    wrap.className = "phone-card";
-    const v = document.createElement("video");
-    v.src = vidItem.url;
-    v.controls = true;
-    v.loop = true;
-    v.muted = true;
-    v.autoplay = true;
-    v.playsInline = true;
-    wrap.appendChild(v);
-    phoneFeed.appendChild(wrap);
+
+  if (!phoneVideos.length) {
+    phoneFeed.innerHTML = "<div class='phone-item'><div class='phone-overlay-ui'><div class='phone-caption'>No videos uploaded yet.</div></div></div>";
+    return;
+  }
+
+  phoneVideos.forEach((item, idx) => {
+    const el = document.createElement("section");
+    el.className = "phone-item";
+    el.dataset.index = idx;
+    el.innerHTML = `
+      <video class="phone-video" muted playsinline loop preload="metadata" src="${item.url}"></video>
+      <button class="phone-video-unmute">Unmute</button>
+      <div class="phone-overlay-ui">
+        <div class="phone-edit-bar">
+          <button class="phone-tag-edit">Add Tag</button>
+          <button class="phone-caption-edit">Edit Caption</button>
+        </div>
+        <div class="phone-caption">${escapeHtml(item.caption || "")}</div>
+        <div class="phone-tags">
+          ${(item.tags || []).map(tag => `<button class="phone-tag" data-tag="${escapeHtml(tag)}">#${escapeHtml(tag)}</button>`).join("")}
+        </div>
+        <div class="phone-comments">
+          <div class="phone-comments-list"></div>
+          <div class="phone-comment-form">
+            <input type="text" placeholder="Write a comment..." />
+            <button type="button">Post</button>
+          </div>
+        </div>
+        <div class="phone-actions">
+          <button class="phone-like">❤️ <span>${item.likes || 0}</span></button>
+          <button class="phone-comment">💬</button>
+          <button class="phone-share">↗</button>
+        </div>
+      </div>
+    `;
+
+    const video = el.querySelector(".phone-video");
+    const unmuteBtn = el.querySelector(".phone-video-unmute");
+    const likeBtn = el.querySelector(".phone-like");
+    const commentBtn = el.querySelector(".phone-comment");
+    const shareBtn = el.querySelector(".phone-share");
+    const comments = el.querySelector(".phone-comments");
+    const commentInput = el.querySelector(".phone-comment-form input");
+    const postBtn = el.querySelector(".phone-comment-form button");
+    const tagButtons = el.querySelectorAll(".phone-tag");
+    const tagEditBtn = el.querySelector(".phone-tag-edit");
+    const captionEditBtn = el.querySelector(".phone-caption-edit");
+
+    video.autoplay = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.muted = true;
+    video.play().catch(() => {});
+
+    unmuteBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      video.muted = false;
+      try { await video.play(); } catch { video.muted = true; }
+    });
+
+    el.addEventListener("click", (e) => {
+      if (e.target.closest("button") || e.target.closest("input") || e.target.closest(".phone-comments")) return;
+      if (video.paused) video.play().catch(() => {});
+      else video.pause();
+    });
+
+    likeBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const res = await fetch("/api/like", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ public_id: item.public_id, gallery: currentGallery })
+      });
+      const data = await res.json();
+      if (data.success) likeBtn.querySelector("span").textContent = data.likes;
+    });
+
+    commentBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      comments.classList.toggle("active");
+      commentInput.focus();
+    });
+
+    postBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const txt = commentInput.value.trim();
+      if (!txt) return;
+      const row = document.createElement("div");
+      row.className = "phone-comment-item";
+      row.textContent = txt;
+      el.querySelector(".phone-comments-list").appendChild(row);
+      commentInput.value = "";
+    });
+
+    shareBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (navigator.share) {
+        try { await navigator.share({ title: "Video", url: item.url }); } catch {}
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(item.url);
+        alert("Video link copied!");
+      }
+    });
+
+    tagEditBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await addTagToItem(item.public_id);
+      await buildPhoneFeed();
+    });
+
+    captionEditBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await editCaption(item.public_id);
+      await buildPhoneFeed();
+    });
+
+    tagButtons.forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        activeTagFilter = btn.dataset.tag;
+        closePhoneOverlay();
+        render();
+        renderTags();
+      });
+    });
+
+    phoneFeed.appendChild(el);
   });
+
+  await jumpToPhoneItem(0);
+}
+
+async function jumpToPhoneItem(idx) {
+  const target = phoneFeed.querySelector(`.phone-item[data-index="${idx}"]`);
+  if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
 }
