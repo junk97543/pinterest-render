@@ -2,97 +2,26 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Family Gallery</title>
-  <link id="site-favicon" rel="icon" href="" type="image/png" />
-  <link rel="manifest" href="/manifest.json" />
+  <title>My Pinterest (Simple)</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body class="light">
-  <div id="gate-screen" class="gate-screen">
-    <div class="gate-card">
-      <h1>Family Gallery</h1>
-      <p id="gate-message">Enter the family access code.</p>
-      <input id="family-code-input" type="password" placeholder="Code" />
-      <button id="family-code-btn">Enter</button>
-    </div>
-  </div>
-
-  <header id="main-header" style="display:none;">
-    <div class="brand">
-      <div class="logo-rotator"><img id="main-rotating-logo" alt="Family logo" /></div>
-      <div>
-        <h1 id="gallery-title">Family Gallery</h1>
-        <span id="gallery-badge" class="gallery-badge">Family</span>
-      </div>
-    </div>
-
+  <header>
+    <h1>My Pinterest (Simple)</h1>
     <label for="file-input" class="upload-btn">Upload Photos & Videos</label>
     <input id="file-input" type="file" accept="image/*,video/*" multiple />
-
-    <button id="family-gallery-btn" class="feed-btn" style="display:none;">Family Gallery</button>
-    <button id="private-gallery-btn" class="feed-btn" style="display:none;">Private Gallery</button>
-    <button id="admin-login-btn" class="login-btn">Admin Login</button>
-    <button id="chat-toggle-btn" class="chat-toggle-btn" style="display:none;">💬 Chat</button>
     <button id="theme-toggle" class="theme-toggle">🌙 Dark Mode</button>
-    <button id="video-feed-btn" class="feed-btn">Video Feed</button>
-    <button id="tags-tab-btn" class="feed-btn">Tags</button>
-    <button id="delete-all-btn" class="delete-btn" style="display:none;">Delete All</button>
-    <button id="logout-family-btn" class="login-btn">Family Logout</button>
-    <button id="back-to-top" class="back-to-top-btn" style="display:none;">↑ Top</button>
+    <button id="delete-all-btn" class="delete-btn">Delete All</button>
   </header>
 
-  <div id="admin-bar" class="admin-bar" style="display:none;">
-    <span>Admin is logged in</span>
-    <button id="admin-logout-btn" class="login-btn">Admin Logout</button>
-  </div>
-
-  <div class="sort-buttons" id="sort-buttons" style="display:none;">
-    <button id="sort-newest" class="sort-btn">🕐 Newest</button>
-    <button id="sort-random" class="sort-btn active">🔀 Random</button>
-    <button id="sort-popular" class="sort-btn">❤️ Most Liked</button>
-  </div>
-
-  <section id="tag-panel" class="tag-panel" style="display:none;">
-    <div class="tag-panel-header">
-      <h2>Tags</h2>
-      <button id="clear-tag-filter" class="tag-clear-btn">Show All</button>
-      <button id="close-tag-panel" class="tag-clear-btn">Close</button>
-    </div>
-    <div id="tag-list" class="tag-list"></div>
-  </section>
-
   <main id="gallery" class="masonry"></main>
-
-  <section id="chat-section" class="chat-section" style="display:none;">
-    <h2>Live Chat</h2>
-    <div id="chat-messages" class="chat-messages"></div>
-    <div class="chat-input">
-      <input id="chat-name" type="text" placeholder="Your name" />
-      <input id="chat-message" type="text" placeholder="Type a message..." />
-      <button id="send-chat">Send</button>
-    </div>
-    <button id="chat-close-btn" class="chat-close-btn">Close Chat</button>
-  </section>
 
   <div id="lightbox" class="lightbox">
     <button id="lightbox-close" class="lightbox-close" title="Close (Esc)">✕</button>
     <div class="lightbox-content">
       <img id="lightbox-img" alt="" />
       <video id="lightbox-video" controls></video>
-      <div id="lightbox-caption" class="lightbox-caption"></div>
     </div>
-  </div>
-
-  <div id="phone-overlay" class="phone-overlay">
-    <div class="phone-topbar">
-      <button id="phone-back-btn" class="phone-back-btn">← Back</button>
-      <button id="phone-close-btn" class="phone-close-btn">✕</button>
-    </div>
-    <div id="phone-feed" class="phone-feed"></div>
   </div>
 
   <script src="app.js"></script>
