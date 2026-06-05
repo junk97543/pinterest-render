@@ -387,17 +387,6 @@ function render() {
       actions.appendChild(capBtn);
     }
 
-    if (currentGallery === "private") {
-      const comfyBtn = document.createElement("button");
-      comfyBtn.className = "add-tag-btn";
-      comfyBtn.textContent = "Run ComfyUI";
-      comfyBtn.addEventListener("click", async e => {
-        e.stopPropagation();
-        await runComfyWorkflow(item.public_id);
-      });
-      actions.appendChild(comfyBtn);
-    }
-
     div.appendChild(actions);
 
     const likeDiv = document.createElement("div");
@@ -422,20 +411,6 @@ function render() {
     div.addEventListener("click", () => openLightbox(originalIndex));
     gallery.appendChild(div);
   });
-}
-
-async function runComfyWorkflow(publicId) {
-  const res = await fetch("/api/run-comfy", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ public_id: publicId, gallery: "private" })
-  });
-  const data = await res.json();
-  if (!data.success) {
-    alert(data.error || "ComfyUI workflow failed");
-    return;
-  }
-  await loadMedia();
 }
 
 async function addTagToItem(publicId) {
@@ -481,5 +456,144 @@ function renderTags() {
       renderTags();
     });
     tagList.appendChild(btn);
+  });
+}
+
+async function uploadFiles() {
+  const files = Array.from(fileInput.files || []);
+  if (!files.length) return;
+  const fd = new FormData();
+  files.forEach(f => fd.append("files", f));
+  fd.append("gallery", currentGallery);
+
+  const btn = document.querySelector(".upload-btn");
+  const originalLabel = "Upload Photos & Videos";
+  btn.textContent = `Uploading ${files.length} file${files.length === 1 ? "" : "s"}...`;
+  btn.disabled = true;
+
+  try {
+    const res = await fetch("/upload", { method: "POST", body: fd });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      await loadMedia();
+    } else {
+      alert(data.error || "Upload failed");
+    }
+  } catch (err) {
+    console.error(err);
+    alert("Upload failed");
+  } finally {
+    btn.textContent = originalLabel;
+    btn.disabled = false;
+    fileInput.value = "";
+  }
+}
+
+function openLightbox(index) {
+  lightboxIndex = index;
+  showLightboxItem(index);
+  lightbox.classList.add("active");
+}
+
+function showLightboxItem(index) {
+  const item = items[index];
+  if (!item) return;
+
+  lightboxImg.style.display = "none";
+  lightboxVideo.style.display = "none";
+  lightboxCaption.classList.remove("show");
+  lightboxCaption.textContent = item.caption || "";
+  if (item.caption) lightboxCaption.classList.add("show");
+
+  if (item.type === "image") {
+    lightboxImg.src = item.url;
+    lightboxImg.style.display = "block";
+  } else {
+    lightboxVideo.src = item.url;
+    lightboxVideo.style.display = "block";
+    lightboxVideo.muted = false;
+    lightboxVideo.controls = true;
+    lightboxVideo.play().catch(() => {
+      lightboxVideo.muted = true;
+      lightboxVideo.play().catch(() => {});
+    });
+  }
+}
+
+function closeLightbox() {
+  lightbox.classList.remove("active");
+  lightboxImg.src = "";
+  lightboxVideo.pause();
+  lightboxVideo.src = "";
+  lightboxCaption.classList.remove("show");
+  lightboxCaption.textContent = "";
+}
+
+function handleLightboxWheel(e) {
+  if (!lightbox.classList.contains("active")) return;
+  e.preventDefault();
+  if (wheelLock) return;
+  wheelLock = true;
+  stepLightbox(e.deltaY > 0 ? 1 : -1);
+  setTimeout(() => { wheelLock = false; }, 550);
+}
+
+function stepLightbox(direction) {
+  if (!items.length) return;
+  lightboxIndex = (lightboxIndex + direction + items.length) % items.length;
+  showLightboxItem(lightboxIndex);
+}
+
+function enableAudioOnFirstGesture() {
+  if (!lightbox.classList.contains("active")) return;
+  if (!lightboxVideo || !lightboxVideo.src) return;
+  lightboxVideo.muted = false;
+  lightboxVideo.play().catch(() => {});
+}
+
+async function openPhoneOverlay() {
+  phoneOverlay.classList.add("active");
+  await buildPhoneFeed();
+}
+
+function closePhoneOverlay() {
+  phoneOverlay.classList.remove("active");
+  phoneFeed.innerHTML = "";
+}
+
+async function buildPhoneFeed() {
+  const res = await fetch(`/media?sort=newest&gallery=${currentGallery}`);
+  if (!res.ok) {
+    phoneFeed.innerHTML = "<div class='phone-item'><div class='phone-overlay-ui'><div class='phone-caption'>No access or no videos.</div></div></div>";
+    return;
+  }
+
+  const data = await res.json();
+  phoneVideos = data.filter(item => item.type === "video");
+  phoneFeed.innerHTML = "";
+
+  if (!phoneVideos.length) {
+    phoneFeed.innerHTML = "<div class='phone-item'><div class='phone-overlay-ui'><div class='phone-caption'>No videos uploaded yet.</div></div></div>";
+    return;
+  }
+
+  phoneVideos.forEach((item) => {
+    const el = document.createElement("section");
+    el.className = "phone-item";
+    el.innerHTML = `<video class="phone-video" muted playsinline loop preload="metadata" src="${item.url}"></video>`;
+
+    const video = el.querySelector(".phone-video");
+    video.autoplay = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.muted = true;
+    video.play().catch(() => {});
+
+    el.addEventListener("click", () => {
+      if (video.paused) video.play().catch(() => {});
+      else video.pause();
+    });
+
+    phoneFeed.appendChild(el);
   });
 }
