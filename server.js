@@ -154,16 +154,6 @@ app.get("/api/status", (req, res) => {
   });
 });
 
-app.get("/api/test-comfydeploy", async (req, res) => {
-  res.json({
-    ok: true,
-    hasKey: !!COMFYDEPLOY_API_KEY,
-    hasEndpoint: !!COMFYDEPLOY_ENDPOINT_URL,
-    hasDeployment: !!COMFYDEPLOY_DEPLOYMENT_ID,
-    publicBaseUrl: PUBLIC_BASE_URL || null
-  });
-});
-
 app.post("/api/family-unlock", (req, res) => {
   try {
     const code = String((req.body && req.body.code) || "").trim();

@@ -63,6 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
     btnRow.className = "button-row";
 
     const likeBtn = document.createElement("button");
+    likeBtn.type = "button";
     likeBtn.textContent = "Like";
     likeBtn.onclick = async () => {
       await api("/api/like", {
@@ -73,6 +74,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const runBtn = document.createElement("button");
+    runBtn.type = "button";
     runBtn.textContent = "Run ComfyDeploy";
     runBtn.disabled = item.gallery !== "private";
     runBtn.onclick = async () => {
@@ -131,9 +133,10 @@ document.addEventListener("DOMContentLoaded", () => {
   if (familyUnlockForm) {
     familyUnlockForm.addEventListener("submit", async (e) => {
       e.preventDefault();
+      const code = String(familyCodeInput?.value || "").trim();
+
       try {
         showFamilyMessage("Checking code...");
-        const code = String(familyCodeInput.value || "").trim();
         const data = await api("/api/family-unlock", {
           method: "POST",
           body: JSON.stringify({ code })
