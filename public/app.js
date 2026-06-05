@@ -54,8 +54,7 @@ let lightboxIndex = -1;
 let phoneIndex = 0;
 let phoneVideos = [];
 let wheelLock = false;
-let mainLogoTimer = null;
-let privateLogoTimer = null;
+let familyLogoTimer = null;
 
 initTheme();
 initHandlers();
@@ -177,6 +176,7 @@ function initHandlers() {
   phoneBackBtn.addEventListener("click", closePhoneOverlay);
 
   lightboxClose.addEventListener("click", closeLightbox);
+
   lightbox.addEventListener("click", e => {
     if (e.target === lightbox || e.target.classList.contains("lightbox-content")) closeLightbox();
   });
@@ -244,12 +244,8 @@ function familyImages() {
   return items.filter(item => item.gallery === "family" && item.type === "image");
 }
 
-function privateImages() {
-  return items.filter(item => item.gallery === "private" && item.type === "image");
-}
-
 function startFamilyLogoRotation() {
-  if (mainLogoTimer) clearInterval(mainLogoTimer);
+  if (familyLogoTimer) clearInterval(familyLogoTimer);
   const imgs = familyImages();
   if (!imgs.length) {
     mainRotatingLogo.removeAttribute("src");
@@ -265,27 +261,7 @@ function startFamilyLogoRotation() {
     }, 150);
   };
   show();
-  mainLogoTimer = setInterval(show, 3000);
-}
-
-function startPrivateLogoRotation() {
-  if (privateLogoTimer) clearInterval(privateLogoTimer);
-  const imgs = privateImages();
-  if (!imgs.length) {
-    mainRotatingLogo.removeAttribute("src");
-    return;
-  }
-  let idx = 0;
-  const show = () => {
-    mainRotatingLogo.style.opacity = "0";
-    setTimeout(() => {
-      mainRotatingLogo.src = imgs[idx % imgs.length].url;
-      mainRotatingLogo.style.opacity = "1";
-      idx = (idx + 1) % imgs.length;
-    }, 150);
-  };
-  show();
-  privateLogoTimer = setInterval(show, 3000);
+  familyLogoTimer = setInterval(show, 3000);
 }
 
 function setFavicon(url) {
@@ -294,8 +270,7 @@ function setFavicon(url) {
 }
 
 function updateBrandLogo() {
-  if (currentGallery === "family") startFamilyLogoRotation();
-  if (currentGallery === "private") startPrivateLogoRotation();
+  startFamilyLogoRotation();
 }
 
 function updateFaviconFromFamily() {
@@ -593,18 +568,6 @@ function closePhoneOverlay() {
   removePhoneNav();
 }
 
-function ensurePhoneNav() {
-  let nav = document.querySelector(".phone-feed-nav");
-  if (!nav) {
-    nav = document.createElement("div");
-    nav.className = "phone-feed-nav active";
-    nav.innerHTML = `<button id="phone-prev">‹</button><button id="phone-next">›</button>`;
-    document.body.appendChild(nav);
-    nav.querySelector("#phone-prev").addEventListener("click", () => stepPhone(-1));
-    nav.querySelector("#phone-next").addEventListener("click", () => stepPhone(1));
-  }
-}
-
 function removePhoneNav() {
   const nav = document.querySelector(".phone-feed-nav");
   if (nav) nav.remove();
@@ -751,19 +714,12 @@ async function buildPhoneFeed() {
     phoneFeed.appendChild(el);
   });
 
-  ensurePhoneNav();
   await jumpToPhoneItem(0);
 }
 
 async function jumpToPhoneItem(idx) {
   const target = phoneFeed.querySelector(`.phone-item[data-index="${idx}"]`);
   if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-function stepPhone(direction) {
-  if (!phoneVideos.length) return;
-  phoneIndex = (phoneIndex + direction + phoneVideos.length) % phoneVideos.length;
-  jumpToPhoneItem(phoneIndex);
 }
 
 function escapeHtml(text) {
