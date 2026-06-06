@@ -55,6 +55,7 @@ let phoneIndex = 0;
 let phoneVideos = [];
 let wheelLock = false;
 let familyLogoTimer = null;
+let excludedTags = [];
 
 initTheme();
 initHandlers();
@@ -91,7 +92,7 @@ function initHandlers() {
     const data = await res.json();
     if (data.success) {
       isAdmin = true;
-      currentGallery = "private";
+      currentGallery = "family";
       await refreshStatus();
       await loadMedia();
     } else alert("Wrong admin password");
@@ -119,6 +120,18 @@ function initHandlers() {
 
   privateGalleryBtn.addEventListener("click", async () => {
     if (!isAdmin) return;
+    const password = prompt("Re-enter admin password to open Private Gallery:");
+    if (!password) return;
+    const check = await fetch("/api/admin-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password })
+    });
+    const checkData = await check.json();
+    if (!checkData.success) {
+      alert("Wrong admin password");
+      return;
+    }
     currentGallery = "private";
     await fetch("/api/switch-gallery", {
       method: "POST",
@@ -132,7 +145,7 @@ function initHandlers() {
   logoutFamilyBtn.addEventListener("click", async () => {
     await fetch("/api/family-logout", { method: "POST" });
     familyAccess = false;
-    currentGallery = isAdmin ? "private" : "family";
+    currentGallery = isAdmin ? "family" : "family";
     await refreshStatus();
     await loadMedia();
   });
@@ -224,11 +237,12 @@ async function refreshStatus() {
   const data = await res.json();
   isAdmin = data.isAdmin;
   familyAccess = data.familyAccess;
-  currentGallery = data.currentView || (isAdmin ? "private" : "family");
+  currentGallery = data.currentView || (isAdmin ? "family" : "family");
 
-  gateScreen.style.display = familyAccess || isAdmin ? "none" : "flex";
-  mainHeader.style.display = familyAccess || isAdmin ? "flex" : "none";
-  sortButtons.style.display = familyAccess || isAdmin ? "flex" : "none";
+  const showMain = familyAccess || isAdmin;
+  gateScreen.style.display = showMain ? "none" : "flex";
+  mainHeader.style.display = showMain ? "flex" : "none";
+  sortButtons.style.display = showMain ? "flex" : "none";
   adminBar.style.display = isAdmin ? "flex" : "none";
 
   deleteAllBtn.style.display = isAdmin ? "inline-block" : "none";
@@ -238,6 +252,18 @@ async function refreshStatus() {
 
   galleryTitle.textContent = currentGallery === "private" ? "Private Gallery" : "Family Gallery";
   galleryBadge.textContent = currentGallery === "private" ? "Private" : "Family";
+
+  await loadExcludedTags();
+}
+
+async function loadExcludedTags() {
+  try {
+    const res = await fetch("/api/excluded-tags");
+    const data = await res.json();
+    excludedTags = data.success && Array.isArray(data.excludedTags) ? data.excludedTags : [];
+  } catch {
+    excludedTags = [];
+  }
 }
 
 function familyImages() {
@@ -565,12 +591,6 @@ async function openPhoneOverlay() {
 function closePhoneOverlay() {
   phoneOverlay.classList.remove("active");
   phoneFeed.innerHTML = "";
-  removePhoneNav();
-}
-
-function removePhoneNav() {
-  const nav = document.querySelector(".phone-feed-nav");
-  if (nav) nav.remove();
 }
 
 async function buildPhoneFeed() {

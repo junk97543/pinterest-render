@@ -19,7 +19,6 @@ const PUBLIC_DIR = path.join(__dirname, "public");
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(TEMP_UPLOAD_DIR)) fs.mkdirSync(TEMP_UPLOAD_DIR, { recursive: true });
 
-// MongoDB Setup
 const client = new MongoClient(process.env.MONGODB_URI);
 let db;
 
@@ -32,7 +31,6 @@ async function connectDB() {
   return db;
 }
 
-// Run connection on startup
 connectDB().catch(console.error);
 
 app.use(express.json({ limit: "25mb" }));
@@ -60,11 +58,12 @@ async function loadState() {
     const state = await database.collection("state").findOne({ _id: "main" });
     return state ? {
       family: Array.isArray(state.family) ? state.family : [],
-      private: Array.isArray(state.private) ? state.private : []
-    } : { family: [], private: [] };
+      private: Array.isArray(state.private) ? state.private : [],
+      excludedTags: Array.isArray(state.excludedTags) ? state.excludedTags : []
+    } : { family: [], private: [], excludedTags: [] };
   } catch (err) {
     console.error("DB loadState error:", err);
-    return { family: [], private: [] };
+    return { family: [], private: [], excludedTags: [] };
   }
 }
 
@@ -73,7 +72,13 @@ async function saveState(state) {
     const database = await connectDB();
     await database.collection("state").updateOne(
       { _id: "main" },
-      { $set: { family: state.family || [], private: state.private || [] } },
+      {
+        $set: {
+          family: state.family || [],
+          private: state.private || [],
+          excludedTags: Array.isArray(state.excludedTags) ? state.excludedTags : []
+        }
+      },
       { upsert: true }
     );
   } catch (err) {
@@ -107,17 +112,21 @@ async function saveChat(chat) {
 
 function isAdmin(req) { return !!req.session?.isAdmin; }
 function hasFamilyAccess(req) { return !!req.session?.familyAccess; }
+
 function canAccessGallery(req, gallery) {
   if (gallery === "private") return isAdmin(req);
   return hasFamilyAccess(req) || isAdmin(req);
 }
+
 function normalizeTag(tag) {
   return String(tag || "").trim().replace(/^#/, "").replace(/\s+/g, " ");
 }
+
 function getTargetGallery(req) {
   const g = String(req.query.gallery || req.body?.gallery || activeGallery || "family").toLowerCase();
   return g === "private" ? "private" : "family";
 }
+
 function configureCloudinary(gallery) {
   if (gallery === "private") {
     cloudinary.config({
@@ -135,6 +144,7 @@ function configureCloudinary(gallery) {
     });
   }
 }
+
 async function uploadToCloudinary(filePath, originalName, gallery) {
   const ext = path.extname(originalName).toLowerCase();
   const isVideo = [".mp4", ".mov", ".webm", ".m4v", ".avi", ".ogg"].includes(ext);
@@ -145,7 +155,14 @@ async function uploadToCloudinary(filePath, originalName, gallery) {
   });
 }
 
-// ======================== ROUTES ========================
+function excludeByTags(items, excludedTags) {
+  const excluded = new Set((excludedTags || []).map(t => String(t).toLowerCase()));
+  if (!excluded.size) return items;
+  return items.filter(item => {
+    const tags = Array.isArray(item.tags) ? item.tags.map(t => String(t).toLowerCase()) : [];
+    return !tags.some(t => excluded.has(t));
+  });
+}
 
 app.get("/api/status", (req, res) => {
   res.json({
@@ -160,7 +177,7 @@ app.post("/api/admin-login", (req, res) => {
   const { password } = req.body || {};
   if (password === ADMIN_PASSWORD) {
     req.session.isAdmin = true;
-    activeGallery = "private";
+    activeGallery = "family";
     return res.json({ success: true, activeGallery });
   }
   return res.status(401).json({ success: false, error: "Wrong admin password" });
@@ -203,6 +220,10 @@ app.get("/media", async (req, res) => {
   const sort = String(req.query.sort || "random");
   const state = await loadState();
   let media = [...state[gallery]];
+
+  if (gallery === "private") {
+    media = excludeByTags(media, state.excludedTags);
+  }
 
   if (sort === "newest") media.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   if (sort === "popular") media.sort((a, b) => (b.likes || 0) - (a.likes || 0));
@@ -317,6 +338,49 @@ app.post("/api/caption", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: "Caption failed" });
+  }
+});
+
+app.post("/api/excluded-tags/add", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
+    const { tag } = req.body || {};
+    const cleanTag = normalizeTag(tag);
+    if (!cleanTag) return res.status(400).json({ success: false, error: "Missing tag" });
+
+    const state = await loadState();
+    if (!Array.isArray(state.excludedTags)) state.excludedTags = [];
+    if (!state.excludedTags.includes(cleanTag)) state.excludedTags.push(cleanTag);
+    await saveState(state);
+    res.json({ success: true, excludedTags: state.excludedTags });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Failed to add excluded tag" });
+  }
+});
+
+app.post("/api/excluded-tags/remove", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
+    const { tag } = req.body || {};
+    const cleanTag = normalizeTag(tag);
+    const state = await loadState();
+    state.excludedTags = (state.excludedTags || []).filter(t => String(t).toLowerCase() !== cleanTag.toLowerCase());
+    await saveState(state);
+    res.json({ success: true, excludedTags: state.excludedTags });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Failed to remove excluded tag" });
+  }
+});
+
+app.get("/api/excluded-tags", async (req, res) => {
+  try {
+    const state = await loadState();
+    res.json({ success: true, excludedTags: state.excludedTags || [] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Failed to load excluded tags" });
   }
 });
 
