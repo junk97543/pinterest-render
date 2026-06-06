@@ -122,13 +122,13 @@ function initHandlers() {
     if (!isAdmin) return;
     const password = prompt("Re-enter admin password to open Private Gallery:");
     if (!password) return;
-    const check = await fetch("/api/admin-login", {
+    const res = await fetch("/api/admin-login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password })
     });
-    const checkData = await check.json();
-    if (!checkData.success) {
+    const data = await res.json();
+    if (!data.success) {
       alert("Wrong admin password");
       return;
     }
@@ -145,7 +145,7 @@ function initHandlers() {
   logoutFamilyBtn.addEventListener("click", async () => {
     await fetch("/api/family-logout", { method: "POST" });
     familyAccess = false;
-    currentGallery = isAdmin ? "family" : "family";
+    currentGallery = "family";
     await refreshStatus();
     await loadMedia();
   });
@@ -237,7 +237,7 @@ async function refreshStatus() {
   const data = await res.json();
   isAdmin = data.isAdmin;
   familyAccess = data.familyAccess;
-  currentGallery = data.currentView || (isAdmin ? "family" : "family");
+  currentGallery = data.currentView || "family";
 
   const showMain = familyAccess || isAdmin;
   gateScreen.style.display = showMain ? "none" : "flex";
@@ -254,6 +254,7 @@ async function refreshStatus() {
   galleryBadge.textContent = currentGallery === "private" ? "Private" : "Family";
 
   await loadExcludedTags();
+  renderExcludedTagsPanel();
 }
 
 async function loadExcludedTags() {
@@ -264,6 +265,68 @@ async function loadExcludedTags() {
   } catch {
     excludedTags = [];
   }
+}
+
+function renderExcludedTagsPanel() {
+  if (!tagPanel) return;
+  const existingHeader = tagPanel.querySelector(".excluded-tags-panel");
+  if (existingHeader) existingHeader.remove();
+
+  if (!isAdmin || currentGallery !== "private") return;
+
+  const wrap = document.createElement("div");
+  wrap.className = "excluded-tags-panel";
+  wrap.innerHTML = `
+    <div class="tag-panel-header">
+      <h2>Excluded Tags</h2>
+    </div>
+    <div class="tag-list" id="excluded-tags-list"></div>
+    <div class="excluded-tag-form">
+      <input id="excluded-tag-input" type="text" placeholder="Add excluded tag, e.g. nsfw" />
+      <button id="add-excluded-tag-btn" class="tag-clear-btn">Exclude Tag</button>
+    </div>
+  `;
+  tagPanel.prepend(wrap);
+
+  const list = wrap.querySelector("#excluded-tags-list");
+  list.innerHTML = "";
+
+  if (!excludedTags.length) {
+    list.innerHTML = "<p>No excluded tags.</p>";
+  } else {
+    excludedTags.forEach(tag => {
+      const chip = document.createElement("button");
+      chip.className = "tag-chip active";
+      chip.textContent = `#${tag} ✕`;
+      chip.addEventListener("click", async () => {
+        await fetch("/api/excluded-tags/remove", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tag })
+        });
+        await refreshStatus();
+        await loadMedia();
+      });
+      list.appendChild(chip);
+    });
+  }
+
+  wrap.querySelector("#add-excluded-tag-btn").addEventListener("click", async () => {
+    const input = wrap.querySelector("#excluded-tag-input");
+    const tag = input.value.trim();
+    if (!tag) return;
+    const res = await fetch("/api/excluded-tags/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tag })
+    });
+    const data = await res.json();
+    if (data.success) {
+      input.value = "";
+      await refreshStatus();
+      await loadMedia();
+    }
+  });
 }
 
 function familyImages() {

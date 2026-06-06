@@ -155,12 +155,12 @@ async function uploadToCloudinary(filePath, originalName, gallery) {
   });
 }
 
-function excludeByTags(items, excludedTags) {
+function filterExcludedTags(items, excludedTags) {
   const excluded = new Set((excludedTags || []).map(t => String(t).toLowerCase()));
   if (!excluded.size) return items;
   return items.filter(item => {
     const tags = Array.isArray(item.tags) ? item.tags.map(t => String(t).toLowerCase()) : [];
-    return !tags.some(t => excluded.has(t));
+    return !tags.some(tag => excluded.has(tag));
   });
 }
 
@@ -222,7 +222,7 @@ app.get("/media", async (req, res) => {
   let media = [...state[gallery]];
 
   if (gallery === "private") {
-    media = excludeByTags(media, state.excludedTags);
+    media = filterExcludedTags(media, state.excludedTags);
   }
 
   if (sort === "newest") media.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -341,6 +341,16 @@ app.post("/api/caption", async (req, res) => {
   }
 });
 
+app.get("/api/excluded-tags", async (req, res) => {
+  try {
+    const state = await loadState();
+    res.json({ success: true, excludedTags: state.excludedTags || [] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Failed to load excluded tags" });
+  }
+});
+
 app.post("/api/excluded-tags/add", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
@@ -352,6 +362,7 @@ app.post("/api/excluded-tags/add", async (req, res) => {
     if (!Array.isArray(state.excludedTags)) state.excludedTags = [];
     if (!state.excludedTags.includes(cleanTag)) state.excludedTags.push(cleanTag);
     await saveState(state);
+
     res.json({ success: true, excludedTags: state.excludedTags });
   } catch (err) {
     console.error(err);
@@ -364,23 +375,15 @@ app.post("/api/excluded-tags/remove", async (req, res) => {
     if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
     const { tag } = req.body || {};
     const cleanTag = normalizeTag(tag);
+
     const state = await loadState();
     state.excludedTags = (state.excludedTags || []).filter(t => String(t).toLowerCase() !== cleanTag.toLowerCase());
     await saveState(state);
+
     res.json({ success: true, excludedTags: state.excludedTags });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: "Failed to remove excluded tag" });
-  }
-});
-
-app.get("/api/excluded-tags", async (req, res) => {
-  try {
-    const state = await loadState();
-    res.json({ success: true, excludedTags: state.excludedTags || [] });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, error: "Failed to load excluded tags" });
   }
 });
 
