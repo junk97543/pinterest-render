@@ -440,5 +440,80 @@ app.post("/api/chat", async (req, res) => {
 app.get("/", (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
+// ======================== RATING + EMOJI + DELETE ========================
+app.post("/api/rate", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
+    const { public_id, gallery, ratings } = req.body;
+    const targetGallery = gallery === "private" ? "private" : "family";
 
-app.listen(PORT, () => console.log(`Server running on ${PORT}`));
+    const state = await loadState();
+    const item = state[targetGallery].find(m => m.public_id === public_id);
+    if (!item) return res.status(404).json({ success: false, error: "Media not found" });
+
+    item.ratings = ratings || {};
+    
+    const numeric = Object.values(item.ratings).filter(v => typeof v === "number");
+    if (numeric.length) {
+      item.overallRating = parseFloat((numeric.reduce((a,b)=>a+b,0)/numeric.length).toFixed(2));
+    }
+
+    const autoTags = generateAutoTags(item.ratings, item.overallRating);
+    if (!item.tags) item.tags = [];
+    autoTags.forEach(tag => { if (!item.tags.includes(tag)) item.tags.push(tag); });
+
+    await saveState(state);
+    res.json({ success: true, overallRating: item.overallRating, tags: item.tags });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Rating failed" });
+  }
+});
+
+function generateAutoTags(r, overall) {
+  const tags = [];
+  if (r.breast === "huge") tags.push("mommy-milkers", "huge-tits");
+  if (r.breast === "big") tags.push("big-tits");
+  if (r.breast === "flat") tags.push("flat-chest");
+
+  if (r.bodyShape === "thick" || r.bodyShape === "bbw") tags.push("thick", "curvy", "bbw");
+  if (r.build === "chubby") tags.push("chubby", "soft");
+
+  if (r.fuckability >= 9) tags.push("extremely-fuckable");
+  if (r.cuteness >= 8.5) tags.push("adorable");
+  if (r.beauty >= 9) tags.push("goddess");
+  if (r.hotness >= 9) tags.push("smoking-hot");
+  if (r.sluttiness >= 8) tags.push("total-slut");
+
+  if (overall >= 9) tags.push("god-tier");
+  if (overall >= 8.5) tags.push("top-tier");
+  return tags;
+}
+
+// Single Delete
+app.post("/api/delete-item", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
+    const { public_id, gallery, password } = req.body;
+    if (password !== ADMIN_PASSWORD) return res.status(401).json({ success: false, error: "Wrong admin password" });
+
+    const target = gallery === "private" ? "private" : "family";
+    configureCloudinary(target);
+
+    const state = await loadState();
+    const idx = state[target].findIndex(m => m.public_id === public_id);
+    if (idx === -1) return res.status(404).json({ success: false, error: "Not found" });
+
+    const item = state[target][idx];
+    try {
+      await cloudinary.uploader.destroy(item.public_id, { resource_type: item.type === "video" ? "video" : "image" });
+    } catch {}
+
+    state[target].splice(idx, 1);
+    await saveState(state);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Delete failed" });
+  }
+});app.listen(PORT, () => console.log(`Server running on ${PORT}`));
