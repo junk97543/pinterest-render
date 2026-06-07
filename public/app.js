@@ -619,16 +619,15 @@ function showLightboxItem(index) {
     lightboxVideo.play().catch(() => {});
   }
 
-  // Clear old panels
+  // Remove old stuff
   document.querySelectorAll("#rating-panel, #depravity-panel, .overlay-element").forEach(el => el.remove());
 
   if (isAdmin && currentGallery === "private") {
-    createRatingPanel(item, index);     // LEFT SIDE - Rating
-    createDepravityPanel(item);         // RIGHT SIDE - Tools
-    loadSavedOverlays(item);          // Load saved overlays
+    createRatingPanel(item, index);   // LEFT: Rating
+    createDepravityPanel(item);       // RIGHT: Tools
+    loadSavedOverlays(item);          // Load previously saved emojis/text
   }
 }
-
 function closeLightbox() {
   lightbox.classList.remove("active");
   lightboxImg.src = "";
@@ -882,6 +881,7 @@ function createRatingPanel(item, index) {
   `;
 
   document.querySelector(".lightbox-content").appendChild(panel);
+  panel.querySelector("#save-rating-btn").addEventListener("click", saveRatings);
 
   document.getElementById("save-rating-btn").addEventListener("click", saveRatings);
   document.getElementById("add-emoji-btn").addEventListener("click", () => showEmojiPicker(item));
