@@ -516,4 +516,45 @@ app.post("/api/delete-item", async (req, res) => {
     console.error(err);
     res.status(500).json({ success: false, error: "Delete failed" });
   }
+// ======================== ALBUMS ========================
+app.post("/api/albums", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
+    const state = await loadState();
+    if (!state.albums) state.albums = [];
+    res.json({ success: true, albums: state.albums });
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+});
+
+app.post("/api/albums/create", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ success: false });
+    const { name } = req.body;
+    const state = await loadState();
+    if (!state.albums) state.albums = [];
+    state.albums.push({ id: Date.now().toString(), name: name || "New Album", items: [] });
+    await saveState(state);
+    res.json({ success: true, albums: state.albums });
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+});
+
+app.post("/api/albums/add", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ success: false });
+    const { albumId, public_id } = req.body;
+    const state = await loadState();
+    const album = state.albums.find(a => a.id === albumId);
+    if (album) {
+      if (!album.items.includes(public_id)) album.items.push(public_id);
+      await saveState(state);
+      res.json({ success: true });
+    } else res.status(404).json({ success: false });
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+});
 });app.listen(PORT, () => console.log(`Server running on ${PORT}`));

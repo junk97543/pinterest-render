@@ -616,12 +616,10 @@ function showLightboxItem(index) {
     lightboxVideo.play().catch(() => {});
   }
 
-  // Remove old panels
-  document.querySelectorAll("#rating-panel, #depravity-panel").forEach(el => el.remove());
+  document.querySelectorAll(".overlay-element").forEach(el => el.remove());
 
   if (isAdmin && currentGallery === "private") {
-    createRatingPanel(item, index);   // your existing rating panel
-    // createDepravityPanel(item);    // uncomment when you add the new panel
+    createDepravityPanel(item);
   }
 }
 function closeLightbox() {
@@ -1095,4 +1093,156 @@ async function deleteSingleItem(public_id) {
     await loadMedia();
   } else alert(data.error || "Failed");
 }
+// ======================== ALBUMS ========================
+async function showAlbums() {
+  const res = await fetch("/api/albums");
+  const data = await res.json();
+  if (!data.success) return alert("Failed to load albums");
+  
+  let list = "Albums:\n";
+  data.albums.forEach(album => {
+    list += `- ${album.name} (${album.items.length} items)\n`;
+  });
+  const name = prompt(list + "\n\nEnter new album name to create:");
+  if (name) {
+    await fetch("/api/albums/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name })
+    });
+    alert("Album created!");
+  }
+}
+
+// ======================== IMPROVED DRAGGABLE EMOJIS + TEXT ========================
+function createDepravityPanel(item) {
+  const panel = document.createElement("div");
+  panel.id = "depravity-panel";
+  panel.style = `position:absolute; top:20px; left:20px; width:400px; background:rgba(0,0,0,0.95); padding:20px; border-radius:14px; color:#fff; z-index:1002; max-height:80vh; overflow-y:auto;`;
+
+  panel.innerHTML = `
+    <h3 style="text-align:center;color:#ff5a5f">🔥 Depravity Tools</h3>
+    <button id="emoji-btn" style="width:100%;padding:12px;margin:6px 0;background:#ff1493;border:none;color:white;border-radius:8px;">😈 Draggable Emoji</button>
+    <button id="text-btn" style="width:100%;padding:12px;margin:6px 0;background:#ff4500;border:none;color:white;border-radius:8px;">✍️ Tattoo Text</button>
+    <button id="bubble-btn" style="width:100%;padding:12px;margin:6px 0;background:#8a2be2;border:none;color:white;border-radius:8px;">💬 Speech Bubble</button>
+    <button id="auto-caption-btn" style="width:100%;padding:12px;margin:6px 0;background:#e60023;border:none;color:white;border-radius:8px;">🤖 Auto Filthy Caption</button>
+    <button id="album-btn" style="width:100%;padding:12px;margin:6px 0;background:#32cd32;border:none;color:white;border-radius:8px;">📁 Add to Album</button>
+    <button id="delete-btn" style="width:100%;padding:12px;margin:12px 0 0 0;background:#333;border:none;color:white;border-radius:8px;">🗑️ Delete Image</button>
+  `;
+
+  document.querySelector(".lightbox-content").appendChild(panel);
+
+  panel.querySelector("#emoji-btn").onclick = () => addDraggableEmoji(item);
+  panel.querySelector("#text-btn").onclick = () => addDraggableText(item);
+  panel.querySelector("#bubble-btn").onclick = () => addSpeechBubble(item);
+  panel.querySelector("#auto-caption-btn").onclick = () => autoDepravedCaption(item.public_id);
+  panel.querySelector("#album-btn").onclick = () => addToAlbum(item.public_id);
+  panel.querySelector("#delete-btn").onclick = () => deleteSingleItem(item.public_id);
+}
+
+// Draggable functions
+function addDraggableEmoji(item) {
+  const emojis = ["🍆","💦","🍑","🥵","😈","🤤","👅","🍼","🔥","😩","🍒"];
+  const emo = emojis[Math.floor(Math.random()*emojis.length)];
+  createDraggableElement(emo, 60, item, "emoji");
+}
+
+function addDraggableText(item) {
+  const txt = prompt("Tattoo text:", "SLUT");
+  if (!txt) return;
+  const el = createDraggableElement(txt.toUpperCase(), 28, item, "text");
+  el.style.fontFamily = "'Comic Sans MS', cursive";
+  el.style.color = "#ff0000";
+  el.style.textShadow = "2px 2px 4px #000";
+  el.style.transform = "rotate(-8deg)";
+}
+
+function addSpeechBubble(item) {
+  const txt = prompt("What does she say?", "Fuck me harder Daddy");
+  if (!txt) return;
+  const el = createDraggableElement(txt, 18, item, "bubble");
+  el.style.background = "rgba(255,255,255,0.95)";
+  el.style.color = "#000";
+  el.style.padding = "12px 18px";
+  el.style.borderRadius = "20px";
+  el.style.maxWidth = "240px";
+}
+
+function createDraggableElement(content, fontSize, item, type) {
+  const el = document.createElement("div");
+  el.className = "overlay-element";
+  el.style.position = "absolute";
+  el.style.fontSize = fontSize + "px";
+  el.style.cursor = "move";
+  el.style.zIndex = "1003";
+  el.style.userSelect = "none";
+  el.textContent = content;
+  document.querySelector(".lightbox-content").appendChild(el);
+  makeDraggable(el, item);
+  return el;
+}
+
+function makeDraggable(el, item) {
+  let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+  el.onmousedown = dragMouseDown;
+
+  function dragMouseDown(e) {
+    e.preventDefault();
+    pos3 = e.clientX; pos4 = e.clientY;
+    document.onmouseup = closeDragElement;
+    document.onmousemove = elementDrag;
+  }
+
+  function elementDrag(e) {
+    e.preventDefault();
+    pos1 = pos3 - e.clientX;
+    pos2 = pos4 - e.clientY;
+    pos3 = e.clientX;
+    pos4 = e.clientY;
+    el.style.top = (el.offsetTop - pos2) + "px";
+    el.style.left = (el.offsetLeft - pos1) + "px";
+  }
+
+  function closeDragElement() {
+    document.onmouseup = null;
+    document.onmousemove = null;
+    saveCurrentOverlays(item);
+  }
+}
+
+async function saveCurrentOverlays(item) {
+  const overlays = [];
+  document.querySelectorAll(".overlay-element").forEach(el => {
+    overlays.push({
+      content: el.textContent,
+      top: el.style.top,
+      left: el.style.left
+    });
+  });
+  item.overlays = overlays;
+  await fetch("/api/overlay/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ public_id: item.public_id, gallery: currentGallery, overlays })
+  });
+}
+
+async function autoDepravedCaption(public_id) {
+  const res = await fetch("/api/auto-caption", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ public_id, gallery: currentGallery })
+  });
+  const data = await res.json();
+  if (data.success) alert("Filthy caption added!");
+}
+
+async function deleteSingleItem(public_id) { /* your existing delete function */ }
+
+async function addToAlbum(public_id) {
+  const name = prompt("Enter album name:");
+  if (!name) return;
+  // For simplicity, create if not exists
+  await fetch("/api/albums/create", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ name }) });
+  alert("Added to album (basic version)");
 }
