@@ -623,7 +623,7 @@ function showLightboxItem(index) {
 
   if (isAdmin && currentGallery === "private") {
     createRatingPanel(item, index);   // LEFT: Rating
-    createDepravityPanel(item);       // RIGHT: Tools
+    createToolbox(item);       // RIGHT: Tools
     loadSavedOverlays(item);          // Load previously saved emojis/text
   }
 }
@@ -892,7 +892,7 @@ async function saveRatings() {
     chest: document.getElementById("r-chest").value,
     bodyShape: document.getElementById("r-body").value,
     build: document.getElementById("r-build").value,
-    loveability: parseFloat(document.getElementById("r-love").value),
+    loveability: parseFloat(document.getElementById("r-fuck").value),
     cuteness: parseFloat(document.getElementById("r-cute").value),
     beauty: parseFloat(document.getElementById("r-beauty").value),
     hotness: parseFloat(document.getElementById("r-hot").value),
@@ -911,6 +911,41 @@ async function saveRatings() {
     await loadMedia();
   }
 }
+
+
+
+function createToolbox(item) {
+  const panel = document.createElement("div");
+  panel.id = "toolbox-panel";
+  panel.style = `position:absolute; top:20px; right:20px; width:280px; background:rgba(0,0,0,0.95); padding:20px; border-radius:16px; color:#fff; z-index:1002;`;
+
+  panel.innerHTML = `
+    <h3 style="text-align:center; color:#ff5a5f; margin:0 0 15px 0;">🛠️ Toolbox</h3>
+    <button id="add-tattoo-btn" style="width:100%;padding:10px;margin:5px 0;background:#ff6b35;border:none;color:white;font-weight:bold;border-radius:8px;">📝 Tattoo Text</button>
+    <button id="add-snapchat-btn" style="width:100%;padding:10px;margin:5px 0;background:#fffc00;color:black;border:none;font-weight:bold;border-radius:8px;">📱 Snapchat Text</button>
+    <button id="add-speech-btn" style="width:100%;padding:10px;margin:5px 0;background:#ffffff;border:none;color:black;font-weight:bold;border-radius:8px;">💬 Speech Bubble</button>
+    <button id="add-tier-btn" style="width:100%;padding:10px;margin:5px 0;background:#4CAF50;border:none;color:white;font-weight:bold;border-radius:8px;">📊 Tier List</button>
+    <button id="add-to-album-btn" style="width:100%;padding:10px;margin:5px 0;background:#2196F3;border:none;color:white;font-weight:bold;border-radius:8px;">📁 Add to Album</button>
+    <button id="save-overlays-btn" style="width:100%;padding:10px;margin:5px 0;background:#e60023;border:none;color:white;font-weight:bold;border-radius:8px;">💾 Save Overlays</button>
+  `;
+
+  document.querySelector(".lightbox-content").appendChild(panel);
+
+  // Button handlers
+  panel.querySelector("#add-tattoo-btn").addEventListener("click", () => addDraggableTextWithSliders(item));
+  panel.querySelector("#add-snapchat-btn").addEventListener("click", () => addSnapchatText(item));
+  panel.querySelector("#add-speech-btn").addEventListener("click", () => addSpeechBubbleWithSlider(item));
+  panel.querySelector("#add-tier-btn").addEventListener("click", () => openTierListMaker(item));
+  panel.querySelector("#add-to-album-btn").addEventListener("click", () => addToAlbum(item));
+  panel.querySelector("#save-overlays-btn").addEventListener("click", () => saveCurrentOverlays(item));
+}
+
+
+
+
+
+
+
 
 function showEmojiPicker(item) {
   const emojis = ["🍆", "💦", "😈", "🍑", "🔥", "🥵", "💋", "🍼", "😩", "🤤", "👅", "🍒"];
@@ -1038,32 +1073,274 @@ function addSpeechBubbleWithSlider(item) {
 }
 
 // Keep the rest of draggable functions (createDraggableElement, makeDraggable, saveCurrentOverlays, loadSavedOverlays, etc.)
+function createDraggableElement(text, fontSize, item) {
+  const el = document.createElement("div");
+  el.className = "overlay-element";
+  el.style.position = "absolute";
+  el.style.top = "30%";
+  el.style.left = "40%";
+  el.style.fontSize = fontSize + "px";
+  el.style.color = "#ff0000";
+  el.style.cursor = "move";
+  el.style.zIndex = "1003";
+  el.style.userSelect = "none";
+  el.style.background = "rgba(0,0,0,0.7)";
+  el.style.padding = "8px 16px";
+  el.style.borderRadius = "8px";
+  el.textContent = text;
+
+  // Make draggable
+  makeDraggable(el, item);
+  document.querySelector(".lightbox-content").appendChild(el);
+  return el;
+}
+
+function makeDraggable(el, item) {
+  let isDragging = false;
+  let startX, startY, startLeft, startTop;
+
+  el.addEventListener("mousedown", (e) => {
+    isDragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    startLeft = parseInt(el.style.left || 0);
+    startTop = parseInt(el.style.top || 0);
+    el.style.cursor = "grabbing";
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    el.style.left = (startLeft + dx) + "px";
+    el.style.top = (startTop + dy) + "px";
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (isDragging) {
+      isDragging = false;
+      el.style.cursor = "move";
+    }
+  });
+}
+
 function openTierListMaker(currentItem) {
-  const tierHTML = `
-    <div style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#111; padding:20px; border-radius:12px; z-index:10000; width:600px; color:white;">
-      <h2>Tier List Maker</h2>
-      <div style="display:flex; gap:10px; flex-wrap:wrap;">
-        <div style="background:#4CAF50; padding:10px; min-width:80px;">S Tier</div>
-        <div style="background:#8BC34A; padding:10px; min-width:80px;">A Tier</div>
-        <div style="background:#FFEB3B; color:black; padding:10px; min-width:80px;">B Tier</div>
-        <div style="background:#FF9800; padding:10px; min-width:80px;">C Tier</div>
-        <div style="background:#F44336; padding:10px; min-width:80px;">F Tier</div>
+  // Close any existing tier list first
+  const existing = document.getElementById("tier-list-modal");
+  if (existing) existing.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "tier-list-modal";
+  modal.style = `position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); z-index:10001; display:flex; align-items:center; justify-content:center;`;
+
+  modal.innerHTML = `
+    <div style="background:#111; padding:20px; border-radius:12px; width:90%; max-width:700px; color:white; max-height:85vh; overflow-y:auto;">
+      <h2 style="text-align:center; margin-bottom:15px;">📊 Tier List Maker</h2>
+      <div style="margin-bottom:15px;">
+        <p style="font-size:13px; color:#aaa;">Drag this image into any tier below:</p>
+        <div style="display:flex; justify-content:center; gap:10px; margin:10px 0;">
+          <img src="${currentItem.url}" style="width:100px; height:100px; object-fit:cover; border:3px solid #ff5a5f; border-radius:8px; cursor:grab;" id="tier-drag-image">
+        </div>
       </div>
-      <button onclick="this.parentElement.remove()" style="margin-top:15px;">Close</button>
+      <div style="background:#222; padding:15px; border-radius:8px;">
+        <div style="display:grid; grid-template-columns:80px 1fr; gap:10px; margin-bottom:8px;">
+          <div style="background:#4CAF50; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px;">S</div>
+          <div class="tier-drop-zone" data-tier="S" style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;"></div>
+        </div>
+        <div style="display:grid; grid-template-columns:80px 1fr; gap:10px; margin-bottom:8px;">
+          <div style="background:#8BC34A; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px;">A</div>
+          <div class="tier-drop-zone" data-tier="A" style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;"></div>
+        </div>
+        <div style="display:grid; grid-template-columns:80px 1fr; gap:10px; margin-bottom:8px;">
+          <div style="background:#FFEB3B; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px; color:black;">B</div>
+          <div class="tier-drop-zone" data-tier="B" style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;"></div>
+        </div>
+        <div style="display:grid; grid-template-columns:80px 1fr; gap:10px; margin-bottom:8px;">
+          <div style="background:#FF9800; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px;">C</div>
+          <div class="tier-drop-zone" data-tier="C" style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;"></div>
+        </div>
+        <div style="display:grid; grid-template-columns:80px 1fr; gap:10px;">
+          <div style="background:#F44336; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px;">F</div>
+          <div class="tier-drop-zone" data-tier="F" style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;"></div>
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:15px;">
+        <button id="save-tier-btn" style="flex:1; padding:12px; background:#4CAF50; border:none; color:white; font-weight:bold; border-radius:8px;">💾 Save Tier</button>
+        <button id="close-tier-btn" style="flex:1; padding:12px; background:#666; border:none; color:white; font-weight:bold; border-radius:8px;">Close</button>
+      </div>
     </div>
   `;
-  const modal = document.createElement("div");
-  modal.innerHTML = tierHTML;
+
   document.body.appendChild(modal);
+
+  // Make image draggable
+  const dragImage = modal.querySelector("#tier-drag-image");
+  dragImage.draggable = true;
+  
+  dragImage.addEventListener("dragstart", (e) => {
+    e.dataTransfer.setData("text/plain", JSON.stringify(currentItem));
+    e.dataTransfer.effectAllowed = "move";
+  });
+
+  // Make drop zones work
+  const dropZones = modal.querySelectorAll(".tier-drop-zone");
+  dropZones.forEach(zone => {
+    zone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      zone.style.background = "#444";
+    });
+
+    zone.addEventListener("dragleave", () => {
+      zone.style.background = "#333";
+    });
+
+    zone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      zone.style.background = "#333";
+      const item = JSON.parse(e.dataTransfer.getData("text/plain"));
+      
+      // Create droppable image in tier
+      const img = document.createElement("img");
+      img.src = item.url;
+      img.style = "width:50px; height:50px; object-fit:cover; border-radius:4px; cursor:grab;";
+      img.draggable = true;
+      
+      img.addEventListener("dragstart", (dragE) => {
+        dragE.dataTransfer.setData("text/plain", JSON.stringify(item));
+      });
+
+      img.addEventListener("click", () => {
+        if(confirm("Remove from tier?")) img.remove();
+      });
+
+      zone.appendChild(img);
+    });
+  });
+
+  // Save tier button
+  modal.querySelector("#save-tier-btn").addEventListener("click", async () => {
+    const tiers = {};
+    dropZones.forEach(zone => {
+      const tierName = zone.dataset.tier;
+      const images = Array.from(zone.querySelectorAll("img")).map(img => ({
+        url: img.src,
+        public_id: currentItem.public_id
+      }));
+      if (images.length > 0) {
+        tiers[tierName] = images;
+      }
+    });
+
+    // Save to item ratings
+    if (!currentItem.ratings) currentItem.ratings = {};
+    currentItem.ratings.tierList = tiers;
+
+    const res = await fetch("/api/rate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        public_id: currentItem.public_id, 
+        gallery: currentGallery, 
+        ratings: currentItem.ratings 
+      })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      alert("✅ Tier list saved!");
+      modal.remove();
+      await loadMedia();
+    } else {
+      alert("Failed to save tier: " + data.error);
+    }
+  });
+
+  modal.querySelector("#close-tier-btn").addEventListener("click", () => modal.remove());
 }
-async function showAlbums() {
+
+aasync function addToAlbum(item) {
+  // Get existing albums
   const res = await fetch("/api/albums");
   const data = await res.json();
+  
   let msg = "Albums:\n\n";
-  (data.albums || []).forEach(a => msg += `• ${a.name} (${a.items ? a.items.length : 0})\n`);
-  const name = prompt(msg + "\n\nNew album name:");
-  if (name) {
-    await fetch("/api/albums/create", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name})});
-    alert("Album created!");
+  const albums = data.albums || [];
+  if (!albums.length) {
+    msg = "No albums yet. Create one first:\n\n";
+  } else {
+    albums.forEach((a, i) => msg += `${i + 1}. ${a.name} (${a.items ? a.items.length : 0} items)\n`);
+  }
+  
+  msg += "\nType album name (or create new):";
+  const name = prompt(msg);
+  if (!name) return;
+
+  // Check if album exists
+  let album = albums.find(a => a.name.toLowerCase() === name.toLowerCase());
+  
+  if (!album) {
+    // Create new album
+    const createRes = await fetch("/api/albums/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name })
+    });
+    const createData = await createRes.json();
+    if (!createData.success) {
+      alert("Failed to create album: " + createData.error);
+      return;
+    }
+    album = createData.album;
+  }
+
+  // Add item to album
+  const addRes = await fetch("/api/albums/add", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ 
+      albumName: album.name, 
+      public_id: item.public_id,
+      gallery: currentGallery 
+    })
+  });
+
+  const addData = await addRes.json();
+  if (addData.success) {
+    alert(`✅ Added to "${album.name}"!`);
+  } else {
+    alert("Failed: " + addData.error);
+  }
+}
+
+async function saveCurrentOverlays(item) {
+  const overlays = [];
+  
+  // Get all overlay elements
+  document.querySelectorAll(".overlay-element").forEach(el => {
+    overlays.push({
+      content: el.textContent,
+      top: el.style.top,
+      left: el.style.left,
+      fontSize: el.style.fontSize,
+      color: el.style.color
+    });
+  });
+
+  const res = await fetch("/api/overlay/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ 
+      public_id: item.public_id, 
+      gallery: currentGallery,
+      overlays 
+    })
+  });
+
+  const data = await res.json();
+  if (data.success) {
+    alert("✅ Overlays saved!");
+  } else {
+    alert("Failed to save overlays");
   }
 }

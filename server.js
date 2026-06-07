@@ -559,5 +559,58 @@ app.post("/api/auto-caption", async (req, res) => {
     res.status(500).json({ success: false });
   }
 });
+// ======================== ALBUMS SYSTEM ========================
+app.get("/api/albums", async (req, res) => {
+  try {
+    const database = await connectDB();
+    const albums = await database.collection("albums").find({}).toArray();
+    res.json({ success: true, albums });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Failed to load albums" });
+  }
+});
+
+app.post("/api/albums/create", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ success: false, error: "Missing name" });
+
+    const database = await connectDB();
+    const result = await database.collection("albums").insertOne({
+      name: String(name).slice(0, 50),
+      items: [],
+      createdAt: new Date().toISOString()
+    });
+
+    res.json({ success: true, album: { _id: result.insertedId, name, items: [] } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Failed to create album" });
+  }
+});
+
+app.post("/api/albums/add", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
+    const { albumName, public_id, gallery } = req.body;
+    if (!albumName || !public_id) return res.status(400).json({ success: false, error: "Missing albumName or public_id" });
+
+    const database = await connectDB();
+    const album = await database.collection("albums").findOne({ name: albumName });
+    if (!album) return res.status(404).json({ success: false, error: "Album not found" });
+
+    await database.collection("albums").updateOne(
+      { _id: album._id },
+      { $push: { items: { public_id, gallery, addedAt: new Date().toISOString() } } }
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Failed to add to album" });
+  }
+});
 
 app.listen(PORT, () => console.log(`Server running on ${PORT}`));
