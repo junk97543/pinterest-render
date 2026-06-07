@@ -1,182 +1,353 @@
-require("dotenv").config();
-
 const express = require("express");
-const session = require("express-session");
-const cookieParser = require("cookie-parser");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-const { v2: cloudinary } = require("cloudinary");
+const { v4: uuidv4 } = require("crypto");
 const { MongoClient } = require("mongodb");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const uploadDir = path.join(process.cwd(), "uploads");
+const dbUrl = process.env.DB_URL || "mongodb://localhost:27017";
+const dbName = process.env.DB_NAME || "gallery";
 
-const DATA_DIR = path.join(__dirname, "data");
-const TEMP_UPLOAD_DIR = path.join(__dirname, "tmp-uploads");
-const PUBLIC_DIR = path.join(__dirname, "public");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-if (!fs.existsSync(TEMP_UPLOAD_DIR)) fs.mkdirSync(TEMP_UPLOAD_DIR, { recursive: true });
-
-const client = new MongoClient(process.env.MONGODB_URI);
+// MongoDB client
+let mongoClient;
 let db;
+let collection;
 
-async function connectDB() {
-  if (!db) {
-    await client.connect();
-    db = client.db("family_gallery");
-    console.log("✅ Connected to MongoDB");
+async function initDb() {
+  if (!mongoClient) {
+    mongoClient = new MongoClient(dbUrl);
+    await mongoClient.connect();
+    db = mongoClient.db(dbName);
+    collection = db.collection("media");
   }
-  return db;
 }
 
-connectDB().catch(console.error);
-
-app.use(express.json({ limit: "25mb" }));
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
-
-app.use(session({
-  secret: process.env.SESSION_SECRET || "replace-this",
-  resave: false,
-  saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: "lax" }
-}));
-
-app.use(express.static(PUBLIC_DIR));
-
-const upload = multer({ dest: TEMP_UPLOAD_DIR });
-
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin";
-const FAMILY_GALLERY_CODE = process.env.FAMILY_GALLERY_CODE || "1234";
-let activeGallery = "family";
-
-async function loadState() {
+// Ensure MongoDB is connected
+app.use(async (req, res, next) => {
   try {
-    const database = await connectDB();
-    const state = await database.collection("state").findOne({ _id: "main" });
-    return state ? {
-      family: Array.isArray(state.family) ? state.family : [],
-      private: Array.isArray(state.private) ? state.private : [],
-      excludedTags: Array.isArray(state.excludedTags) ? state.excludedTags : []
-    } : { family: [], private: [], excludedTags: [] };
+    await initDb();
+    next();
   } catch (err) {
-    console.error("DB loadState error:", err);
-    return { family: [], private: [], excludedTags: [] };
+    console.error("MongoDB connection error:", err);
+    res.status(500).json({ error: "Database connection failed" });
   }
-}
-
-async function saveState(state) {
-  try {
-    const database = await connectDB();
-    await database.collection("state").updateOne(
-      { _id: "main" },
-      {
-        $set: {
-          family: state.family || [],
-          private: state.private || [],
-          excludedTags: Array.isArray(state.excludedTags) ? state.excludedTags : []
-        }
-      },
-      { upsert: true }
-    );
-  } catch (err) {
-    console.error("DB saveState error:", err);
-  }
-}
-
-async function loadChat() {
-  try {
-    const database = await connectDB();
-    const chatDoc = await database.collection("chat").findOne({ _id: "main" });
-    return chatDoc && Array.isArray(chatDoc.messages) ? chatDoc.messages : [];
-  } catch (err) {
-    console.error("DB loadChat error:", err);
-    return [];
-  }
-}
-
-async function saveChat(chat) {
-  try {
-    const database = await connectDB();
-    await database.collection("chat").updateOne(
-      { _id: "main" },
-      { $set: { messages: chat.slice(-200) } },
-      { upsert: true }
-    );
-  } catch (err) {
-    console.error("DB saveChat error:", err);
-  }
-}
-
-function isAdmin(req) { return !!req.session?.isAdmin; }
-function hasFamilyAccess(req) { return !!req.session?.familyAccess; }
-
-function canAccessGallery(req, gallery) {
-  if (gallery === "private") return isAdmin(req);
-  return hasFamilyAccess(req) || isAdmin(req);
-}
-
-function normalizeTag(tag) {
-  return String(tag || "").trim().replace(/^#/, "").replace(/\s+/g, " ");
-}
-
-function getTargetGallery(req) {
-  const g = String(req.query.gallery || req.body?.gallery || activeGallery || "family").toLowerCase();
-  return g === "private" ? "private" : "family";
-}
-
-function configureCloudinary(gallery) {
-  if (gallery === "private") {
-    cloudinary.config({
-      secure: true,
-      cloud_name: process.env.PRIVATE_CLOUDINARY_CLOUD_NAME,
-      api_key: process.env.PRIVATE_CLOUDINARY_API_KEY,
-      api_secret: process.env.PRIVATE_CLOUDINARY_API_SECRET
-    });
-  } else {
-    cloudinary.config({
-      secure: true,
-      cloud_name: process.env.FAMILY_CLOUDINARY_CLOUD_NAME,
-      api_key: process.env.FAMILY_CLOUDINARY_API_KEY,
-      api_secret: process.env.FAMILY_CLOUDINARY_API_SECRET
-    });
-  }
-}
-
-async function uploadToCloudinary(filePath, originalName, gallery) {
-  const ext = path.extname(originalName).toLowerCase();
-  const isVideo = [".mp4", ".mov", ".webm", ".m4v", ".avi", ".ogg"].includes(ext);
-  configureCloudinary(gallery);
-  return await cloudinary.uploader.upload(filePath, {
-    resource_type: isVideo ? "video" : "image",
-    folder: gallery === "private" ? "private_gallery" : "family_gallery"
-  });
-}
-
-function filterExcludedTags(items, excludedTags) {
-  const excluded = new Set((excludedTags || []).map(t => String(t).toLowerCase()));
-  if (!excluded.size) return items;
-  return items.filter(item => {
-    const tags = Array.isArray(item.tags) ? item.tags.map(t => String(t).toLowerCase()) : [];
-    return !tags.some(tag => excluded.has(tag));
-  });
-}
-
-app.get("/api/status", (req, res) => {
-  res.json({
-    isAdmin: isAdmin(req),
-    familyAccess: hasFamilyAccess(req),
-    activeGallery,
-    currentView: isAdmin(req) ? activeGallery : "family"
-  });
 });
 
+app.use(express.json());
+app.use(express.static("public"));
 
+// Multer for file uploads
+const storage = multer.diskStorage({
+  destination: uploadDir,
+  filename: (req, file, cb) => {
+    const uniqueName = uuidv4() + "-" + file.originalname;
+    cb(null, uniqueName);
+  }
+});
 
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
+  fileFilter: (req, file, cb) => {
+    const allowed = [
+      "image/jpeg", "image/png", "image/gif", "image/webp",
+      "video/mp4", "video/webm", "video/quicktime"
+    ];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Unsupported file type"));
+    }
+  }
+});
 
-// Get single media item by public_id
+// Admin check
+function isAdmin(req) {
+  return req.session?.isAdmin === true;
+}
+
+// Session-based gallery access
+function canAccessGallery(req, gallery) {
+  if (gallery === "family") {
+    return req.session?.familyAccess === true || isAdmin(req);
+  }
+  if (gallery === "private") {
+    return isAdmin(req);
+  }
+  return false;
+}
+
+// Load state from MongoDB
+async function loadState() {
+  const state = {
+    family: [],
+    private: []
+  };
+  
+  try {
+    const docs = await collection.find({}).toArray();
+    docs.forEach(doc => {
+      if (doc.gallery === "family") {
+        state.family.push(doc);
+      } else if (doc.gallery === "private") {
+        state.private.push(doc);
+      }
+    });
+  } catch (err) {
+    console.error("Error loading state:", err);
+  }
+  
+  return state;
+}
+
+// Save state to MongoDB
+async function saveState(state) {
+  try {
+    await collection.deleteMany({});
+    
+    const docs = [];
+    if (state.family) {
+      docs.push(...state.family.map(item => ({ ...item, gallery: "family" })));
+    }
+    if (state.private) {
+      docs.push(...state.private.map(item => ({ ...item, gallery: "private" })));
+    }
+    
+    if (docs.length > 0) {
+      await collection.insertMany(docs);
+    }
+  } catch (err) {
+    console.error("Error saving state:", err);
+  }
+}
+
+// Auth routes
+app.post("/api/admin-login", async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (password === "admin123") {
+      req.session.isAdmin = true;
+      res.json({ success: true });
+    } else {
+      res.json({ success: false, error: "Wrong password" });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Login failed" });
+  }
+});
+
+app.post("/api/admin-logout", async (req, res) => {
+  req.session.isAdmin = false;
+  res.json({ success: true });
+});
+
+app.post("/api/family-unlock", async (req, res) => {
+  try {
+    const { code } = req.body;
+    if (code === "family123") {
+      req.session.familyAccess = true;
+      res.json({ success: true });
+    } else {
+      res.json({ success: false, error: "Wrong code" });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Unlock failed" });
+  }
+});
+
+app.post("/api/family-logout", async (req, res) => {
+  req.session.familyAccess = false;
+  res.json({ success: true });
+});
+
+app.post("/api/switch-gallery", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+    
+    const { gallery } = req.body;
+    req.session.currentView = gallery === "private" ? "private" : "family";
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Switch failed" });
+  }
+});
+
+app.get("/api/status", async (req, res) => {
+  try {
+    res.json({
+      isAdmin: isAdmin(req),
+      familyAccess: req.session?.familyAccess === true,
+      currentView: req.session?.currentView || "family"
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Status failed" });
+  }
+});
+
+// Get excluded tags
+app.get("/api/excluded-tags", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+    
+    const state = await loadState();
+    const privateItems = state.private || [];
+    
+    const excludedTags = privateItems
+      .filter(item => item.excluded === true)
+      .map(item => item.tags?.[0])
+      .filter(Boolean);
+    
+    res.json({ success: true, excludedTags });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed" });
+  }
+});
+
+// Add excluded tag
+app.post("/api/excluded-tags/add", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+    
+    const { tag } = req.body;
+    if (!tag) return res.status(400).json({ error: "Tag required" });
+    
+    const state = await loadState();
+    const items = state.private || [];
+    
+    const item = items.find(i => i.tags?.[0]?.toLowerCase() === tag.toLowerCase());
+    if (item) {
+      item.excluded = true;
+      await saveState(state);
+    }
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed" });
+  }
+});
+
+// Remove excluded tag
+app.post("/api/excluded-tags/remove", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+    
+    const { tag } = req.body;
+    if (!tag) return res.status(400).json({ error: "Tag required" });
+    
+    const state = await loadState();
+    const items = state.private || [];
+    
+    const item = items.find(i => i.tags?.[0]?.toLowerCase() === tag.toLowerCase());
+    if (item) {
+      item.excluded = false;
+      await saveState(state);
+    }
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed" });
+  }
+});
+
+// Upload route
+app.post("/upload", upload.array("files", 1000), async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: "No files uploaded" });
+    }
+
+    const gallery = req.body.gallery === "private" ? "private" : "family";
+    if (!canAccessGallery(req, gallery)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    const errors = [];
+    const uploaded = [];
+
+    for (const file of req.files) {
+      try {
+        const mimetype = file.mimetype;
+        const type = mimetype.startsWith("image/") ? "image" : "video";
+        const ext = path.extname(file.originalname);
+        const publicId = uuidv4();
+
+        const item = {
+          public_id: publicId,
+          url: `/uploads/${file.filename}`,
+          type,
+          gallery,
+          mimetype,
+          caption: "",
+          tags: [],
+          likes: 0,
+          createdAt: new Date(),
+          overlays: []
+        };
+
+        const result = await collection.insertOne(item);
+        if (result.acknowledged) {
+          uploaded.push(item);
+        } else {
+          errors.push(file.originalname);
+        }
+      } catch (err) {
+        console.error("Upload error:", err);
+        errors.push(file.originalname);
+      }
+    }
+
+    res.json({
+      success: true,
+      count: uploaded.length,
+      errors,
+      items: uploaded
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Upload failed" });
+  }
+});
+
+// Media route
+app.get("/media", async (req, res) => {
+  try {
+    const sort = req.query.sort || "random";
+    const gallery = req.query.gallery === "private" ? "private" : "family";
+    
+    if (!canAccessGallery(req, gallery)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    const state = await loadState();
+    const items = state[gallery] || [];
+
+    if (sort === "newest") {
+      items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    } else if (sort === "popular") {
+      items.sort((a, b) => (b.likes || 0) - (a.likes || 0));
+    }
+
+    res.json(items);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load media" });
+  }
+});
+
+// Get single media item by public_id (NEW - for album viewer)
 app.get("/api/media/:public_id", async (req, res) => {
   try {
     const { public_id } = req.params;
@@ -187,8 +358,7 @@ app.get("/api/media/:public_id", async (req, res) => {
       return res.status(403).json({ success: false, error: "Access denied" });
     }
 
-    const state = await loadState();
-    const item = state[gallery].find(m => m.public_id === public_id);
+    const item = await collection.findOne({ public_id: public_id, gallery });
 
     if (!item) {
       return res.status(404).json({ success: false, error: "Media not found" });
@@ -201,360 +371,120 @@ app.get("/api/media/:public_id", async (req, res) => {
   }
 });
 
-
-
-
-
-
-
-
-app.post("/api/admin-login", (req, res) => {
-  const { password } = req.body || {};
-  if (password === ADMIN_PASSWORD) {
-    req.session.isAdmin = true;
-    activeGallery = "family";
-    return res.json({ success: true, activeGallery });
-  }
-  return res.status(401).json({ success: false, error: "Wrong admin password" });
-});
-
-app.post("/api/admin-logout", (req, res) => {
-  req.session.isAdmin = false;
-  activeGallery = "family";
-  res.json({ success: true });
-});
-
-app.post("/api/family-unlock", (req, res) => {
-  const { code } = req.body || {};
-  if (String(code || "") === String(FAMILY_GALLERY_CODE)) {
-    req.session.familyAccess = true;
-    activeGallery = "family";
-    return res.json({ success: true, activeGallery: "family" });
-  }
-  return res.status(401).json({ success: false, error: "Wrong family code" });
-});
-
-app.post("/api/family-logout", (req, res) => {
-  req.session.familyAccess = false;
-  if (!isAdmin(req)) activeGallery = "family";
-  res.json({ success: true });
-});
-
-app.post("/api/switch-gallery", (req, res) => {
-  if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
-  const { gallery } = req.body || {};
-  if (gallery !== "family" && gallery !== "private") return res.status(400).json({ success: false, error: "Invalid gallery" });
-  activeGallery = gallery;
-  res.json({ success: true, activeGallery });
-});
-
-app.get("/media", async (req, res) => {
-  const gallery = getTargetGallery(req);
-  if (!canAccessGallery(req, gallery)) return res.status(403).json({ success: false, error: "Access denied" });
-
-  const sort = String(req.query.sort || "random");
-  const state = await loadState();
-  let media = [...state[gallery]];
-
-  if (gallery === "private") {
-    media = filterExcludedTags(media, state.excludedTags);
-  }
-
-  if (sort === "newest") media.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  if (sort === "popular") media.sort((a, b) => (b.likes || 0) - (a.likes || 0));
-
-  res.json(media);
-});
-
-app.post("/upload", upload.array("files", 1000), async (req, res) => {
-  const gallery = String(req.body.gallery || "family").toLowerCase() === "private" ? "private" : "family";
-
-  try {
-    if (!canAccessGallery(req, gallery)) return res.status(403).json({ success: false, error: "Access denied" });
-    if (gallery === "private" && !isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
-    if (gallery === "family" && !hasFamilyAccess(req) && !isAdmin(req)) {
-      return res.status(401).json({ success: false, error: "Family access required" });
-    }
-
-    const files = req.files || [];
-    if (!files.length) return res.status(400).json({ success: false, error: "No files uploaded" });
-    if (files.length > 1000) return res.status(400).json({ success: false, error: "Maximum 1000 files per upload" });
-
-    const state = await loadState();
-    const uploaded = [];
-    const errors = [];
-
-    for (const file of files) {
-      try {
-        const result = await uploadToCloudinary(file.path, file.originalname, gallery);
-        uploaded.push({
-          public_id: result.public_id,
-          url: result.secure_url,
-          type: result.resource_type === "video" ? "video" : "image",
-          likes: 0,
-          tags: [],
-          caption: "",
-          createdAt: new Date().toISOString(),
-          gallery
-        });
-      } catch (err) {
-        errors.push(`${file.originalname}: ${err.message}`);
-      } finally {
-        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-      }
-    }
-
-    state[gallery].push(...uploaded);
-    await saveState(state);
-
-    res.json({ success: true, count: uploaded.length, errors, activeGallery: gallery });
-  } catch (err) {
-    console.error("UPLOAD ERROR:", err);
-    res.status(500).json({ success: false, error: "Upload failed" });
-  }
-});
-
+// Like route
 app.post("/api/like", async (req, res) => {
   try {
-    const { public_id, gallery } = req.body || {};
+    const { public_id, gallery } = req.body;
     const targetGallery = gallery === "private" ? "private" : "family";
-    if (!canAccessGallery(req, targetGallery)) return res.status(403).json({ success: false, error: "Access denied" });
 
-    const state = await loadState();
-    const item = state[targetGallery].find(m => m.public_id === public_id);
-    if (!item) return res.status(404).json({ success: false, error: "Media not found" });
+    if (!canAccessGallery(req, targetGallery)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
 
-    item.likes = (item.likes || 0) + 1;
-    await saveState(state);
-    res.json({ success: true, likes: item.likes });
+    const result = await collection.findOneAndUpdate(
+      { public_id: public_id, gallery: targetGallery },
+      { $inc: { likes: 1 } }
+    );
+
+    if (result && result.likes !== undefined) {
+      res.json({ success: true, likes: result.likes });
+    } else {
+      res.json({ success: false, error: "Not found" });
+    }
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, error: "Like failed" });
+    res.status(500).json({ error: "Like failed" });
   }
 });
 
+// Tag route
 app.post("/api/tag", async (req, res) => {
   try {
-    const { public_id, tag, gallery } = req.body || {};
+    const { public_id, tag, gallery } = req.body;
     const targetGallery = gallery === "private" ? "private" : "family";
-    if (!canAccessGallery(req, targetGallery)) return res.status(403).json({ success: false, error: "Access denied" });
 
-    const cleanTag = normalizeTag(tag);
-    if (!public_id || !cleanTag) return res.status(400).json({ success: false, error: "Missing public_id or tag" });
+    if (!canAccessGallery(req, targetGallery)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
 
-    const state = await loadState();
-    const item = state[targetGallery].find(m => m.public_id === public_id);
-    if (!item) return res.status(404).json({ success: false, error: "Media not found" });
+    const result = await collection.findOneAndUpdate(
+      { public_id: public_id, gallery: targetGallery },
+      { $push: { tags: tag } }
+    );
 
-    if (!Array.isArray(item.tags)) item.tags = [];
-    if (!item.tags.includes(cleanTag)) item.tags.push(cleanTag);
-    await saveState(state);
-
-    res.json({ success: true, tags: item.tags });
+    if (result) {
+      res.json({ success: true });
+    } else {
+      res.json({ success: false, error: "Not found" });
+    }
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, error: "Tag failed" });
+    res.status(500).json({ error: "Tag failed" });
   }
 });
 
+// Caption route
 app.post("/api/caption", async (req, res) => {
   try {
-    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
-    const { public_id, caption, gallery } = req.body || {};
+    const { public_id, caption, gallery } = req.body;
     const targetGallery = gallery === "private" ? "private" : "family";
 
-    const state = await loadState();
-    const item = state[targetGallery].find(m => m.public_id === public_id);
-    if (!item) return res.status(404).json({ success: false, error: "Media not found" });
-
-    item.caption = String(caption || "").slice(0, 200);
-    await saveState(state);
-    res.json({ success: true, caption: item.caption });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, error: "Caption failed" });
-  }
-});
-
-app.get("/api/excluded-tags", async (req, res) => {
-  try {
-    const state = await loadState();
-    res.json({ success: true, excludedTags: state.excludedTags || [] });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, error: "Failed to load excluded tags" });
-  }
-});
-
-app.post("/api/excluded-tags/add", async (req, res) => {
-  try {
-    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
-    const { tag } = req.body || {};
-    const cleanTag = normalizeTag(tag);
-    if (!cleanTag) return res.status(400).json({ success: false, error: "Missing tag" });
-
-    const state = await loadState();
-    if (!Array.isArray(state.excludedTags)) state.excludedTags = [];
-    if (!state.excludedTags.includes(cleanTag)) state.excludedTags.push(cleanTag);
-    await saveState(state);
-
-    res.json({ success: true, excludedTags: state.excludedTags });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, error: "Failed to add excluded tag" });
-  }
-});
-
-app.post("/api/excluded-tags/remove", async (req, res) => {
-  try {
-    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
-    const { tag } = req.body || {};
-    const cleanTag = normalizeTag(tag);
-
-    const state = await loadState();
-    state.excludedTags = (state.excludedTags || []).filter(t => String(t).toLowerCase() !== cleanTag.toLowerCase());
-    await saveState(state);
-
-    res.json({ success: true, excludedTags: state.excludedTags });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, error: "Failed to remove excluded tag" });
-  }
-});
-
-app.post("/delete-all", async (req, res) => {
-  try {
-    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
-    const { gallery } = req.body || {};
-    const targetGallery = gallery === "private" ? "private" : "family";
-
-    configureCloudinary(targetGallery);
-    const state = await loadState();
-
-    for (const item of state[targetGallery]) {
-      try {
-        await cloudinary.uploader.destroy(item.public_id, { resource_type: item.type === "video" ? "video" : "image" });
-      } catch {}
+    if (!canAccessGallery(req, targetGallery)) {
+      return res.status(403).json({ error: "Access denied" });
     }
 
-    state[targetGallery] = [];
-    await saveState(state);
-    res.json({ success: true });
+    const result = await collection.findOneAndUpdate(
+      { public_id: public_id, gallery: targetGallery },
+      { $set: { caption } }
+    );
+
+    if (result) {
+      res.json({ success: true });
+    } else {
+      res.json({ success: false, error: "Not found" });
+    }
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, error: "Delete failed" });
+    res.status(500).json({ error: "Caption failed" });
   }
 });
 
-app.get("/api/chat", async (req, res) => {
-  if (!isAdmin(req)) return res.status(403).json({ success: false, error: "Admin only" });
-  res.json(await loadChat());
-});
-
-app.post("/api/chat", async (req, res) => {
-  try {
-    if (!isAdmin(req)) return res.status(403).json({ success: false, error: "Admin only" });
-    const { name, message } = req.body || {};
-    if (!name || !message) return res.status(400).json({ success: false, error: "Missing name or message" });
-
-    const chat = await loadChat();
-    chat.push({
-      name: String(name).slice(0, 40),
-      message: String(message).slice(0, 500),
-      timestamp: new Date().toISOString()
-    });
-
-    await saveChat(chat);
-    res.json({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, error: "Chat failed" });
-  }
-});
-
-app.get("/", (req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, "index.html"));
-});
-
-// ======================== RATING SYSTEM ========================
+// Rate route
 app.post("/api/rate", async (req, res) => {
   try {
-    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
-    const { public_id, gallery, ratings } = req.body;
+    const { public_id, ratings, gallery } = req.body;
     const targetGallery = gallery === "private" ? "private" : "family";
 
-    const state = await loadState();
-    const item = state[targetGallery].find(m => m.public_id === public_id);
-    if (!item) return res.status(404).json({ success: false, error: "Media not found" });
-
-    item.ratings = ratings || {};
-    
-    const numeric = Object.values(item.ratings).filter(v => typeof v === "number");
-    if (numeric.length) {
-      item.overallRating = parseFloat((numeric.reduce((a,b)=>a+b,0)/numeric.length).toFixed(2));
+    if (!canAccessGallery(req, targetGallery)) {
+      return res.status(403).json({ error: "Access denied" });
     }
 
-    const autoTags = generateAutoTags(item.ratings, item.overallRating);
-    if (!item.tags) item.tags = [];
-    autoTags.forEach(tag => { if (!item.tags.includes(tag)) item.tags.push(tag); });
+    const ratingsArr = Object.entries(ratings).map(([k, v]) => `${k}:${v}`);
+    const avg = Object.values(ratings).reduce((a, b) => a + b, 0) / Object.values(ratings).length;
 
-    await saveState(state);
-    res.json({ success: true, overallRating: item.overallRating, tags: item.tags });
+    const item = await collection.findOne({ public_id: public_id, gallery: targetGallery });
+    if (!item) {
+      return res.status(404).json({ error: "Not found" });
+    }
+
+    const newTags = [...(item.tags || [])];
+    ratingsArr.forEach(r => {
+      if (!newTags.includes(r)) newTags.push(r);
+    });
+
+    await collection.findOneAndUpdate(
+      { public_id: public_id, gallery: targetGallery },
+      { $set: { ratings, tags: newTags, overallRating: avg } }
+    );
+
+    res.json({ success: true, overallRating: avg });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, error: "Rating failed" });
+    res.status(500).json({ error: "Rate failed" });
   }
 });
 
-function generateAutoTags(r, overall) {
-  const tags = [];
-  if (r.chest === "huge") tags.push("chest", "huge-chest");
-  if (r.chest === "big") tags.push("big-chest");
-  if (r.chest === "flat") tags.push("flat-chest");
-
-  if (r.bodyShape === "thick" || r.bodyShape === "bbw") tags.push("thick", "curvy", "bbw");
-  if (r.build === "chubby") tags.push("chubby", "soft");
-
-  if (r.loveability >= 9) tags.push("extremely-loveable");
-  if (r.cuteness >= 8.5) tags.push("adorable");
-  if (r.beauty >= 9) tags.push("goddess");
-  if (r.hotness >= 9) tags.push("smoking-hot");
-  if (r.funness >= 8) tags.push("total-fun");
-
-  if (overall >= 9) tags.push("god-tier");
-  if (overall >= 8.5) tags.push("top-tier");
-  return tags;
-}
-
-// Single Delete
-app.post("/api/delete-item", async (req, res) => {
-  try {
-    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
-    const { public_id, gallery, password } = req.body;
-    if (password !== ADMIN_PASSWORD) return res.status(401).json({ success: false, error: "Wrong admin password" });
-
-    const target = gallery === "private" ? "private" : "family";
-    configureCloudinary(target);
-
-    const state = await loadState();
-    const idx = state[target].findIndex(m => m.public_id === public_id);
-    if (idx === -1) return res.status(404).json({ success: false, error: "Not found" });
-
-    const item = state[target][idx];
-    try {
-      await cloudinary.uploader.destroy(item.public_id, { resource_type: item.type === "video" ? "video" : "image" });
-    } catch {}
-
-    state[target].splice(idx, 1);
-    await saveState(state);
-    res.json({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, error: "Delete failed" });
-  }
-});
-
-// Save overlays for an image
+// Save overlays (NEW - for overlay persistence)
 app.post("/api/overlay/save", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
@@ -566,172 +496,169 @@ app.post("/api/overlay/save", async (req, res) => {
       return res.status(403).json({ success: false, error: "Access denied" });
     }
 
-    const state = await loadState();
-    const item = state[targetGallery].find(m => m.public_id === public_id);
-    if (!item) {
-      return res.status(404).json({ success: false, error: "Media not found" });
+    const result = await collection.findOneAndUpdate(
+      { public_id: public_id, gallery: targetGallery },
+      { $set: { overlays } }
+    );
+
+    if (result) {
+      res.json({ success: true });
+    } else {
+      res.json({ success: false, error: "Not found" });
     }
-
-    item.overlays = overlays || [];
-    await saveState(state);
-
-    res.json({ success: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: "Overlay save failed" });
   }
 });
 
-
-
-
-// ======================== ALBUMS SYSTEM ========================
-app.get("/api/albums", async (req, res) => {
+// Delete route
+app.post("/delete-all", async (req, res) => {
   try {
-    const database = await connectDB();
-    const albums = await database.collection("albums").find({}).toArray();
-    res.json({ success: true, albums });
+    const { gallery } = req.body;
+    const targetGallery = gallery === "private" ? "private" : "family";
+
+    if (!isAdmin(req)) {
+      return res.status(401).json({ error: "Admin only" });
+    }
+
+    await collection.deleteMany({ gallery: targetGallery });
+    res.json({ success: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, error: "Failed to load albums" });
+    res.status(500).json({ error: "Delete failed" });
   }
 });
 
-app.post("/api/albums/create", async (req, res) => {
+// Delete single item
+app.post("/api/delete-item", async (req, res) => {
   try {
-    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
-    const { name } = req.body;
-    if (!name) return res.status(400).json({ success: false, error: "Missing name" });
+    const { public_id, gallery, password } = req.body;
+    
+    if (password !== "admin123") {
+      return res.status(401).json({ error: "Wrong password" });
+    }
 
-    const database = await connectDB();
-    const result = await database.collection("albums").insertOne({
-      name: String(name).slice(0, 50),
-      items: [],
-      createdAt: new Date().toISOString()
-    });
-
-    res.json({ success: true, album: { _id: result.insertedId, name, items: [] } });
+    const targetGallery = gallery === "private" ? "private" : "family";
+    await collection.deleteOne({ public_id: public_id, gallery: targetGallery });
+    
+    res.json({ success: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, error: "Failed to create album" });
+    res.status(500).json({ error: "Delete failed" });
+  }
+});
+
+// Tier lists
+app.post("/api/tierlists/save", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+    
+    const { name, tiers } = req.body;
+    const state = await loadState();
+    if (!state.tierLists) state.tierLists = [];
+    
+    const existing = state.tierLists.find(t => t.name === name);
+    if (existing) {
+      existing.tiers = tiers;
+    } else {
+      state.tierLists.push({ name, tiers });
+    }
+    
+    await saveState(state);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Save failed" });
+  }
+});
+
+app.get("/api/tierlists", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+    
+    const state = await loadState();
+    res.json({ success: true, tierLists: state.tierLists || [] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed" });
+  }
+});
+
+// Albums
+app.post("/api/albums/create", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+    
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: "Name required" });
+    
+    const state = await loadState();
+    if (!state.albums) state.albums = [];
+    
+    if (state.albums.some(a => a.name === name)) {
+      return res.json({ success: false, error: "Album already exists" });
+    }
+    
+    const album = { name, items: [] };
+    state.albums.push(album);
+    await saveState(state);
+    
+    res.json({ success: true, album });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Create failed" });
   }
 });
 
 app.post("/api/albums/add", async (req, res) => {
   try {
-    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
+    if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+    
     const { albumName, public_id, gallery } = req.body;
-    if (!albumName || !public_id) return res.status(400).json({ success: false, error: "Missing albumName or public_id" });
-
-    const database = await connectDB();
-    const album = await database.collection("albums").findOne({ name: albumName });
-    if (!album) return res.status(404).json({ success: false, error: "Album not found" });
-
-    await database.collection("albums").updateOne(
-      { _id: album._id },
-      { $push: { items: { public_id, gallery, addedAt: new Date().toISOString() } } }
-    );
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, error: "Failed to add to album" });
-  }
-});
-
-app.get("/api/albums/view", async (req, res) => {
-  try {
-    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
-    const { albumName } = req.query;
-    if (!albumName) return res.status(400).json({ success: false, error: "Missing albumName" });
-
-    const database = await connectDB();
-    const album = await database.collection("albums").findOne({ name: albumName });
-    if (!album) return res.status(404).json({ success: false, error: "Album not found" });
-
-    res.json({ success: true, album });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, error: "Failed to load album" });
-  }
-});
-
-// ======================== TIER LISTS SYSTEM ========================
-app.get("/api/tierlists", async (req, res) => {
-  try {
-    const database = await connectDB();
-    const tierLists = await database.collection("tierlists").find({}).toArray();
-    res.json({ success: true, tierLists });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, error: "Failed to load tier lists" });
-  }
-});
-
-app.post("/api/tierlists/create", async (req, res) => {
-  try {
-    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
-    const { name } = req.body;
-    if (!name) return res.status(400).json({ success: false, error: "Missing name" });
-
-    const database = await connectDB();
-    const result = await database.collection("tierlists").insertOne({
-      name: String(name).slice(0, 50),
-      tiers: {},
-      createdAt: new Date().toISOString()
-    });
-
-    res.json({ success: true, tierList: { _id: result.insertedId, name, tiers: {} } });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, error: "Failed to create tier list" });
-  }
-});
-
-app.post("/api/tierlists/save", async (req, res) => {
-  try {
-    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
-    const { name, tiers } = req.body;
-    if (!name || !tiers) return res.status(400).json({ success: false, error: "Missing name or tiers" });
-
-    const database = await connectDB();
+    if (!albumName || !public_id) return res.status(400).json({ error: "Missing data" });
     
-    await database.collection("tierlists").updateOne(
-      { name: name },
-      { 
-        $set: { 
-          tiers: tiers,
-          updatedAt: new Date().toISOString()
-        }
-      },
-      { upsert: true }
-    );
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, error: "Failed to save tier list" });
-  }
-});
-
-// NEW: Get media by public_id
-app.get("/api/media/:public_id", async (req, res) => {
-  try {
     const state = await loadState();
-    let item = null;
+    const album = state.albums?.find(a => a.name === albumName);
     
-    for (const gallery of ["family", "private"]) {
-      item = state[gallery].find(m => m.public_id === req.params.public_id);
-      if (item) break;
+    if (!album) {
+      return res.json({ success: false, error: "Album not found" });
     }
     
-    if (!item) return res.status(404).json({ success: false, error: "Media not found" });
+    if (!album.items.some(i => i.public_id === public_id)) {
+      album.items.push({ public_id, gallery });
+      await saveState(state);
+    }
     
-    res.json({ success: true, item });
+    res.json({ success: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, error: "Failed to load media" });
+    res.status(500).json({ error: "Add failed" });
   }
 });
 
-app.listen(PORT, () => console.log(`Server running on ${PORT}`));
+app.get("/api/albums", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+    
+    const state = await loadState();
+    res.json({ success: true, albums: state.albums || [] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed" });
+  }
+});
+
+// Session middleware
+app.use((req, res, next) => {
+  if (!req.session) {
+    req.session = {};
+  }
+  next();
+});
+
+// Start server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
