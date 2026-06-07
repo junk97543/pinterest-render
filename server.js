@@ -173,6 +173,41 @@ app.get("/api/status", (req, res) => {
   });
 });
 
+
+
+
+// Get single media item by public_id
+app.get("/api/media/:public_id", async (req, res) => {
+  try {
+    const { public_id } = req.params;
+    const { gallery: queryGallery } = req.query;
+    const gallery = queryGallery === "private" ? "private" : "family";
+
+    if (!canAccessGallery(req, gallery)) {
+      return res.status(403).json({ success: false, error: "Access denied" });
+    }
+
+    const state = await loadState();
+    const item = state[gallery].find(m => m.public_id === public_id);
+
+    if (!item) {
+      return res.status(404).json({ success: false, error: "Media not found" });
+    }
+
+    res.json({ success: true, item });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Failed to load media" });
+  }
+});
+
+
+
+
+
+
+
+
 app.post("/api/admin-login", (req, res) => {
   const { password } = req.body || {};
   if (password === ADMIN_PASSWORD) {
@@ -519,23 +554,36 @@ app.post("/api/delete-item", async (req, res) => {
   }
 });
 
-// OVERLAY SAVE (Emojis + Text)
+// Save overlays for an image
 app.post("/api/overlay/save", async (req, res) => {
   try {
-    if (!isAdmin(req)) return res.status(401).json({ success: false });
+    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
+
     const { public_id, gallery, overlays } = req.body;
-    const target = gallery === "private" ? "private" : "family";
-    const state = await loadState();
-    const item = state[target].find(m => m.public_id === public_id);
-    if (item) {
-      item.overlays = overlays || [];
-      await saveState(state);
+    const targetGallery = gallery === "private" ? "private" : "family";
+
+    if (!canAccessGallery(req, targetGallery)) {
+      return res.status(403).json({ success: false, error: "Access denied" });
     }
+
+    const state = await loadState();
+    const item = state[targetGallery].find(m => m.public_id === public_id);
+    if (!item) {
+      return res.status(404).json({ success: false, error: "Media not found" });
+    }
+
+    item.overlays = overlays || [];
+    await saveState(state);
+
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false });
+    console.error(err);
+    res.status(500).json({ success: false, error: "Overlay save failed" });
   }
 });
+
+
+
 
 // ======================== ALBUMS SYSTEM ========================
 app.get("/api/albums", async (req, res) => {

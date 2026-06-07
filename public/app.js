@@ -1024,13 +1024,23 @@ function showEmojiPickerWithMove(item) {
 function addEmojiToImageWithMove(emoji, item) {
   if (!item.overlays) item.overlays = [];
   
+  const container = document.querySelector(".lightbox-content");
+  const img = container.querySelector("img");
+  if (!img) return;
+
+  const rect = img.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+
+  const xPct = ((rect.left - containerRect.left) + rect.width / 2) / rect.width * 100;
+  const yPct = ((rect.top - containerRect.top) + rect.height / 2) / rect.height * 100;
+
   const overlay = {
     type: "emoji",
     content: emoji,
-    top: "50%",
-    left: "50%",
-    fontSize: "42px",
-    opacity: "0.9"
+    xPct,
+    yPct,
+    fontSize: 42,
+    opacity: 0.9
   };
   item.overlays.push(overlay);
 
@@ -1057,76 +1067,107 @@ async function deleteSingleItem(public_id) {
   }
 }
 
-function createToolbox(item) {
-  const panel = document.createElement("div");
-  panel.id = "toolbox-panel";
-  panel.style = `position:absolute; top:20px; right:20px; width:280px; background:rgba(0,0,0,0.95); border-radius:16px; color:#fff; z-index:1002;`;
+let currentSelectedOverlay = null;
 
-  panel.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:10px;">
-      <h3 style="color:#ff5a5f; margin:0;">🛠️ Toolbox</h3>
-      <button id="collapse-toolbox-btn" style="background:#666; border:none; color:white; width:30px; height:30px; border-radius:50%; cursor:pointer;">−</button>
-    </div>
-    <div id="toolbox-content">
-      <button id="add-tattoo-btn" style="width:100%;padding:10px;margin:5px 0;background:#ff6b35;border:none;color:white;font-weight:bold;border-radius:8px;">📝 Tattoo Text</button>
-      <button id="add-snapchat-btn" style="width:100%;padding:10px;margin:5px 0;background:#fffc00;color:black;border:none;font-weight:bold;border-radius:8px;">📱 Snapchat Text</button>
-      <button id="add-speech-btn" style="width:100%;padding:10px;margin:5px 0;background:#ffffff;border:none;color:black;font-weight:bold;border-radius:8px;">💬 Speech Bubble</button>
-      <button id="add-tier-btn" style="width:100%;padding:10px;margin:5px 0;background:#4CAF50;border:none;color:white;font-weight:bold;border-radius:8px;">📊 Add to Tier List</button>
-      <button id="add-to-album-btn" style="width:100%;padding:10px;margin:5px 0;background:#2196F3;border:none;color:white;font-weight:bold;border-radius:8px;">📁 Add to Album</button>
-      <button id="auto-caption-btn" style="width:100%;padding:10px;margin:5px 0;background:#9C27B0;border:none;color:white;font-weight:bold;border-radius:8px;">✨ Auto Caption</button>
-      <button id="save-overlays-btn" style="width:100%;padding:10px;margin:5px 0;background:#e60023;border:none;color:white;font-weight:bold;border-radius:8px;">💾 Save Overlays</button>
-    </div>
+function createSlidersPanel(item) {
+  let slidersPanel = document.getElementById("sliders-panel");
+  if (slidersPanel) slidersPanel.remove();
+
+  slidersPanel = document.createElement("div");
+  slidersPanel.id = "sliders-panel";
+  slidersPanel.style = `position:absolute; top:200px; right:20px; width:220px; background:rgba(0,0,0,0.9); padding:15px; border-radius:12px; z-index:1004;`;
+
+  slidersPanel.innerHTML = `
+    <h4 style="margin:0 0 10px 0; color:#ff5a5f;">Overlay Controls</h4>
+    <label style="font-size:12px;">Size:</label>
+    <input type="range" id="slider-size" min="12" max="80" value="32" style="width:100%; margin:5px 0;">
+    <label style="font-size:12px;">Color:</label>
+    <input type="color" id="slider-color" value="#ff0000" style="width:100%; margin:5px 0;">
+    <label style="font-size:12px;">Opacity:</label>
+    <input type="range" id="slider-opacity" min="0.3" max="1" step="0.05" value="1" style="width:100%; margin:5px 0;">
+    <button id="close-sliders-btn" style="width:100%;margin-top:10px;padding:8px;background:#666;border:none;color:white;border-radius:6px;">Close</button>
   `;
 
-  document.querySelector(".lightbox-content").appendChild(panel);
+  document.querySelector(".lightbox-content").appendChild(slidersPanel);
 
-  let isCollapsed = false;
-  panel.querySelector("#collapse-toolbox-btn").addEventListener("click", () => {
-    const content = panel.querySelector("#toolbox-content");
-    const btn = panel.querySelector("#collapse-toolbox-btn");
-    if (isCollapsed) {
-      content.style.display = "block";
-      btn.textContent = "−";
-    } else {
-      content.style.display = "none";
-      btn.textContent = "+";
-    }
-    isCollapsed = !isCollapsed;
+  slidersPanel.querySelector("#close-sliders-btn").addEventListener("click", () => {
+    slidersPanel.style.display = "none";
+    currentSelectedOverlay = null;
   });
 
-  panel.querySelector("#add-tattoo-btn").addEventListener("click", () => addDraggableTextNoBox(item));
-  panel.querySelector("#add-snapchat-btn").addEventListener("click", () => addSnapchatText(item));
-  panel.querySelector("#add-speech-btn").addEventListener("click", () => addSpeechBubbleWithSlider(item));
-  panel.querySelector("#add-tier-btn").addEventListener("click", () => openTierListMaker(item));
-  panel.querySelector("#add-to-album-btn").addEventListener("click", () => addToAlbum(item));
-  panel.querySelector("#auto-caption-btn").addEventListener("click", () => autoCaption(item));
-  panel.querySelector("#save-overlays-btn").addEventListener("click", () => saveOverlaysToDB(item));
+  const sizeSlider = slidersPanel.querySelector("#slider-size");
+  const colorPicker = slidersPanel.querySelector("#slider-color");
+  const opacitySlider = slidersPanel.querySelector("#slider-opacity");
+
+  sizeSlider.oninput = () => {
+    if (currentSelectedOverlay) {
+      currentSelectedOverlay.fontSize = parseInt(sizeSlider.value);
+      renderOverlaysInLightbox();
+      saveOverlaysToDB(item);
+    }
+  };
+
+  colorPicker.oninput = () => {
+    if (currentSelectedOverlay) {
+      currentSelectedOverlay.color = colorPicker.value;
+      renderOverlaysInLightbox();
+      saveOverlaysToDB(item);
+    }
+  };
+
+  opacitySlider.oninput = () => {
+    if (currentSelectedOverlay) {
+      currentSelectedOverlay.opacity = parseFloat(opacitySlider.value);
+      renderOverlaysInLightbox();
+      saveOverlaysToDB(item);
+    }
+  };
+
+  return slidersPanel;
+}
+
+function renderOverlaysInLightbox() {
+  const item = items[lightboxIndex];
+  if (!item || !item.overlays) return;
+
+  document.querySelectorAll(".lightbox-overlay").forEach(el => el.remove());
+
+  item.overlays.forEach(ov => {
+    createOverlayElement(ov, item);
+  });
 }
 
 function createOverlayElement(ov, item) {
+  const container = document.querySelector(".lightbox-content");
+  const img = container.querySelector("img");
+  if (!img) return;
+
   const overlay = document.createElement("div");
   overlay.className = "lightbox-overlay";
   overlay.style.position = "absolute";
-  overlay.style.top = ov.top;
-  overlay.style.left = ov.left;
-  overlay.style.fontSize = ov.fontSize || "16px";
-  overlay.style.color = ov.color || "#ff0000";
   overlay.style.zIndex = "1003";
   overlay.style.userSelect = "none";
   overlay.style.cursor = "move";
   overlay.style.opacity = ov.opacity || "1";
   overlay.style.pointerEvents = "auto";
 
-  if (ov.type === "text") {
+  if (ov.type === "text" || ov.type === "emoji") {
     overlay.textContent = ov.content;
+    overlay.style.fontSize = ov.fontSize || "28px";
+    overlay.style.color = ov.color || "#ff0000";
     overlay.style.background = "none";
-  } else if (ov.type === "emoji") {
-    overlay.textContent = ov.content;
+
+    overlay.style.left = `calc(${ov.xPct}% - 50%)`;
+    overlay.style.top = `calc(${ov.yPct}% - 50%)`;
+    overlay.style.transform = "translate(-50%, -50%)";
   } else if (ov.type === "snapchat") {
     overlay.style.width = "100%";
+    overlay.style.left = "0";
     overlay.style.background = ov.background || "rgba(0,0,0,0.45)";
     overlay.style.padding = ov.padding || "12px 20px";
     overlay.style.textAlign = "center";
+    overlay.style.top = `calc(${ov.yPct}% - 50%)`;
+    overlay.style.transform = "translateY(-50%)";
 
     const textSpan = document.createElement("span");
     textSpan.style.color = ov.color || "#fff";
@@ -1134,47 +1175,67 @@ function createOverlayElement(ov, item) {
     textSpan.style.fontWeight = "bold";
     textSpan.textContent = ov.content;
     overlay.appendChild(textSpan);
+  } else if (ov.type === "speech") {
+    overlay.textContent = ov.content;
+    overlay.style.fontSize = ov.fontSize || "18px";
+    overlay.style.color = ov.color || "#000";
+    overlay.style.background = ov.background || "rgba(255,255,255,0.95)";
+    overlay.style.padding = ov.padding || "12px 18px";
+    overlay.style.borderRadius = ov.borderRadius || "20px";
+    overlay.style.maxWidth = ov.maxWidth || "260px";
+    overlay.style.whiteSpace = "normal";
+
+    overlay.style.left = `calc(${ov.xPct}% - 50%)`;
+    overlay.style.top = `calc(${ov.yPct}% - 50%)`;
+    overlay.style.transform = "translate(-50%, -50%)";
   }
 
-  document.querySelector(".lightbox-content").appendChild(overlay);
-  makeDraggable(overlay, item);
-  return overlay;
+  makeDraggable(overlay, ov, item);
+  container.appendChild(overlay);
 }
 
-function makeDraggable(el, item) {
+function makeDraggable(el, ov, item) {
   let isDragging = false;
-  let startX, startY, startLeft, startTop;
 
   el.addEventListener("mousedown", (e) => {
     isDragging = true;
-    startX = e.clientX;
-    startY = e.clientY;
-    startLeft = el.offsetLeft;
-    startTop = el.offsetTop;
+    currentSelectedOverlay = ov;
+    const slidersPanel = document.getElementById("sliders-panel");
+    if (slidersPanel) slidersPanel.style.display = "block";
+
     el.style.cursor = "grabbing";
     e.preventDefault();
   });
 
   document.addEventListener("mousemove", (e) => {
     if (!isDragging) return;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-    el.style.left = (startLeft + dx) + "px";
-    el.style.top = (startTop + dy) + "px";
+
+    const container = document.querySelector(".lightbox-content");
+    const img = container.querySelector("img");
+    if (!img) return;
+
+    const rect = img.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+
+    const pctX = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+    const pctY = ((e.clientY - containerRect.top) / containerRect.height) * 100;
+
+    ov.xPct = pctX;
+    ov.yPct = pctY;
+
+    if (ov.type === "text" || ov.type === "emoji" || ov.type === "speech") {
+      el.style.left = `calc(${ov.xPct}% - 50%)`;
+      el.style.top = `calc(${ov.yPct}% - 50%)`;
+    } else if (ov.type === "snapchat") {
+      el.style.top = `calc(${ov.yPct}% - 50%)`;
+    }
   });
 
   document.addEventListener("mouseup", () => {
     if (isDragging) {
       isDragging = false;
       el.style.cursor = "move";
-      
-      if (item.overlays) {
-        const ov = item.overlays.find(o => o.top === el.style.top && o.left === el.style.left);
-        if (ov) {
-          ov.left = el.style.left;
-          ov.top = el.style.top;
-        }
-      }
+      saveOverlaysToDB(item);
     }
   });
 }
@@ -1194,10 +1255,60 @@ async function saveOverlaysToDB(item) {
 
   const data = await res.json();
   if (data.success) {
-    alert("✅ Overlays saved! They will show on gallery images.");
   } else {
     alert("Failed to save overlays");
   }
+}
+
+function createOverlayElementForGallery(ov, imgElement) {
+  const overlay = document.createElement("div");
+  overlay.className = "gallery-overlay";
+  overlay.style.position = "absolute";
+  overlay.style.zIndex = "2";
+  overlay.style.userSelect = "none";
+  overlay.style.pointerEvents = "none";
+  overlay.style.opacity = ov.opacity || "1";
+
+  if (ov.type === "text" || ov.type === "emoji") {
+    overlay.textContent = ov.content;
+    overlay.style.fontSize = ov.fontSize || "28px";
+    overlay.style.color = ov.color || "#ff0000";
+    overlay.style.background = "none";
+
+    overlay.style.left = `calc(${ov.xPct}% - 50%)`;
+    overlay.style.top = `calc(${ov.yPct}% - 50%)`;
+    overlay.style.transform = "translate(-50%, -50%)";
+  } else if (ov.type === "snapchat") {
+    overlay.style.width = "100%";
+    overlay.style.left = "0";
+    overlay.style.background = ov.background || "rgba(0,0,0,0.45)";
+    overlay.style.padding = ov.padding || "12px 20px";
+    overlay.style.textAlign = "center";
+    overlay.style.top = `calc(${ov.yPct}% - 50%)`;
+    overlay.style.transform = "translateY(-50%)";
+
+    const textSpan = document.createElement("span");
+    textSpan.style.color = ov.color || "#fff";
+    textSpan.style.fontSize = ov.fontSize || "26px";
+    textSpan.style.fontWeight = "bold";
+    textSpan.textContent = ov.content;
+    overlay.appendChild(textSpan);
+  } else if (ov.type === "speech") {
+    overlay.textContent = ov.content;
+    overlay.style.fontSize = ov.fontSize || "18px";
+    overlay.style.color = ov.color || "#000";
+    overlay.style.background = ov.background || "rgba(255,255,255,0.95)";
+    overlay.style.padding = ov.padding || "12px 18px";
+    overlay.style.borderRadius = ov.borderRadius || "20px";
+    overlay.style.maxWidth = ov.maxWidth || "260px";
+    overlay.style.whiteSpace = "normal";
+
+    overlay.style.left = `calc(${ov.xPct}% - 50%)`;
+    overlay.style.top = `calc(${ov.yPct}% - 50%)`;
+    overlay.style.transform = "translate(-50%, -50%)";
+  }
+
+  return overlay;
 }
 
 function loadSavedOverlays(item) {
@@ -1211,20 +1322,24 @@ function addDraggableTextNoBox(item) {
   const txt = prompt("Tattoo text:", "text");
   if (!txt) return;
 
+  const xPct = 40;
+  const yPct = 30;
+
   const overlay = {
     type: "text",
     content: txt,
-    top: "30%",
-    left: "40%",
-    fontSize: "32px",
+    xPct,
+    yPct,
+    fontSize: 32,
     color: "#ff0000",
-    opacity: "1"
+    opacity: 1
   };
   
   if (!item.overlays) item.overlays = [];
   item.overlays.push(overlay);
 
   createOverlayElement(overlay, item);
+  createSlidersPanel(item);
   saveOverlaysToDB(item);
 }
 
@@ -1232,22 +1347,25 @@ function addSnapchatText(item) {
   const txt = prompt("Snapchat text:", "text");
   if (!txt) return;
 
+  const yPct = 70;
+
   const overlay = {
     type: "snapchat",
     content: txt,
-    top: "70%",
-    left: "0",
-    fontSize: "26px",
+    xPct: 0,
+    yPct,
+    fontSize: 26,
     color: "#fff",
     background: "rgba(0,0,0,0.45)",
     padding: "12px 20px",
-    opacity: "1"
+    opacity: 1
   };
 
   if (!item.overlays) item.overlays = [];
   item.overlays.push(overlay);
 
   createOverlayElement(overlay, item);
+  createSlidersPanel(item);
   saveOverlaysToDB(item);
 }
 
@@ -1255,29 +1373,28 @@ function addSpeechBubbleWithSlider(item) {
   const txt = prompt("What does she say?", "text");
   if (!txt) return;
 
+  const xPct = 40;
+  const yPct = 30;
+
   const overlay = {
-    type: "text",
+    type: "speech",
     content: txt,
-    top: "30%",
-    left: "40%",
-    fontSize: "18px",
+    xPct,
+    yPct,
+    fontSize: 18,
     color: "#000",
     background: "rgba(255,255,255,0.95)",
     padding: "12px 18px",
     borderRadius: "20px",
     maxWidth: "260px",
-    opacity: "1"
+    opacity: 1
   };
 
   if (!item.overlays) item.overlays = [];
   item.overlays.push(overlay);
 
-  const el = createOverlayElement(overlay, item);
-  el.style.background = overlay.background;
-  el.style.padding = overlay.padding;
-  el.style.borderRadius = overlay.borderRadius;
-  el.style.maxWidth = overlay.maxWidth;
-  
+  createOverlayElement(overlay, item);
+  createSlidersPanel(item);
   saveOverlaysToDB(item);
 }
 
@@ -1508,7 +1625,7 @@ async function addToAlbum(item) {
   const name = prompt(msg);
   if (!name) return;
 
-  let album = albums.find(a => a.name.toLowerCase() === name.toLowerCase());
+  let album = albums.find(a => a.name.toLowerCase().trim() === name.toLowerCase().trim());
   
   if (!album) {
     const createRes = await fetch("/api/albums/create", {
@@ -1559,7 +1676,7 @@ async function showAlbums() {
   const action = prompt(msg + "\n\nType album name to view, or create new:");
   if (!action) return;
 
-  const album = albums.find(a => a.name.toLowerCase() === action.toLowerCase());
+  const album = albums.find(a => a.name.toLowerCase().trim() === action.toLowerCase().trim());
   
   if (album) {
     openAlbumViewer(album);
@@ -1571,7 +1688,9 @@ async function showAlbums() {
     });
     const createData = await createRes.json();
     if (createData.success) {
-      alert("Album created!");
+      alert("Album created! Now opening it...");
+      const newAlbum = createData.album;
+      openAlbumViewer(newAlbum);
     } else {
       alert("Failed to create: " + createData.error);
     }
@@ -1597,15 +1716,15 @@ async function openAlbumViewer(album) {
     <button id="close-album-btn" style="width:100%; padding:12px; margin-top:15px; background:#666; border:none; color:white; font-weight:bold; border-radius:8px;">Close</button>
   </div>`;
 
-  const contentDiv = modal.querySelector("div:not([style*='grid'])");
+  const contentDiv = modal.querySelector("div");
+  contentDiv.appendChild(gridDiv);
   
   if (!album.items || !album.items.length) {
     const empty = document.createElement("p");
     empty.textContent = "No items in this album.";
     empty.style = "text-align:center; color:#666; grid-column:1/-1;";
-    contentDiv.appendChild(empty);
+    gridDiv.appendChild(empty);
   } else {
-    contentDiv.appendChild(gridDiv);
     for (const item of album.items) {
       const res = await fetch(`/api/media/${item.public_id}`);
       const data = await res.json();
