@@ -4,18 +4,18 @@ const path = require("path");
 const fs = require("fs");
 const { v4: uuidv4 } = require("crypto");
 const { MongoClient } = require("mongodb");
+const session = require("express-session");
 
 const app = express();
 const uploadDir = path.join(process.cwd(), "uploads");
 const dbUrl = process.env.DB_URL || "mongodb://localhost:27017";
 const dbName = process.env.DB_NAME || "gallery";
 
-// Session middleware
-const session = require("session");
 app.use(session({
   secret: "gallery-secret-key",
   resave: false,
-  saveUninitialized: true
+  saveUninitialized: true,
+  cookie: { secure: false }
 }));
 
 if (!fs.existsSync(uploadDir)) {
@@ -61,7 +61,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
+  limits: { fileSize: 500 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = [
       "image/jpeg", "image/png", "image/gif", "image/webp",
@@ -123,7 +123,6 @@ async function loadState() {
 // Save state to MongoDB
 async function saveState(state) {
   try {
-    // Delete old docs
     await collection.deleteMany({});
     
     const docs = [];
@@ -148,7 +147,7 @@ async function saveState(state) {
   }
 }
 
-// Auth routes - FIXED family password
+// Auth routes
 app.post("/api/admin-login", async (req, res) => {
   try {
     const { password } = req.body;
@@ -172,7 +171,6 @@ app.post("/api/admin-logout", async (req, res) => {
 app.post("/api/family-unlock", async (req, res) => {
   try {
     const { code } = req.body;
-    // FIXED: Check code properly (trim whitespace, case-insensitive)
     if (code && code.trim().toLowerCase() === "family123".toLowerCase()) {
       req.session.familyAccess = true;
       res.json({ success: true });
@@ -303,7 +301,6 @@ app.post("/upload", upload.array("files", 1000), async (req, res) => {
       try {
         const mimetype = file.mimetype;
         const type = mimetype.startsWith("image/") ? "image" : "video";
-        const ext = path.extname(file.originalname);
         const publicId = uuidv4();
 
         const item = {
@@ -343,7 +340,7 @@ app.post("/upload", upload.array("files", 1000), async (req, res) => {
   }
 });
 
-// Media route - FIXED to return JSON
+// Media route
 app.get("/media", async (req, res) => {
   try {
     const sort = req.query.sort || "random";
@@ -362,7 +359,6 @@ app.get("/media", async (req, res) => {
       items.sort((a, b) => (b.likes || 0) - (a.likes || 0));
     }
 
-    // FIXED: Return JSON directly (not text)
     res.json(items);
   } catch (err) {
     console.error(err);
@@ -370,7 +366,7 @@ app.get("/media", async (req, res) => {
   }
 });
 
-// Get single media item by public_id
+// Get single media item
 app.get("/api/media/:public_id", async (req, res) => {
   try {
     const { public_id } = req.params;
