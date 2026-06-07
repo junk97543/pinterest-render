@@ -443,7 +443,6 @@ function render() {
       img.style.display = "block";
       imgContainer.appendChild(img);
 
-      // Render saved overlays on gallery image
       if (item.overlays && item.overlays.length) {
         item.overlays.forEach(ov => {
           if (ov.type === "text") {
@@ -576,7 +575,6 @@ function render() {
     gallery.appendChild(div);
   });
 }
-
 async function addTagToItem(publicId) {
   const tag = prompt("Enter a tag for this item:");
   if (!tag) return;
@@ -674,7 +672,6 @@ function showLightboxItem(index) {
   lightboxCaption.textContent = item.caption || "";
   if (item.caption) lightboxCaption.classList.add("show");
 
-  // Remove all old panels and overlays
   document.querySelectorAll("#rating-panel, #toolbox-panel, #sliders-panel, .lightbox-overlay, #emoji-picker, #tier-list-modal, #tier-viewer-modal, #album-viewer-modal").forEach(el => el.remove());
 
   if (isAdmin && currentGallery === "private") {
@@ -683,7 +680,6 @@ function showLightboxItem(index) {
     loadSavedOverlays(item);
   }
 
-  // Load saved overlays onto lightbox image
   if (item.overlays && item.overlays.length) {
     item.overlays.forEach(ov => {
       createOverlayElement(ov, item);
@@ -903,8 +899,6 @@ function escapeHtml(text) {
   div.textContent = text;
   return div.innerHTML;
 }
-
-// ==================== RATING PANEL (LEFT SIDE - COLLAPSIBLE) ====================
 function createRatingPanel(item, index) {
   const panel = document.createElement("div");
   panel.id = "rating-panel";
@@ -1041,8 +1035,6 @@ function addEmojiToImageWithMove(emoji, item) {
   item.overlays.push(overlay);
 
   createOverlayElement(overlay, item);
-  
-  // Save immediately
   saveOverlaysToDB(item);
 }
 
@@ -1065,7 +1057,6 @@ async function deleteSingleItem(public_id) {
   }
 }
 
-// ==================== TOOLBOX PANEL (RIGHT SIDE - COLLAPSIBLE) ====================
 function createToolbox(item) {
   const panel = document.createElement("div");
   panel.id = "toolbox-panel";
@@ -1112,7 +1103,6 @@ function createToolbox(item) {
   panel.querySelector("#save-overlays-btn").addEventListener("click", () => saveOverlaysToDB(item));
 }
 
-// ==================== OVERLAY SYSTEM (SAVED TO DB + VISIBLE ON GALLERY) ====================
 function createOverlayElement(ov, item) {
   const overlay = document.createElement("div");
   overlay.className = "lightbox-overlay";
@@ -1148,6 +1138,7 @@ function createOverlayElement(ov, item) {
 
   document.querySelector(".lightbox-content").appendChild(overlay);
   makeDraggable(overlay, item);
+  return overlay;
 }
 
 function makeDraggable(el, item) {
@@ -1158,8 +1149,6 @@ function makeDraggable(el, item) {
     isDragging = true;
     startX = e.clientX;
     startY = e.clientY;
-    const container = document.querySelector(".lightbox-content");
-    const rect = container.getBoundingClientRect();
     startLeft = el.offsetLeft;
     startTop = el.offsetTop;
     el.style.cursor = "grabbing";
@@ -1179,9 +1168,8 @@ function makeDraggable(el, item) {
       isDragging = false;
       el.style.cursor = "move";
       
-      // Update overlay position in item
-      if (activeOverlay && item.overlays) {
-        const ov = item.overlays.find(o => o === activeOverlay);
+      if (item.overlays) {
+        const ov = item.overlays.find(o => o.top === el.style.top && o.left === el.style.left);
         if (ov) {
           ov.left = el.style.left;
           ov.top = el.style.top;
@@ -1219,7 +1207,6 @@ function loadSavedOverlays(item) {
   });
 }
 
-// No box behind tattoo text
 function addDraggableTextNoBox(item) {
   const txt = prompt("Tattoo text:", "text");
   if (!txt) return;
@@ -1294,7 +1281,6 @@ function addSpeechBubbleWithSlider(item) {
   saveOverlaysToDB(item);
 }
 
-// Auto Caption with 20 random texts
 function autoCaption(item) {
   const captions = [
     "text 1", "text 2", "text 3", "text 4", "text 5",
@@ -1318,7 +1304,6 @@ function autoCaption(item) {
   });
 }
 
-// ==================== TIER LIST MAKER ====================
 function openTierListMaker(currentItem) {
   const existing = document.getElementById("tier-list-modal");
   if (existing) existing.remove();
@@ -1507,7 +1492,6 @@ async function openTierListViewer() {
   document.body.appendChild(modal);
 }
 
-// ==================== ALBUMS ====================
 async function addToAlbum(item) {
   const res = await fetch("/api/albums");
   const data = await res.json();
@@ -1545,8 +1529,8 @@ async function addToAlbum(item) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ 
       albumName: album.name, 
-      public_id: item.public_id
-                     gallery: currentGallery 
+      public_id: item.public_id,
+      gallery: currentGallery 
     })
   });
 
@@ -1623,7 +1607,6 @@ async function openAlbumViewer(album) {
   } else {
     contentDiv.appendChild(gridDiv);
     for (const item of album.items) {
-      // Fetch full item data
       const res = await fetch(`/api/media/${item.public_id}`);
       const data = await res.json();
       if (!data.success || !data.item) continue;
