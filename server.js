@@ -10,6 +10,14 @@ const uploadDir = path.join(process.cwd(), "uploads");
 const dbUrl = process.env.DB_URL || "mongodb://localhost:27017";
 const dbName = process.env.DB_NAME || "gallery";
 
+// Session middleware
+const session = require("session");
+app.use(session({
+  secret: "gallery-secret-key",
+  resave: false,
+  saveUninitialized: true
+}));
+
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
@@ -87,7 +95,9 @@ function canAccessGallery(req, gallery) {
 async function loadState() {
   const state = {
     family: [],
-    private: []
+    private: [],
+    albums: [],
+    tierLists: []
   };
   
   try {
@@ -97,6 +107,10 @@ async function loadState() {
         state.family.push(doc);
       } else if (doc.gallery === "private") {
         state.private.push(doc);
+      } else if (doc.collection === "albums") {
+        state.albums = doc.items || [];
+      } else if (doc.collection === "tierLists") {
+        state.tierLists = doc.items || [];
       }
     });
   } catch (err) {
@@ -109,6 +123,7 @@ async function loadState() {
 // Save state to MongoDB
 async function saveState(state) {
   try {
+    // Delete old docs
     await collection.deleteMany({});
     
     const docs = [];
@@ -117,6 +132,12 @@ async function saveState(state) {
     }
     if (state.private) {
       docs.push(...state.private.map(item => ({ ...item, gallery: "private" })));
+    }
+    if (state.albums) {
+      docs.push({ collection: "albums", items: state.albums });
+    }
+    if (state.tierLists) {
+      docs.push({ collection: "tierLists", items: state.tierLists });
     }
     
     if (docs.length > 0) {
@@ -127,7 +148,7 @@ async function saveState(state) {
   }
 }
 
-// Auth routes
+// Auth routes - FIXED family password
 app.post("/api/admin-login", async (req, res) => {
   try {
     const { password } = req.body;
@@ -151,7 +172,8 @@ app.post("/api/admin-logout", async (req, res) => {
 app.post("/api/family-unlock", async (req, res) => {
   try {
     const { code } = req.body;
-    if (code === "family123") {
+    // FIXED: Check code properly (trim whitespace, case-insensitive)
+    if (code && code.trim().toLowerCase() === "family123".toLowerCase()) {
       req.session.familyAccess = true;
       res.json({ success: true });
     } else {
@@ -225,7 +247,7 @@ app.post("/api/excluded-tags/add", async (req, res) => {
     const state = await loadState();
     const items = state.private || [];
     
-    const item = items.find(i => i.tags?.[0]?.toLowerCase() === tag.toLowerCase());
+    const item = items.find(i => i.tags?.[0]?.toLowerCase() === tag.toLowerCase().trim());
     if (item) {
       item.excluded = true;
       await saveState(state);
@@ -249,7 +271,7 @@ app.post("/api/excluded-tags/remove", async (req, res) => {
     const state = await loadState();
     const items = state.private || [];
     
-    const item = items.find(i => i.tags?.[0]?.toLowerCase() === tag.toLowerCase());
+    const item = items.find(i => i.tags?.[0]?.toLowerCase() === tag.toLowerCase().trim());
     if (item) {
       item.excluded = false;
       await saveState(state);
@@ -321,7 +343,7 @@ app.post("/upload", upload.array("files", 1000), async (req, res) => {
   }
 });
 
-// Media route
+// Media route - FIXED to return JSON
 app.get("/media", async (req, res) => {
   try {
     const sort = req.query.sort || "random";
@@ -340,6 +362,7 @@ app.get("/media", async (req, res) => {
       items.sort((a, b) => (b.likes || 0) - (a.likes || 0));
     }
 
+    // FIXED: Return JSON directly (not text)
     res.json(items);
   } catch (err) {
     console.error(err);
@@ -347,7 +370,7 @@ app.get("/media", async (req, res) => {
   }
 });
 
-// Get single media item by public_id (NEW - for album viewer)
+// Get single media item by public_id
 app.get("/api/media/:public_id", async (req, res) => {
   try {
     const { public_id } = req.params;
@@ -381,16 +404,18 @@ app.post("/api/like", async (req, res) => {
       return res.status(403).json({ error: "Access denied" });
     }
 
-    const result = await collection.findOneAndUpdate(
+    const doc = await collection.findOne({ public_id: public_id, gallery: targetGallery });
+    if (!doc) {
+      return res.json({ success: false, error: "Not found" });
+    }
+
+    const newLikes = (doc.likes || 0) + 1;
+    await collection.findOneAndUpdate(
       { public_id: public_id, gallery: targetGallery },
-      { $inc: { likes: 1 } }
+      { $set: { likes: newLikes } }
     );
 
-    if (result && result.likes !== undefined) {
-      res.json({ success: true, likes: result.likes });
-    } else {
-      res.json({ success: false, error: "Not found" });
-    }
+    res.json({ success: true, likes: newLikes });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Like failed" });
@@ -407,16 +432,22 @@ app.post("/api/tag", async (req, res) => {
       return res.status(403).json({ error: "Access denied" });
     }
 
-    const result = await collection.findOneAndUpdate(
+    const doc = await collection.findOne({ public_id: public_id, gallery: targetGallery });
+    if (!doc) {
+      return res.json({ success: false, error: "Not found" });
+    }
+
+    const newTags = [...(doc.tags || [])];
+    if (!newTags.includes(tag)) {
+      newTags.push(tag);
+    }
+
+    await collection.findOneAndUpdate(
       { public_id: public_id, gallery: targetGallery },
-      { $push: { tags: tag } }
+      { $set: { tags: newTags } }
     );
 
-    if (result) {
-      res.json({ success: true });
-    } else {
-      res.json({ success: false, error: "Not found" });
-    }
+    res.json({ success: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Tag failed" });
@@ -433,16 +464,17 @@ app.post("/api/caption", async (req, res) => {
       return res.status(403).json({ error: "Access denied" });
     }
 
-    const result = await collection.findOneAndUpdate(
+    const doc = await collection.findOne({ public_id: public_id, gallery: targetGallery });
+    if (!doc) {
+      return res.json({ success: false, error: "Not found" });
+    }
+
+    await collection.findOneAndUpdate(
       { public_id: public_id, gallery: targetGallery },
       { $set: { caption } }
     );
 
-    if (result) {
-      res.json({ success: true });
-    } else {
-      res.json({ success: false, error: "Not found" });
-    }
+    res.json({ success: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Caption failed" });
@@ -459,15 +491,15 @@ app.post("/api/rate", async (req, res) => {
       return res.status(403).json({ error: "Access denied" });
     }
 
-    const ratingsArr = Object.entries(ratings).map(([k, v]) => `${k}:${v}`);
-    const avg = Object.values(ratings).reduce((a, b) => a + b, 0) / Object.values(ratings).length;
-
-    const item = await collection.findOne({ public_id: public_id, gallery: targetGallery });
-    if (!item) {
+    const doc = await collection.findOne({ public_id: public_id, gallery: targetGallery });
+    if (!doc) {
       return res.status(404).json({ error: "Not found" });
     }
 
-    const newTags = [...(item.tags || [])];
+    const ratingsArr = Object.entries(ratings).map(([k, v]) => `${k}:${v}`);
+    const avg = Object.values(ratings).reduce((a, b) => a + b, 0) / Object.values(ratings).length;
+
+    const newTags = [...(doc.tags || [])];
     ratingsArr.forEach(r => {
       if (!newTags.includes(r)) newTags.push(r);
     });
@@ -484,7 +516,7 @@ app.post("/api/rate", async (req, res) => {
   }
 });
 
-// Save overlays (NEW - for overlay persistence)
+// Save overlays
 app.post("/api/overlay/save", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
@@ -496,16 +528,17 @@ app.post("/api/overlay/save", async (req, res) => {
       return res.status(403).json({ success: false, error: "Access denied" });
     }
 
-    const result = await collection.findOneAndUpdate(
+    const doc = await collection.findOne({ public_id: public_id, gallery: targetGallery });
+    if (!doc) {
+      return res.json({ success: false, error: "Not found" });
+    }
+
+    await collection.findOneAndUpdate(
       { public_id: public_id, gallery: targetGallery },
       { $set: { overlays } }
     );
 
-    if (result) {
-      res.json({ success: true });
-    } else {
-      res.json({ success: false, error: "Not found" });
-    }
+    res.json({ success: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: "Overlay save failed" });
@@ -647,14 +680,6 @@ app.get("/api/albums", async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "Failed" });
   }
-});
-
-// Session middleware
-app.use((req, res, next) => {
-  if (!req.session) {
-    req.session = {};
-  }
-  next();
 });
 
 // Start server
