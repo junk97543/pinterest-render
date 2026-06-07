@@ -185,6 +185,14 @@ function initHandlers() {
 
   fileInput.addEventListener("change", uploadFiles);
   videoFeedBtn.addEventListener("click", openPhoneOverlay);
+
+// Add this near the other buttons
+const albumsBtn = document.createElement("button");
+albumsBtn.textContent = "📁 Albums";
+albumsBtn.className = "feed-btn";
+albumsBtn.addEventListener("click", showAlbums);
+mainHeader.appendChild(albumsBtn);
+
   phoneCloseBtn.addEventListener("click", closePhoneOverlay);
   phoneBackBtn.addEventListener("click", closePhoneOverlay);
 
@@ -615,8 +623,8 @@ function showLightboxItem(index) {
   document.querySelectorAll("#rating-panel, #depravity-panel, .overlay-element").forEach(el => el.remove());
 
   if (isAdmin && currentGallery === "private") {
-    createRatingPanel(item, index);     // LEFT SIDE
-    createDepravityPanel(item);         // RIGHT SIDE
+    createRatingPanel(item, index);   // LEFT SIDE - Rating
+    createDepravityPanel(item);       // RIGHT SIDE - Depravity Tools
   }
 }
 function closeLightbox() {
@@ -949,11 +957,11 @@ async function deleteSingleItem(public_id) {
     alert(data.error || "Delete failed");
   }
 }
-// ======================== DEPRIVITY TOOLS PANEL ========================
+// ======================== RIGHT SIDE: DEPRIVITY TOOLS ========================
 function createDepravityPanel(item) {
   const panel = document.createElement("div");
   panel.id = "depravity-panel";
-  panel.style = `position:absolute; top:20px; left:20px; width:400px; background:rgba(0,0,0,0.95); padding:20px; border-radius:14px; color:#fff; z-index:1002; max-height:80vh; overflow-y:auto;`;
+  panel.style = `position:absolute; top:20px; right:20px; width:380px; background:rgba(0,0,0,0.95); padding:20px; border-radius:14px; color:#fff; z-index:1002; max-height:80vh; overflow-y:auto;`;
 
   panel.innerHTML = `
     <h3 style="text-align:center;color:#ff5a5f">🔥 Depravity Tools</h3>
@@ -975,23 +983,27 @@ function createDepravityPanel(item) {
   panel.querySelector("#delete-btn").onclick = () => deleteSingleItem(item.public_id);
 }
 
-// Draggable Emoji, Text, Bubble
+// Draggable Emoji
 function addDraggableEmoji(item) {
   const emojis = ["🍆","💦","🍑","🥵","😈","🤤","👅","🍼","🔥","😩","🍒"];
   const emo = emojis[Math.floor(Math.random()*emojis.length)];
   createDraggableElement(emo, 60, item);
 }
 
+// Draggable Tattoo Text with options
 function addDraggableText(item) {
-  const txt = prompt("Tattoo text (e.g. SLUT, CUMDUMP):", "SLUT");
+  const txt = prompt("Tattoo text:", "SLUT");
   if (!txt) return;
-  const el = createDraggableElement(txt.toUpperCase(), 28, item);
+  const size = prompt("Text size (px):", "28") || 28;
+  const color = prompt("Text color (#hex):", "#ff0000") || "#ff0000";
+  const el = createDraggableElement(txt.toUpperCase(), parseInt(size), item);
+  el.style.color = color;
   el.style.fontFamily = "'Comic Sans MS', cursive";
-  el.style.color = "#ff0000";
   el.style.textShadow = "2px 2px 4px #000";
   el.style.transform = "rotate(-8deg)";
 }
 
+// Speech Bubble with options
 function addSpeechBubble(item) {
   const txt = prompt("What does she say?", "Please destroy my asshole Daddy 😭");
   if (!txt) return;
@@ -1051,7 +1063,9 @@ async function saveCurrentOverlays(item) {
     overlays.push({
       content: el.textContent,
       top: el.style.top,
-      left: el.style.left
+      left: el.style.left,
+      fontSize: el.style.fontSize,
+      color: el.style.color
     });
   });
   item.overlays = overlays;
@@ -1061,6 +1075,11 @@ async function saveCurrentOverlays(item) {
     body: JSON.stringify({ public_id: item.public_id, gallery: currentGallery, overlays })
   });
 }
+
+// Other helpers
+async function autoDepravedCaption(public_id) { /* your existing */ }
+async function deleteSingleItem(public_id) { /* your existing */ }
+async function addToAlbum(public_id) { /* your existing */ }
 
 async function autoDepravedCaption(public_id) {
   const res = await fetch("/api/auto-caption", {
@@ -1172,5 +1191,29 @@ async function autoDepravedCaption(public_id) {
   if (data.success) {
     alert("Filthy caption added!");
     await loadMedia();
+  }
+}
+async function showAlbums() {
+  const res = await fetch("/api/albums");
+  const data = await res.json();
+  if (!data.success) return alert("Could not load albums");
+
+  let message = "Current Albums:\n\n";
+  if (data.albums && data.albums.length > 0) {
+    data.albums.forEach(album => {
+      message += `• ${album.name} (${album.items.length} images)\n`;
+    });
+  } else {
+    message += "No albums yet.\n";
+  }
+
+  const newName = prompt(message + "\n\nCreate new album (or leave empty to cancel):");
+  if (newName && newName.trim()) {
+    await fetch("/api/albums/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName.trim() })
+    });
+    alert("Album created!");
   }
 }
