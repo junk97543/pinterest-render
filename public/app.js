@@ -625,6 +625,7 @@ function showLightboxItem(index) {
   if (isAdmin && currentGallery === "private") {
     createRatingPanel(item, index);     // LEFT SIDE - Rating
     createDepravityPanel(item);         // RIGHT SIDE - Tools
+    loadSavedOverlays(item);          // Load saved overlays
   }
 }
 
@@ -1506,5 +1507,108 @@ async function deleteSingleItem(public_id) {
     await loadMedia();
   } else {
     alert(data.error || "Delete failed");
+  }
+}
+function loadSavedOverlays(item) {
+  if (!item.overlays || !item.overlays.length) return;
+  item.overlays.forEach(ov => {
+    const el = document.createElement("div");
+    el.className = "overlay-element";
+    el.style.position = "absolute";
+    el.style.top = ov.top;
+    el.style.left = ov.left;
+    el.style.fontSize = ov.fontSize || "28px";
+    el.style.color = ov.color || "#ff0000";
+    el.style.cursor = "move";
+    el.style.zIndex = "1003";
+    el.style.userSelect = "none";
+    el.textContent = ov.content;
+    document.querySelector(".lightbox-content").appendChild(el);
+    makeDraggable(el, item);
+  });
+}
+// Tattoo Text with Sliders
+function addDraggableTextWithSliders(item) {
+  const txt = prompt("Tattoo text:", "SLUT");
+  if (!txt) return;
+
+  const el = createDraggableElement(txt.toUpperCase(), 32, item);
+  el.style.fontFamily = "'Comic Sans MS', cursive";
+  el.style.color = "#ff0000";
+  el.style.textShadow = "2px 2px 4px #000";
+
+  // Simple inline controls for this element
+  const controls = document.createElement("div");
+  controls.style = "position:absolute; top: -40px; left:0; background:rgba(0,0,0,0.8); padding:5px; border-radius:6px; font-size:12px; z-index:1004;";
+  controls.innerHTML = `
+    Size: <input type="range" id="size-slider" min="12" max="80" value="32"> 
+    Color: <input type="color" id="color-picker" value="#ff0000">
+    Opacity: <input type="range" id="opacity-slider" min="0.3" max="1" step="0.05" value="1">
+  `;
+  el.appendChild(controls);
+
+  const sizeSlider = controls.querySelector("#size-slider");
+  const colorPicker = controls.querySelector("#color-picker");
+  const opacitySlider = controls.querySelector("#opacity-slider");
+
+  sizeSlider.oninput = () => el.style.fontSize = sizeSlider.value + "px";
+  colorPicker.oninput = () => el.style.color = colorPicker.value;
+  opacitySlider.oninput = () => el.style.opacity = opacitySlider.value;
+}
+
+// Snapchat Text
+function addSnapchatText(item) {
+  const txt = prompt("Snapchat text:", "I need to be fucked so bad");
+  if (!txt) return;
+  const el = createDraggableElement(txt, 26, item);
+  el.style.background = "rgba(0,0,0,0.75)";
+  el.style.color = "white";
+  el.style.padding = "8px 30px";
+  el.style.borderRadius = "4px";
+  el.style.fontWeight = "bold";
+  el.style.textAlign = "center";
+  el.style.width = "280px";
+}
+
+// Speech Bubble with size slider
+function addSpeechBubbleWithSlider(item) {
+  const txt = prompt("What does she say?", "Destroy my holes Daddy");
+  if (!txt) return;
+  const el = createDraggableElement(txt, 18, item);
+  el.style.background = "rgba(255,255,255,0.95)";
+  el.style.color = "#000";
+  el.style.padding = "12px 18px";
+  el.style.borderRadius = "20px";
+  el.style.maxWidth = "260px";
+}
+
+// Keep the rest of draggable functions (createDraggableElement, makeDraggable, saveCurrentOverlays, loadSavedOverlays, etc.)
+function openTierListMaker(currentItem) {
+  const tierHTML = `
+    <div style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#111; padding:20px; border-radius:12px; z-index:10000; width:600px; color:white;">
+      <h2>Tier List Maker</h2>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <div style="background:#4CAF50; padding:10px; min-width:80px;">S Tier</div>
+        <div style="background:#8BC34A; padding:10px; min-width:80px;">A Tier</div>
+        <div style="background:#FFEB3B; color:black; padding:10px; min-width:80px;">B Tier</div>
+        <div style="background:#FF9800; padding:10px; min-width:80px;">C Tier</div>
+        <div style="background:#F44336; padding:10px; min-width:80px;">F Tier</div>
+      </div>
+      <button onclick="this.parentElement.remove()" style="margin-top:15px;">Close</button>
+    </div>
+  `;
+  const modal = document.createElement("div");
+  modal.innerHTML = tierHTML;
+  document.body.appendChild(modal);
+}
+async function showAlbums() {
+  const res = await fetch("/api/albums");
+  const data = await res.json();
+  let msg = "Albums:\n\n";
+  (data.albums || []).forEach(a => msg += `• ${a.name} (${a.items ? a.items.length : 0})\n`);
+  const name = prompt(msg + "\n\nNew album name:");
+  if (name) {
+    await fetch("/api/albums/create", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name})});
+    alert("Album created!");
   }
 }
