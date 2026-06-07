@@ -777,8 +777,8 @@ async function buildPhoneFeed() {
   phoneFeed.innerHTML = "";
 
   if (!phoneVideos.length) {
-    phoneFeed.innerHTML = "<div class='phone-item'><div class='phone-overlay-ui'><div class='phone-caption'>No videos uploaded yet.</div></
-  }
+  phoneFeed.innerHTML = "<div class='phone-item'><div class='phone-overlay-ui'><div class='phone-caption'>No videos uploaded yet.</div></div></div>";
+}
 
   phoneVideos.forEach((item, idx) => {
     const el = document.createElement("section");
