@@ -611,12 +611,14 @@ function showLightboxItem(index) {
     lightboxVideo.play().catch(() => {});
   }
 
-  // Clear old rating panel
-  const oldPanel = document.getElementById("rating-panel");
-  if (oldPanel) oldPanel.remove();
+  // Load saved overlays
+  document.querySelectorAll(".overlay-element").forEach(el => el.remove());
+  if (item.overlays && item.overlays.length) {
+    item.overlays.forEach(ov => loadSavedOverlay(ov));
+  }
 
   if (isAdmin && currentGallery === "private") {
-    createRatingPanel(item, index);
+    createDepravityPanel(item, index);
   }
 }
 function closeLightbox() {
@@ -948,4 +950,129 @@ async function deleteSingleItem(public_id) {
   } else {
     alert(data.error || "Delete failed");
   }
+}
+function createDepravityPanel(item, index) {
+  const panel = document.createElement("div");
+  panel.id = "depravity-panel";
+  panel.style = `position:absolute; top:20px; left:20px; width:380px; background:rgba(0,0,0,0.95); padding:18px; border-radius:14px; color:#fff; z-index:1002; max-height:80vh; overflow-y:auto;`;
+
+  panel.innerHTML = `
+    <h3 style="text-align:center;color:#ff5a5f">🔥 Depravity Tools</h3>
+    <button id="emoji-btn" style="width:100%;padding:10px;margin:4px 0;background:#ff1493">😈 Add Draggable Emoji</button>
+    <button id="text-btn" style="width:100%;padding:10px;margin:4px 0;background:#ff4500">✍️ Add Tattoo Text</button>
+    <button id="bubble-btn" style="width:100%;padding:10px;margin:4px 0;background:#8a2be2">💬 Add Speech Bubble</button>
+    <button id="auto-caption-btn" style="width:100%;padding:10px;margin:4px 0;background:#e60023">🤖 Auto Filthy Caption</button>
+    <button id="delete-btn" style="width:100%;padding:10px;margin:8px 0;background:#333">🗑️ Delete Image</button>
+    <hr style="margin:12px 0">
+    <button id="tierlist-btn" style="width:100%;padding:10px;background:#00bfff">🏆 Open Tier List Maker</button>
+    <button id="album-btn" style="width:100%;padding:10px;margin-top:4px;background:#32cd32">📁 Add to Album</button>
+  `;
+
+  document.querySelector(".lightbox-content").appendChild(panel);
+
+  panel.querySelector("#emoji-btn").onclick = () => addDraggableEmoji(item);
+  panel.querySelector("#text-btn").onclick = () => addDraggableText(item);
+  panel.querySelector("#bubble-btn").onclick = () => addSpeechBubble(item);
+  panel.querySelector("#auto-caption-btn").onclick = () => autoDepravedCaption(item.public_id);
+  panel.querySelector("#delete-btn").onclick = () => deleteSingleItem(item.public_id);
+  panel.querySelector("#tierlist-btn").onclick = openTierListMaker;
+  panel.querySelector("#album-btn").onclick = () => addToAlbum(item.public_id);
+}
+function addDraggableEmoji(item) {
+  const emojis = ["🍆","💦","🍑","🥵","😈","🤤","👅","🍼","🔥","😩","🍒","💉"];
+  const el = createDraggableElement(emojis[Math.floor(Math.random()*emojis.length)], 60, item, "emoji");
+}
+
+function addDraggableText(item) {
+  const txt = prompt("Tattoo text (e.g. SLUT, CUMDUMP, BREEDME):", "SLUT");
+  if (!txt) return;
+  const el = createDraggableElement(txt.toUpperCase(), 28, item, "text");
+  el.style.fontFamily = "'Comic Sans MS', cursive";
+  el.style.color = "#ff0000";
+  el.style.textShadow = "2px 2px 4px #000";
+  el.style.transform = "rotate(-8deg)";
+}
+
+function addSpeechBubble(item) {
+  const txt = prompt("What does she say?", "Please destroy my holes Daddy 😭");
+  if (!txt) return;
+  const el = createDraggableElement(txt, 18, item, "bubble");
+  el.style.background = "rgba(255,255,255,0.95)";
+  el.style.color = "#000";
+  el.style.padding = "12px 18px";
+  el.style.borderRadius = "20px";
+  el.style.maxWidth = "240px";
+}
+
+function createDraggableElement(content, fontSize, item, type) {
+  const el = document.createElement("div");
+  el.className = "overlay-element";
+  el.style.position = "absolute";
+  el.style.fontSize = fontSize + "px";
+  el.style.cursor = "move";
+  el.style.zIndex = "1003";
+  el.style.userSelect = "none";
+  el.textContent = content;
+  document.querySelector(".lightbox-content").appendChild(el);
+
+  makeElementDraggable(el, item, type, content);
+  return el;
+}
+
+function makeElementDraggable(el, item, type, content) {
+  let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+  el.onmousedown = dragMouseDown;
+
+  function dragMouseDown(e) {
+    e.preventDefault();
+    pos3 = e.clientX; pos4 = e.clientY;
+    document.onmouseup = closeDrag;
+    document.onmousemove = elementDrag;
+  }
+
+  function elementDrag(e) {
+    e.preventDefault();
+    pos1 = pos3 - e.clientX;
+    pos2 = pos4 - e.clientY;
+    pos3 = e.clientX;
+    pos4 = e.clientY;
+    el.style.top = (el.offsetTop - pos2) + "px";
+    el.style.left = (el.offsetLeft - pos1) + "px";
+  }
+
+  function closeDrag() {
+    document.onmouseup = null;
+    document.onmousemove = null;
+    saveCurrentOverlays(item);
+  }
+}
+
+async function saveCurrentOverlays(item) {
+  const overlays = [];
+  document.querySelectorAll(".overlay-element").forEach(el => {
+    overlays.push({
+      type: "custom",
+      content: el.textContent,
+      top: el.style.top,
+      left: el.style.left
+    });
+  });
+  item.overlays = overlays;
+  await fetch("/api/overlay/save", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({public_id: item.public_id, gallery: currentGallery, overlays})
+  });
+}
+
+function loadSavedOverlay(ov) {
+  // Implementation for loading saved overlays on open
+  const el = document.createElement("div");
+  el.className = "overlay-element";
+  el.style.position = "absolute";
+  el.style.top = ov.top || "30%";
+  el.style.left = ov.left || "40%";
+  el.textContent = ov.content;
+  document.querySelector(".lightbox-content").appendChild(el);
+  makeElementDraggable(el, items[lightboxIndex], ov.type, ov.content);
 }
