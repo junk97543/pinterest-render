@@ -824,6 +824,12 @@ function escapeHtml(text) {
   div.textContent = text;
   return div.innerHTML;
 }
+
+
+
+
+
+
 function createRatingPanel(item, index) {
   const panel = document.createElement("div");
   panel.id = "rating-panel";
@@ -833,13 +839,13 @@ function createRatingPanel(item, index) {
     <h3 style="text-align:center; color:#ff5a5f; margin:0 0 15px 0;">Rate This Nude</h3>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:14px;">
       <div>
-        <label>Boobs:</label><br>
-        <select id="r-breast" style="width:100%;padding:8px;margin:4px 0;">
-          <option value="flat">Flat / Prepubescent</option>
-          <option value="small">Small Perky</option>
-          <option value="medium">Medium Teardrop</option>
-          <option value="big">Big Full</option>
-          <option value="huge" selected>Mommy Milkers / Massive</option>
+        <label>chest:</label><br>
+        <select id="r-chest" style="width:100%;padding:8px;margin:4px 0;">
+          <option value="flat">Flat / veryflat</option>
+          <option value="small">Small </option>
+          <option value="medium">Medium </option>
+          <option value="big">Big </option>
+          <option value="huge" selected>huge / Massive</option>
         </select>
       </div>
       <div>
@@ -862,16 +868,16 @@ function createRatingPanel(item, index) {
         </select>
       </div>
 
-      <div><label>Fuckability (0-10)</label><br><input type="number" id="r-fuck" step="0.1" min="0" max="10" value="${item.ratings?.fuckability || 7.5}" style="width:100%;padding:8px;"></div>
+      <div><label>loveability (0-10)</label><br><input type="number" id="r-fuck" step="0.1" min="0" max="10" value="${item.ratings?.loveability || 7.5}" style="width:100%;padding:8px;"></div>
       <div><label>Cuteness (0-10)</label><br><input type="number" id="r-cute" step="0.1" min="0" max="10" value="${item.ratings?.cuteness || 7}" style="width:100%;padding:8px;"></div>
       <div><label>Beauty (0-10)</label><br><input type="number" id="r-beauty" step="0.1" min="0" max="10" value="${item.ratings?.beauty || 7}" style="width:100%;padding:8px;"></div>
       <div><label>Hotness (0-10)</label><br><input type="number" id="r-hot" step="0.1" min="0" max="10" value="${item.ratings?.hotness || 8}" style="width:100%;padding:8px;"></div>
-      <div><label>Sluttiness (0-10)</label><br><input type="number" id="r-slut" step="0.1" min="0" max="10" value="${item.ratings?.sluttiness || 6}" style="width:100%;padding:8px;"></div>
+      <div><label>funness (0-10)</label><br><input type="number" id="r-fun" step="0.1" min="0" max="10" value="${item.ratings?.funness || 6}" style="width:100%;padding:8px;"></div>
       <div><label>Submissiveness (0-10)</label><br><input type="number" id="r-sub" step="0.1" min="0" max="10" value="${item.ratings?.submissiveness || 5}" style="width:100%;padding:8px;"></div>
     </div>
 
     <button id="save-rating-btn" style="margin-top:15px;width:100%;padding:12px;background:#e60023;border:none;color:white;font-weight:bold;border-radius:8px;">💾 Save Ratings & Tags</button>
-    <button id="add-emoji-btn" style="margin-top:8px;width:100%;padding:10px;background:#ff1493;border:none;color:white;font-weight:bold;border-radius:8px;">😈 Add Porn Emoji</button>
+    <button id="add-emoji-btn" style="margin-top:8px;width:100%;padding:10px;background:#ff1493;border:none;color:white;font-weight:bold;border-radius:8px;">😈 Add  Emoji</button>
     <button id="delete-item-btn" style="margin-top:8px;width:100%;padding:10px;background:#333;border:none;color:white;font-weight:bold;border-radius:8px;">🗑️ Delete This Image</button>
   `;
 
@@ -884,564 +890,14 @@ function createRatingPanel(item, index) {
 
 async function saveRatings() {
   const ratings = {
-    breast: document.getElementById("r-breast").value,
+    chest: document.getElementById("r-chest").value,
     bodyShape: document.getElementById("r-body").value,
     build: document.getElementById("r-build").value,
-    fuckability: parseFloat(document.getElementById("r-fuck").value),
+    loveability: parseFloat(document.getElementById("r-love").value),
     cuteness: parseFloat(document.getElementById("r-cute").value),
     beauty: parseFloat(document.getElementById("r-beauty").value),
     hotness: parseFloat(document.getElementById("r-hot").value),
-    sluttiness: parseFloat(document.getElementById("r-slut").value),
-    submissiveness: parseFloat(document.getElementById("r-sub").value),
-  };
-
-  const res = await fetch("/api/rate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ public_id: items[lightboxIndex].public_id, gallery: currentGallery, ratings })
-  });
-  const data = await res.json();
-  if (data.success) {
-    alert(`✅ Saved! Overall Rating: ${data.overallRating}`);
-    await loadMedia();
-  }
-}
-
-function showEmojiPicker(item) {
-  const emojis = ["🍆", "💦", "😈", "🍑", "🔥", "🥵", "💋", "🍼", "😩", "🤤", "👅", "🍒"];
-  let picker = document.getElementById("emoji-picker");
-  if (picker) picker.remove();
-
-  picker = document.createElement("div");
-  picker.id = "emoji-picker";
-  picker.style = `position:absolute; top:20px; right:20px; background:rgba(0,0,0,0.95); padding:15px; border-radius:12px; z-index:1003; display:flex; flex-wrap:wrap; gap:8px; width:280px;`;
-
-  emojis.forEach(emo => {
-    const btn = document.createElement("button");
-    btn.textContent = emo;
-    btn.style = "font-size:28px; background:none; border:none; cursor:pointer; padding:8px;";
-    btn.addEventListener("click", () => addEmojiToImage(emo, item));
-    picker.appendChild(btn);
-  });
-
-  document.querySelector(".lightbox-content").appendChild(picker);
-}
-
-function addEmojiToImage(emoji, item) {
-  if (!item.emojis) item.emojis = [];
-  if (!item.emojis.includes(emoji)) item.emojis.push(emoji);
-
-  // Visual overlay (you can improve positioning later)
-  const overlay = document.createElement("div");
-  overlay.style = `position:absolute; top:${Math.random()*60 + 20}%; left:${Math.random()*60 + 20}%; font-size:42px; pointer-events:none; z-index:1001; opacity:0.9;`;
-  overlay.textContent = emoji;
-  document.querySelector(".lightbox-content").appendChild(overlay);
-
-  setTimeout(() => overlay.remove(), 8000);
-}
-
-// Single Delete
-async function deleteSingleItem(public_id) {
-  const password = prompt("Enter admin password to delete this image:");
-  if (!password) return;
-
-  const res = await fetch("/api/delete-item", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ public_id, gallery: currentGallery, password })
-  });
-  const data = await res.json();
-  if (data.success) {
-    alert("Image deleted");
-    closeLightbox();
-    await loadMedia();
-  } else {
-    alert(data.error || "Delete failed");
-  }
-}
-// ======================== RIGHT SIDE: DEPRIVITY TOOLS ========================
-function createDepravityPanel(item) {
-  const panel = document.createElement("div");
-  panel.id = "depravity-panel";
-  panel.style = `position:absolute; top:20px; right:20px; width:380px; background:rgba(0,0,0,0.95); padding:20px; border-radius:14px; color:#fff; z-index:1002; max-height:80vh; overflow-y:auto;`;
-
-  panel.innerHTML = `
-    <h3 style="text-align:center;color:#ff5a5f">🔥 Depravity Tools</h3>
-    <button id="emoji-btn" style="width:100%;padding:12px;margin:6px 0;background:#ff1493;border:none;color:white;border-radius:8px;">😈 Draggable Emoji</button>
-    <button id="text-btn" style="width:100%;padding:12px;margin:6px 0;background:#ff4500;border:none;color:white;border-radius:8px;">✍️ Tattoo Text</button>
-    <button id="bubble-btn" style="width:100%;padding:12px;margin:6px 0;background:#8a2be2;border:none;color:white;border-radius:8px;">💬 Speech Bubble</button>
-    <button id="auto-caption-btn" style="width:100%;padding:12px;margin:6px 0;background:#e60023;border:none;color:white;border-radius:8px;">🤖 Auto Filthy Caption</button>
-    <button id="album-btn" style="width:100%;padding:12px;margin:6px 0;background:#32cd32;border:none;color:white;border-radius:8px;">📁 Add to Album</button>
-    <button id="delete-btn" style="width:100%;padding:12px;margin:12px 0 0 0;background:#333;border:none;color:white;border-radius:8px;">🗑️ Delete Image</button>
-  `;
-
-  document.querySelector(".lightbox-content").appendChild(panel);
-
-  panel.querySelector("#emoji-btn").onclick = () => addDraggableEmoji(item);
-  panel.querySelector("#text-btn").onclick = () => addDraggableText(item);
-  panel.querySelector("#bubble-btn").onclick = () => addSpeechBubble(item);
-  panel.querySelector("#auto-caption-btn").onclick = () => autoDepravedCaption(item.public_id);
-  panel.querySelector("#album-btn").onclick = () => addToAlbum(item.public_id);
-  panel.querySelector("#delete-btn").onclick = () => deleteSingleItem(item.public_id);
-}
-
-// Draggable Emoji
-function addDraggableEmoji(item) {
-  const emojis = ["🍆","💦","🍑","🥵","😈","🤤","👅","🍼","🔥","😩","🍒"];
-  const emo = emojis[Math.floor(Math.random()*emojis.length)];
-  createDraggableElement(emo, 60, item);
-}
-
-// Draggable Tattoo Text with options
-function addDraggableText(item) {
-  const txt = prompt("Tattoo text:", "SLUT");
-  if (!txt) return;
-  const size = prompt("Text size (px):", "28") || 28;
-  const color = prompt("Text color (#hex):", "#ff0000") || "#ff0000";
-  const el = createDraggableElement(txt.toUpperCase(), parseInt(size), item);
-  el.style.color = color;
-  el.style.fontFamily = "'Comic Sans MS', cursive";
-  el.style.textShadow = "2px 2px 4px #000";
-  el.style.transform = "rotate(-8deg)";
-}
-
-// Speech Bubble with options
-function addSpeechBubble(item) {
-  const txt = prompt("What does she say?", "Please destroy my asshole Daddy 😭");
-  if (!txt) return;
-  const el = createDraggableElement(txt, 18, item);
-  el.style.background = "rgba(255,255,255,0.95)";
-  el.style.color = "#000";
-  el.style.padding = "12px 18px";
-  el.style.borderRadius = "20px";
-  el.style.maxWidth = "240px";
-}
-
-function createDraggableElement(content, fontSize, item) {
-  const el = document.createElement("div");
-  el.className = "overlay-element";
-  el.style.position = "absolute";
-  el.style.fontSize = fontSize + "px";
-  el.style.cursor = "move";
-  el.style.zIndex = "1003";
-  el.style.userSelect = "none";
-  el.textContent = content;
-  document.querySelector(".lightbox-content").appendChild(el);
-  makeDraggable(el, item);
-  return el;
-}
-
-function makeDraggable(el, item) {
-  let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-  el.onmousedown = dragMouseDown;
-
-  function dragMouseDown(e) {
-    e.preventDefault();
-    pos3 = e.clientX; pos4 = e.clientY;
-    document.onmouseup = closeDragElement;
-    document.onmousemove = elementDrag;
-  }
-
-  function elementDrag(e) {
-    e.preventDefault();
-    pos1 = pos3 - e.clientX;
-    pos2 = pos4 - e.clientY;
-    pos3 = e.clientX;
-    pos4 = e.clientY;
-    el.style.top = (el.offsetTop - pos2) + "px";
-    el.style.left = (el.offsetLeft - pos1) + "px";
-  }
-
-  function closeDragElement() {
-    document.onmouseup = null;
-    document.onmousemove = null;
-    saveCurrentOverlays(item);
-  }
-}
-
-async function saveCurrentOverlays(item) {
-  const overlays = [];
-  document.querySelectorAll(".overlay-element").forEach(el => {
-    overlays.push({
-      content: el.textContent,
-      top: el.style.top,
-      left: el.style.left,
-      fontSize: el.style.fontSize,
-      color: el.style.color
-    });
-  });
-  item.overlays = overlays;
-  await fetch("/api/overlay/save", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ public_id: item.public_id, gallery: currentGallery, overlays })
-  });
-}
-
-// Other helpers
-async function autoDepravedCaption(public_id) { /* your existing */ }
-async function deleteSingleItem(public_id) { /* your existing */ }
-async function addToAlbum(public_id) { /* your existing */ }
-
-async function autoDepravedCaption(public_id) {
-  const res = await fetch("/api/auto-caption", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ public_id, gallery: currentGallery })
-  });
-  const data = await res.json();
-  if (data.success) alert("Filthy caption added!");
-}
-
-async function deleteSingleItem(public_id) {
-  const password = prompt("Enter admin password to delete this image:");
-  if (!password) return;
-  const res = await fetch("/api/delete-item", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ public_id, gallery: currentGallery, password })
-  });
-  const data = await res.json();
-  if (data.success) {
-    alert("Image deleted");
-    closeLightbox();
-    await loadMedia();
-  } else {
-    alert(data.error || "Delete failed");
-  }
-}
-
-async function addToAlbum(public_id) {
-  const name = prompt("Enter album name to add this image to:");
-  if (!name) return;
-  await fetch("/api/albums/create", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name })
-  });
-  alert("Added to album!");
-}
-// ======================== LEFT: RATING PANEL (keep your existing) ========================
-function createRatingPanel(item, index) {
-  // Your existing createRatingPanel function (keep it as is)
-  // ... paste your current createRatingPanel here if needed ...
-}
-
-// ======================== RIGHT SIDE: DEPRIVITY TOOLS ========================
-function createDepravityPanel(item) {
-  const panel = document.createElement("div");
-  panel.id = "depravity-panel";
-  panel.style = `position:absolute; top:20px; right:20px; width:380px; background:rgba(0,0,0,0.95); padding:20px; border-radius:14px; color:#fff; z-index:1002; max-height:80vh; overflow-y:auto;`;
-
-  panel.innerHTML = `
-    <h3 style="text-align:center;color:#ff5a5f">🔥 Depravity Tools</h3>
-    <button id="emoji-btn" style="width:100%;padding:12px;margin:6px 0;background:#ff1493;border:none;color:white;border-radius:8px;">😈 Draggable Emoji</button>
-    <button id="text-btn" style="width:100%;padding:12px;margin:6px 0;background:#ff4500;border:none;color:white;border-radius:8px;">✍️ Tattoo Text</button>
-    <button id="bubble-btn" style="width:100%;padding:12px;margin:6px 0;background:#8a2be2;border:none;color:white;border-radius:8px;">💬 Speech Bubble</button>
-    <button id="auto-caption-btn" style="width:100%;padding:12px;margin:6px 0;background:#e60023;border:none;color:white;border-radius:8px;">🤖 Auto Filthy Caption</button>
-    <button id="album-btn" style="width:100%;padding:12px;margin:6px 0;background:#32cd32;border:none;color:white;border-radius:8px;">📁 Add to Album</button>
-    <button id="tierlist-btn" style="width:100%;padding:12px;margin:6px 0;background:#00bfff;border:none;color:white;border-radius:8px;">🏆 Tier List Maker</button>
-    <button id="delete-btn" style="width:100%;padding:12px;margin:12px 0 0 0;background:#333;border:none;color:white;border-radius:8px;">🗑️ Delete Image</button>
-  `;
-
-  document.querySelector(".lightbox-content").appendChild(panel);
-
-  panel.querySelector("#emoji-btn").onclick = () => addDraggableEmoji(item);
-  panel.querySelector("#text-btn").onclick = () => addDraggableText(item);
-  panel.querySelector("#bubble-btn").onclick = () => addSpeechBubble(item);
-  panel.querySelector("#auto-caption-btn").onclick = () => autoDepravedCaption(item.public_id);
-  panel.querySelector("#album-btn").onclick = () => addToAlbum(item.public_id);
-  panel.querySelector("#tierlist-btn").onclick = openTierListMaker;
-  panel.querySelector("#delete-btn").onclick = () => deleteSingleItem(item.public_id);
-}
-
-// Draggable Emoji, Text, Snapchat Text, Bubble, etc. (add the functions from previous response)
-
-function addSnapchatText(item) {
-  const txt = prompt("Snapchat text:", "I need to be fucked so bad");
-  if (!txt) return;
-  const el = createDraggableElement(txt, 24, item);
-  el.style.background = "rgba(0,0,0,0.7)";
-  el.style.color = "white";
-  el.style.padding = "8px 20px";
-  el.style.borderRadius = "4px";
-  el.style.fontWeight = "bold";
-  el.style.textAlign = "center";
-  el.style.width = "80%";
-}
-
-async function addToAlbum(public_id) {
-  const name = prompt("Enter album name:");
-  if (!name) return;
-  await fetch("/api/albums/create", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name })
-  });
-  alert("Added to album!");
-}
-
-async function autoDepravedCaption(public_id) {
-  const res = await fetch("/api/auto-caption", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ public_id, gallery: currentGallery })
-  });
-  const data = await res.json();
-  if (data.success) {
-    alert("Filthy caption added!");
-    await loadMedia();
-  }
-}
-async function showAlbums() {
-  const res = await fetch("/api/albums");
-  const data = await res.json();
-  if (!data.success) return alert("Could not load albums");
-
-  let message = "Current Albums:\n\n";
-  if (data.albums && data.albums.length > 0) {
-    data.albums.forEach(album => {
-      message += `• ${album.name} (${album.items.length} images)\n`;
-    });
-  } else {
-    message += "No albums yet.\n";
-  }
-
-  const newName = prompt(message + "\n\nCreate new album (or leave empty to cancel):");
-  if (newName && newName.trim()) {
-    await fetch("/api/albums/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName.trim() })
-    });
-    alert("Album created!");
-  }
-}
-// Draggable Emoji
-function addDraggableEmoji(item) {
-  const emojis = ["🍆","💦","🍑","🥵","😈","🤤","👅","🍼","🔥","😩","🍒"];
-  const emo = emojis[Math.floor(Math.random()*emojis.length)];
-  createDraggableElement(emo, 60, item);
-}
-
-// Draggable Tattoo Text with sliders
-function addDraggableText(item) {
-  const txt = prompt("Tattoo text:", "SLUT");
-  if (!txt) return;
-  const el = createDraggableElement(txt.toUpperCase(), 28, item);
-  el.style.fontFamily = "'Comic Sans MS', cursive";
-  el.style.color = "#ff0000";
-  el.style.textShadow = "2px 2px 4px #000";
-  el.style.transform = "rotate(-8deg)";
-}
-
-// Speech Bubble
-function addSpeechBubble(item) {
-  const txt = prompt("What does she say?", "Please destroy my asshole Daddy 😭");
-  if (!txt) return;
-  const el = createDraggableElement(txt, 18, item);
-  el.style.background = "rgba(255,255,255,0.95)";
-  el.style.color = "#000";
-  el.style.padding = "12px 18px";
-  el.style.borderRadius = "20px";
-  el.style.maxWidth = "240px";
-}
-
-function createDraggableElement(content, fontSize, item) {
-  const el = document.createElement("div");
-  el.className = "overlay-element";
-  el.style.position = "absolute";
-  el.style.fontSize = fontSize + "px";
-  el.style.cursor = "move";
-  el.style.zIndex = "1003";
-  el.style.userSelect = "none";
-  el.textContent = content;
-  document.querySelector(".lightbox-content").appendChild(el);
-  makeDraggable(el, item);
-  return el;
-}
-
-function makeDraggable(el, item) {
-  let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-  el.onmousedown = dragMouseDown;
-
-  function dragMouseDown(e) {
-    e.preventDefault();
-    pos3 = e.clientX; pos4 = e.clientY;
-    document.onmouseup = closeDragElement;
-    document.onmousemove = elementDrag;
-  }
-
-  function elementDrag(e) {
-    e.preventDefault();
-    pos1 = pos3 - e.clientX;
-    pos2 = pos4 - e.clientY;
-    pos3 = e.clientX;
-    pos4 = e.clientY;
-    el.style.top = (el.offsetTop - pos2) + "px";
-    el.style.left = (el.offsetLeft - pos1) + "px";
-  }
-
-  function closeDragElement() {
-    document.onmouseup = null;
-    document.onmousemove = null;
-    saveCurrentOverlays(item);
-  }
-}
-
-async function saveCurrentOverlays(item) {
-  const overlays = [];
-  document.querySelectorAll(".overlay-element").forEach(el => {
-    overlays.push({
-      content: el.textContent,
-      top: el.style.top,
-      left: el.style.left,
-      fontSize: el.style.fontSize,
-      color: el.style.color
-    });
-  });
-  item.overlays = overlays;
-  await fetch("/api/overlay/save", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ public_id: item.public_id, gallery: currentGallery, overlays })
-  });
-}
-
-// Helper functions
-async function autoDepravedCaption(public_id) {
-  const res = await fetch("/api/auto-caption", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ public_id, gallery: currentGallery })
-  });
-  const data = await res.json();
-  if (data.success) alert("Filthy caption added!");
-}
-
-async function deleteSingleItem(public_id) {
-  const password = prompt("Enter admin password to delete:");
-  if (!password) return;
-  const res = await fetch("/api/delete-item", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ public_id, gallery: currentGallery, password })
-  });
-  const data = await res.json();
-  if (data.success) {
-    alert("Image deleted");
-    closeLightbox();
-    await loadMedia();
-  } else alert(data.error || "Failed");
-}
-
-async function addToAlbum(public_id) {
-  const name = prompt("Enter album name:");
-  if (!name) return;
-  await fetch("/api/albums/create", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name })
-  });
-  alert("Added to album!");
-}
-
-// Tier List Maker (basic)
-function openTierListMaker() {
-  alert("Tier List Maker\n\nS/A/B/C/F tiers coming in next update.");
-}
-async function showAlbums() {
-  const res = await fetch("/api/albums");
-  const data = await res.json();
-  if (!data.success) return alert("Could not load albums");
-
-  let message = "Current Albums:\n\n";
-  if (data.albums && data.albums.length > 0) {
-    data.albums.forEach(album => {
-      message += `• ${album.name} (${album.items.length} images)\n`;
-    });
-  } else {
-    message += "No albums yet.\n";
-  }
-
-  const newName = prompt(message + "\n\nCreate new album name:");
-  if (newName && newName.trim()) {
-    await fetch("/api/albums/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName.trim() })
-    });
-    alert("Album created!");
-  }
-}
-function createRatingPanel(item, index) {
-  const panel = document.createElement("div");
-  panel.id = "rating-panel";
-  panel.style = `position:absolute; top:20px; left:20px; width:420px; background:rgba(0,0,0,0.95); padding:20px; border-radius:16px; color:#fff; z-index:1002; max-height:85vh; overflow-y:auto;`;
-
-  panel.innerHTML = `
-    <h3 style="text-align:center; color:#ff5a5f; margin:0 0 15px 0;">Rate This Nude</h3>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:14px;">
-      <div>
-        <label>Boobs:</label><br>
-        <select id="r-breast" style="width:100%;padding:8px;margin:4px 0;">
-          <option value="flat">Flat / Prepubescent</option>
-          <option value="small">Small Perky</option>
-          <option value="medium">Medium Teardrop</option>
-          <option value="big">Big Full</option>
-          <option value="huge" selected>Mommy Milkers / Massive</option>
-        </select>
-      </div>
-      <div>
-        <label>Body Shape:</label><br>
-        <select id="r-body" style="width:100%;padding:8px;margin:4px 0;">
-          <option value="slim">Slim / Skinny</option>
-          <option value="athletic">Athletic / Toned</option>
-          <option value="curvy">Curvy / Hourglass</option>
-          <option value="thick">Thick / Juicy</option>
-          <option value="bbw">BBW / Voluptuous</option>
-        </select>
-      </div>
-      <div>
-        <label>Build:</label><br>
-        <select id="r-build" style="width:100%;padding:8px;margin:4px 0;">
-          <option value="skinny">Skinny</option>
-          <option value="chubby">Chubby / Soft</option>
-          <option value="fat">Fat / Plump</option>
-          <option value="athletic">Athletic</option>
-        </select>
-      </div>
-
-      <div><label>Fuckability (0-10)</label><br><input type="number" id="r-fuck" step="0.1" min="0" max="10" value="${item.ratings?.fuckability || 7.5}" style="width:100%;padding:8px;"></div>
-      <div><label>Cuteness (0-10)</label><br><input type="number" id="r-cute" step="0.1" min="0" max="10" value="${item.ratings?.cuteness || 7}" style="width:100%;padding:8px;"></div>
-      <div><label>Beauty (0-10)</label><br><input type="number" id="r-beauty" step="0.1" min="0" max="10" value="${item.ratings?.beauty || 7}" style="width:100%;padding:8px;"></div>
-      <div><label>Hotness (0-10)</label><br><input type="number" id="r-hot" step="0.1" min="0" max="10" value="${item.ratings?.hotness || 8}" style="width:100%;padding:8px;"></div>
-      <div><label>Sluttiness (0-10)</label><br><input type="number" id="r-slut" step="0.1" min="0" max="10" value="${item.ratings?.sluttiness || 6}" style="width:100%;padding:8px;"></div>
-      <div><label>Submissiveness (0-10)</label><br><input type="number" id="r-sub" step="0.1" min="0" max="10" value="${item.ratings?.submissiveness || 5}" style="width:100%;padding:8px;"></div>
-    </div>
-
-    <button id="save-rating-btn" style="margin-top:15px;width:100%;padding:12px;background:#e60023;border:none;color:white;font-weight:bold;border-radius:8px;">💾 Save Ratings & Tags</button>
-    <button id="add-emoji-btn" style="margin-top:8px;width:100%;padding:10px;background:#ff1493;border:none;color:white;font-weight:bold;border-radius:8px;">😈 Add Porn Emoji</button>
-    <button id="delete-item-btn" style="margin-top:8px;width:100%;padding:10px;background:#333;border:none;color:white;font-weight:bold;border-radius:8px;">🗑️ Delete This Image</button>
-  `;
-
-  document.querySelector(".lightbox-content").appendChild(panel);
-
-  document.getElementById("save-rating-btn").addEventListener("click", saveRatings);
-  document.getElementById("add-emoji-btn").addEventListener("click", () => showEmojiPicker(item));
-  document.getElementById("delete-item-btn").addEventListener("click", () => deleteSingleItem(item.public_id));
-}
-
-async function saveRatings() {
-  const ratings = {
-    breast: document.getElementById("r-breast").value,
-    bodyShape: document.getElementById("r-body").value,
-    build: document.getElementById("r-build").value,
-    fuckability: parseFloat(document.getElementById("r-fuck").value),
-    cuteness: parseFloat(document.getElementById("r-cute").value),
-    beauty: parseFloat(document.getElementById("r-beauty").value),
-    hotness: parseFloat(document.getElementById("r-hot").value),
-    sluttiness: parseFloat(document.getElementById("r-slut").value),
+    funness: parseFloat(document.getElementById("r-fun").value),
     submissiveness: parseFloat(document.getElementById("r-sub").value),
   };
 
@@ -1529,7 +985,7 @@ function loadSavedOverlays(item) {
 }
 // Tattoo Text with Sliders
 function addDraggableTextWithSliders(item) {
-  const txt = prompt("Tattoo text:", "SLUT");
+  const txt = prompt("Tattoo text:", "text");
   if (!txt) return;
 
   const el = createDraggableElement(txt.toUpperCase(), 32, item);
@@ -1558,7 +1014,7 @@ function addDraggableTextWithSliders(item) {
 
 // Snapchat Text
 function addSnapchatText(item) {
-  const txt = prompt("Snapchat text:", "I need to be fucked so bad");
+  const txt = prompt("Snapchat text:", "text");
   if (!txt) return;
   const el = createDraggableElement(txt, 26, item);
   el.style.background = "rgba(0,0,0,0.75)";
@@ -1572,7 +1028,7 @@ function addSnapchatText(item) {
 
 // Speech Bubble with size slider
 function addSpeechBubbleWithSlider(item) {
-  const txt = prompt("What does she say?", "Destroy my holes Daddy");
+  const txt = prompt("What does she say?", "text");
   if (!txt) return;
   const el = createDraggableElement(txt, 18, item);
   el.style.background = "rgba(255,255,255,0.95)";

@@ -472,18 +472,18 @@ app.post("/api/rate", async (req, res) => {
 
 function generateAutoTags(r, overall) {
   const tags = [];
-  if (r.breast === "huge") tags.push("mommy-milkers", "huge-tits");
-  if (r.breast === "big") tags.push("big-tits");
-  if (r.breast === "flat") tags.push("flat-chest");
+  if (r.chest === "huge") tags.push("chest", "huge-chest");
+  if (r.chest === "big") tags.push("big-chest");
+  if (r.chest === "flat") tags.push("flat-chest");
 
   if (r.bodyShape === "thick" || r.bodyShape === "bbw") tags.push("thick", "curvy", "bbw");
   if (r.build === "chubby") tags.push("chubby", "soft");
 
-  if (r.fuckability >= 9) tags.push("extremely-fuckable");
+  if (r.loveability >= 9) tags.push("extremely-loveable");
   if (r.cuteness >= 8.5) tags.push("adorable");
   if (r.beauty >= 9) tags.push("goddess");
   if (r.hotness >= 9) tags.push("smoking-hot");
-  if (r.sluttiness >= 8) tags.push("total-slut");
+  if (r.funness >= 8) tags.push("total-fun");
 
   if (overall >= 9) tags.push("god-tier");
   if (overall >= 8.5) tags.push("top-tier");
@@ -536,16 +536,16 @@ app.post("/api/overlay/save", async (req, res) => {
   }
 });
 
-// AUTO FILTHY CAPTION
+// AUTO  CAPTION
 app.post("/api/auto-caption", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
     const { public_id, gallery } = req.body;
-    const filthyCaptions = [
-      "Daddy's worthless cumrag", "Use me like a free use whore", "Break my holes", 
-      "Breed me raw", "Cumdump in training", "Mommy needs to be ruined"
+    const Captions = [
+      "caption text 1", "caption text 2", "caption text 3", 
+      "caption text 4", "caption text 5", "caption text 6"
     ];
-    const caption = filthyCaptions[Math.floor(Math.random() * filthyCaptions.length)];
+    const caption = Captions[Math.floor(Math.random() * Captions.length)];
 
     const state = await loadState();
     const target = gallery === "private" ? "private" : "family";
