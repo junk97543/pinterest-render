@@ -57,6 +57,7 @@ let wheelLock = false;
 let familyLogoTimer = null;
 let excludedTags = [];
 let currentTierListName = "My Tier List";
+let activeOverlay = null;
 
 initTheme();
 initHandlers();
@@ -430,9 +431,71 @@ function render() {
     div.className = "masonry-item";
 
     if (item.type === "image") {
+      const imgContainer = document.createElement("div");
+      imgContainer.style.position = "relative";
+      imgContainer.style.width = "100%";
+      imgContainer.style.height = "auto";
+      
       const img = document.createElement("img");
       img.src = item.url;
-      div.appendChild(img);
+      img.style.width = "100%";
+      img.style.height = "auto";
+      img.style.display = "block";
+      imgContainer.appendChild(img);
+
+      // Render saved overlays on gallery image
+      if (item.overlays && item.overlays.length) {
+        item.overlays.forEach(ov => {
+          if (ov.type === "text") {
+            const overlay = document.createElement("div");
+            overlay.style.position = "absolute";
+            overlay.style.top = ov.top;
+            overlay.style.left = ov.left;
+            overlay.style.fontSize = ov.fontSize || "16px";
+            overlay.style.color = ov.color || "#ff0000";
+            overlay.style.zIndex = "2";
+            overlay.style.userSelect = "none";
+            overlay.style.pointerEvents = "none";
+            overlay.style.opacity = ov.opacity || "1";
+            overlay.textContent = ov.content;
+            imgContainer.appendChild(overlay);
+          } else if (ov.type === "emoji") {
+            const overlay = document.createElement("div");
+            overlay.style.position = "absolute";
+            overlay.style.top = ov.top;
+            overlay.style.left = ov.left;
+            overlay.style.fontSize = ov.fontSize || "28px";
+            overlay.style.zIndex = "2";
+            overlay.style.userSelect = "none";
+            overlay.style.pointerEvents = "none";
+            overlay.style.opacity = ov.opacity || "1";
+            overlay.textContent = ov.content;
+            imgContainer.appendChild(overlay);
+          } else if (ov.type === "snapchat") {
+            const overlay = document.createElement("div");
+            overlay.style.position = "absolute";
+            overlay.style.top = ov.top;
+            overlay.style.left = "0";
+            overlay.style.width = "100%";
+            overlay.style.background = ov.background || "rgba(0,0,0,0.45)";
+            overlay.style.padding = ov.padding || "12px 20px";
+            overlay.style.textAlign = "center";
+            overlay.style.zIndex = "2";
+            overlay.style.pointerEvents = "none";
+            overlay.style.opacity = ov.opacity || "1";
+            
+            const textSpan = document.createElement("span");
+            textSpan.style.color = ov.color || "#fff";
+            textSpan.style.fontSize = ov.fontSize || "26px";
+            textSpan.style.fontWeight = "bold";
+            textSpan.textContent = ov.content;
+            overlay.appendChild(textSpan);
+            imgContainer.appendChild(overlay);
+          }
+        });
+      }
+
+      div.appendChild(imgContainer);
     } else {
       const vid = document.createElement("video");
       vid.src = item.url;
@@ -612,13 +675,19 @@ function showLightboxItem(index) {
   if (item.caption) lightboxCaption.classList.add("show");
 
   // Remove all old panels and overlays
-  document.querySelectorAll("#rating-panel, #toolbox-panel, #sliders-panel, .overlay-element, #emoji-picker, #tier-list-modal, #tier-viewer-modal, #album-viewer-modal").forEach(el => el.remove());
+  document.querySelectorAll("#rating-panel, #toolbox-panel, #sliders-panel, .lightbox-overlay, #emoji-picker, #tier-list-modal, #tier-viewer-modal, #album-viewer-modal").forEach(el => el.remove());
 
   if (isAdmin && currentGallery === "private") {
     createRatingPanel(item, index);
     createToolbox(item);
-    createSlidersPanel(item);  // NEW: Separate sliders panel on right
     loadSavedOverlays(item);
+  }
+
+  // Load saved overlays onto lightbox image
+  if (item.overlays && item.overlays.length) {
+    item.overlays.forEach(ov => {
+      createOverlayElement(ov, item);
+    });
   }
 
   if (item.type === "image") {
@@ -640,7 +709,8 @@ function closeLightbox() {
   lightboxVideo.src = "";
   lightboxCaption.classList.remove("show");
   lightboxCaption.textContent = "";
-  document.querySelectorAll("#rating-panel, #toolbox-panel, #sliders-panel, .overlay-element, #emoji-picker, #tier-list-modal, #tier-viewer-modal, #album-viewer-modal").forEach(el => el.remove());
+  document.querySelectorAll("#rating-panel, #toolbox-panel, #sliders-panel, .lightbox-overlay, #emoji-picker, #tier-list-modal, #tier-viewer-modal, #album-viewer-modal").forEach(el => el.remove());
+  activeOverlay = null;
 }
 
 function handleLightboxWheel(e) {
@@ -834,59 +904,78 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// ==================== RATING PANEL (LEFT SIDE) ====================
+// ==================== RATING PANEL (LEFT SIDE - COLLAPSIBLE) ====================
 function createRatingPanel(item, index) {
   const panel = document.createElement("div");
   panel.id = "rating-panel";
-  panel.style = `position:absolute; top:20px; left:20px; width:420px; background:rgba(0,0,0,0.95); padding:20px; border-radius:16px; color:#fff; z-index:1002; max-height:85vh; overflow-y:auto;`;
+  panel.style = `position:absolute; top:20px; left:20px; width:420px; background:rgba(0,0,0,0.95); border-radius:16px; color:#fff; z-index:1002; max-height:85vh; overflow-y:auto;`;
 
   panel.innerHTML = `
-    <h3 style="text-align:center; color:#ff5a5f; margin:0 0 15px 0;">Rate This Image</h3>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:14px;">
-      <div>
-        <label>chest:</label><br>
-        <select id="r-chest" style="width:100%;padding:8px;margin:4px 0;">
-          <option value="flat">Flat / veryflat</option>
-          <option value="small">Small</option>
-          <option value="medium">Medium</option>
-          <option value="big">Big</option>
-          <option value="huge" selected>huge / Massive</option>
-        </select>
-      </div>
-      <div>
-        <label>Body Shape:</label><br>
-        <select id="r-body" style="width:100%;padding:8px;margin:4px 0;">
-          <option value="slim">Slim / Skinny</option>
-          <option value="athletic">Athletic / Toned</option>
-          <option value="curvy">Curvy / Hourglass</option>
-          <option value="thick">Thick / Juicy</option>
-          <option value="bbw">BBW / Voluptuous</option>
-        </select>
-      </div>
-      <div>
-        <label>Build:</label><br>
-        <select id="r-build" style="width:100%;padding:8px;margin:4px 0;">
-          <option value="skinny">Skinny</option>
-          <option value="chubby">Chubby / Soft</option>
-          <option value="fat">Fat / Plump</option>
-          <option value="athletic">Athletic</option>
-        </select>
-      </div>
-
-      <div><label>loveability (0-10)</label><br><input type="number" id="r-fuck" step="0.1" min="0" max="10" value="${item.ratings?.loveability || 7.5}" style="width:100%;padding:8px;"></div>
-      <div><label>Cuteness (0-10)</label><br><input type="number" id="r-cute" step="0.1" min="0" max="10" value="${item.ratings?.cuteness || 7}" style="width:100%;padding:8px;"></div>
-      <div><label>Beauty (0-10)</label><br><input type="number" id="r-beauty" step="0.1" min="0" max="10" value="${item.ratings?.beauty || 7}" style="width:100%;padding:8px;"></div>
-      <div><label>Hotness (0-10)</label><br><input type="number" id="r-hot" step="0.1" min="0" max="10" value="${item.ratings?.hotness || 8}" style="width:100%;padding:8px;"></div>
-      <div><label>funness (0-10)</label><br><input type="number" id="r-fun" step="0.1" min="0" max="10" value="${item.ratings?.funness || 6}" style="width:100%;padding:8px;"></div>
-      <div><label>Submissiveness (0-10)</label><br><input type="number" id="r-sub" step="0.1" min="0" max="10" value="${item.ratings?.submissiveness || 5}" style="width:100%;padding:8px;"></div>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:10px;">
+      <h3 style="color:#ff5a5f; margin:0;">Rate This Image</h3>
+      <button id="collapse-rating-btn" style="background:#666; border:none; color:white; width:30px; height:30px; border-radius:50%; cursor:pointer;">−</button>
     </div>
+    <div id="rating-content">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:14px;">
+        <div>
+          <label>chest:</label><br>
+          <select id="r-chest" style="width:100%;padding:8px;margin:4px 0;">
+            <option value="flat">Flat / veryflat</option>
+            <option value="small">Small</option>
+            <option value="medium">Medium</option>
+            <option value="big">Big</option>
+            <option value="huge" selected>huge / Massive</option>
+          </select>
+        </div>
+        <div>
+          <label>Body Shape:</label><br>
+          <select id="r-body" style="width:100%;padding:8px;margin:4px 0;">
+            <option value="slim">Slim / Skinny</option>
+            <option value="athletic">Athletic / Toned</option>
+            <option value="curvy">Curvy / Hourglass</option>
+            <option value="thick">Thick / Juicy</option>
+            <option value="bbw">BBW / Voluptuous</option>
+          </select>
+        </div>
+        <div>
+          <label>Build:</label><br>
+          <select id="r-build" style="width:100%;padding:8px;margin:4px 0;">
+            <option value="skinny">Skinny</option>
+            <option value="chubby">Chubby / Soft</option>
+            <option value="fat">Fat / Plump</option>
+            <option value="athletic">Athletic</option>
+          </select>
+        </div>
 
-    <button id="save-rating-btn" style="margin-top:15px;width:100%;padding:12px;background:#e60023;border:none;color:white;font-weight:bold;border-radius:8px;">💾 Save Ratings & Tags</button>
-    <button id="add-emoji-btn" style="margin-top:8px;width:100%;padding:10px;background:#ff1493;border:none;color:white;font-weight:bold;border-radius:8px;">😈 Add Emoji</button>
-    <button id="delete-item-btn" style="margin-top:8px;width:100%;padding:10px;background:#333;border:none;color:white;font-weight:bold;border-radius:8px;">🗑️ Delete This Image</button>
+        <div><label>loveability (0-10)</label><br><input type="number" id="r-fuck" step="0.1" min="0" max="10" value="${item.ratings?.loveability || 7.5}" style="width:100%;padding:8px;"></div>
+        <div><label>Cuteness (0-10)</label><br><input type="number" id="r-cute" step="0.1" min="0" max="10" value="${item.ratings?.cuteness || 7}" style="width:100%;padding:8px;"></div>
+        <div><label>Beauty (0-10)</label><br><input type="number" id="r-beauty" step="0.1" min="0" max="10" value="${item.ratings?.beauty || 7}" style="width:100%;padding:8px;"></div>
+        <div><label>Hotness (0-10)</label><br><input type="number" id="r-hot" step="0.1" min="0" max="10" value="${item.ratings?.hotness || 8}" style="width:100%;padding:8px;"></div>
+        <div><label>funness (0-10)</label><br><input type="number" id="r-fun" step="0.1" min="0" max="10" value="${item.ratings?.funness || 6}" style="width:100%;padding:8px;"></div>
+        <div><label>Submissiveness (0-10)</label><br><input type="number" id="r-sub" step="0.1" min="0" max="10" value="${item.ratings?.submissiveness || 5}" style="width:100%;padding:8px;"></div>
+      </div>
+
+      <button id="save-rating-btn" style="margin-top:15px;width:100%;padding:12px;background:#e60023;border:none;color:white;font-weight:bold;border-radius:8px;">💾 Save Ratings & Tags</button>
+      <button id="add-emoji-btn" style="margin-top:8px;width:100%;padding:10px;background:#ff1493;border:none;color:white;font-weight:bold;border-radius:8px;">😈 Add Emoji</button>
+      <button id="delete-item-btn" style="margin-top:8px;width:100%;padding:10px;background:#333;border:none;color:white;font-weight:bold;border-radius:8px;">🗑️ Delete This Image</button>
+    </div>
   `;
 
   document.querySelector(".lightbox-content").appendChild(panel);
+
+  let isCollapsed = false;
+  panel.querySelector("#collapse-rating-btn").addEventListener("click", () => {
+    const content = panel.querySelector("#rating-content");
+    const btn = panel.querySelector("#collapse-rating-btn");
+    if (isCollapsed) {
+      content.style.display = "block";
+      btn.textContent = "−";
+    } else {
+      content.style.display = "none";
+      btn.textContent = "+";
+    }
+    isCollapsed = !isCollapsed;
+  });
 
   panel.querySelector("#save-rating-btn").addEventListener("click", saveRatings);
   panel.querySelector("#add-emoji-btn").addEventListener("click", () => showEmojiPickerWithMove(item));
@@ -939,22 +1028,22 @@ function showEmojiPickerWithMove(item) {
 }
 
 function addEmojiToImageWithMove(emoji, item) {
-  if (!item.emojis) item.emojis = [];
-  if (!item.emojis.includes(emoji)) item.emojis.push(emoji);
+  if (!item.overlays) item.overlays = [];
+  
+  const overlay = {
+    type: "emoji",
+    content: emoji,
+    top: "50%",
+    left: "50%",
+    fontSize: "42px",
+    opacity: "0.9"
+  };
+  item.overlays.push(overlay);
 
-  const overlay = document.createElement("div");
-  overlay.className = "overlay-element emoji-overlay";
-  overlay.style = `position:absolute; top:50%; left:50%; font-size:42px; pointer-events:none; z-index:1001; opacity:0.9; cursor:move; user-select:none;`;
-  overlay.textContent = emoji;
-  document.querySelector(".lightbox-content").appendChild(overlay);
+  createOverlayElement(overlay, item);
   
-  // Make emoji draggable
-  makeDraggable(overlay, item);
-  overlay.style.pointerEvents = "auto";
-  
-  setTimeout(() => {
-    overlay.style.opacity = "0.9";
-  }, 100);
+  // Save immediately
+  saveOverlaysToDB(item);
 }
 
 async function deleteSingleItem(public_id) {
@@ -976,133 +1065,89 @@ async function deleteSingleItem(public_id) {
   }
 }
 
-// ==================== TOOLBOX PANEL (RIGHT SIDE) ====================
+// ==================== TOOLBOX PANEL (RIGHT SIDE - COLLAPSIBLE) ====================
 function createToolbox(item) {
   const panel = document.createElement("div");
   panel.id = "toolbox-panel";
-  panel.style = `position:absolute; top:20px; right:20px; width:280px; background:rgba(0,0,0,0.95); padding:20px; border-radius:16px; color:#fff; z-index:1002;`;
+  panel.style = `position:absolute; top:20px; right:20px; width:280px; background:rgba(0,0,0,0.95); border-radius:16px; color:#fff; z-index:1002;`;
 
   panel.innerHTML = `
-    <h3 style="text-align:center; color:#ff5a5f; margin:0 0 15px 0;">🛠️ Toolbox</h3>
-    <button id="add-tattoo-btn" style="width:100%;padding:10px;margin:5px 0;background:#ff6b35;border:none;color:white;font-weight:bold;border-radius:8px;">📝 Tattoo Text</button>
-    <button id="add-snapchat-btn" style="width:100%;padding:10px;margin:5px 0;background:#fffc00;color:black;border:none;font-weight:bold;border-radius:8px;">📱 Snapchat Text</button>
-    <button id="add-speech-btn" style="width:100%;padding:10px;margin:5px 0;background:#ffffff;border:none;color:black;font-weight:bold;border-radius:8px;">💬 Speech Bubble</button>
-    <button id="add-tier-btn" style="width:100%;padding:10px;margin:5px 0;background:#4CAF50;border:none;color:white;font-weight:bold;border-radius:8px;">📊 Add to Tier List</button>
-    <button id="add-to-album-btn" style="width:100%;padding:10px;margin:5px 0;background:#2196F3;border:none;color:white;font-weight:bold;border-radius:8px;">📁 Add to Album</button>
-    <button id="save-overlays-btn" style="width:100%;padding:10px;margin:5px 0;background:#e60023;border:none;color:white;font-weight:bold;border-radius:8px;">💾 Save Overlays</button>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:10px;">
+      <h3 style="color:#ff5a5f; margin:0;">🛠️ Toolbox</h3>
+      <button id="collapse-toolbox-btn" style="background:#666; border:none; color:white; width:30px; height:30px; border-radius:50%; cursor:pointer;">−</button>
+    </div>
+    <div id="toolbox-content">
+      <button id="add-tattoo-btn" style="width:100%;padding:10px;margin:5px 0;background:#ff6b35;border:none;color:white;font-weight:bold;border-radius:8px;">📝 Tattoo Text</button>
+      <button id="add-snapchat-btn" style="width:100%;padding:10px;margin:5px 0;background:#fffc00;color:black;border:none;font-weight:bold;border-radius:8px;">📱 Snapchat Text</button>
+      <button id="add-speech-btn" style="width:100%;padding:10px;margin:5px 0;background:#ffffff;border:none;color:black;font-weight:bold;border-radius:8px;">💬 Speech Bubble</button>
+      <button id="add-tier-btn" style="width:100%;padding:10px;margin:5px 0;background:#4CAF50;border:none;color:white;font-weight:bold;border-radius:8px;">📊 Add to Tier List</button>
+      <button id="add-to-album-btn" style="width:100%;padding:10px;margin:5px 0;background:#2196F3;border:none;color:white;font-weight:bold;border-radius:8px;">📁 Add to Album</button>
+      <button id="auto-caption-btn" style="width:100%;padding:10px;margin:5px 0;background:#9C27B0;border:none;color:white;font-weight:bold;border-radius:8px;">✨ Auto Caption</button>
+      <button id="save-overlays-btn" style="width:100%;padding:10px;margin:5px 0;background:#e60023;border:none;color:white;font-weight:bold;border-radius:8px;">💾 Save Overlays</button>
+    </div>
   `;
 
   document.querySelector(".lightbox-content").appendChild(panel);
 
-  panel.querySelector("#add-tattoo-btn").addEventListener("click", () => addDraggableTextWithSliders(item));
+  let isCollapsed = false;
+  panel.querySelector("#collapse-toolbox-btn").addEventListener("click", () => {
+    const content = panel.querySelector("#toolbox-content");
+    const btn = panel.querySelector("#collapse-toolbox-btn");
+    if (isCollapsed) {
+      content.style.display = "block";
+      btn.textContent = "−";
+    } else {
+      content.style.display = "none";
+      btn.textContent = "+";
+    }
+    isCollapsed = !isCollapsed;
+  });
+
+  panel.querySelector("#add-tattoo-btn").addEventListener("click", () => addDraggableTextNoBox(item));
   panel.querySelector("#add-snapchat-btn").addEventListener("click", () => addSnapchatText(item));
   panel.querySelector("#add-speech-btn").addEventListener("click", () => addSpeechBubbleWithSlider(item));
   panel.querySelector("#add-tier-btn").addEventListener("click", () => openTierListMaker(item));
   panel.querySelector("#add-to-album-btn").addEventListener("click", () => addToAlbum(item));
-  panel.querySelector("#save-overlays-btn").addEventListener("click", () => saveCurrentOverlays(item));
+  panel.querySelector("#auto-caption-btn").addEventListener("click", () => autoCaption(item));
+  panel.querySelector("#save-overlays-btn").addEventListener("click", () => saveOverlaysToDB(item));
 }
 
-// ==================== SEPARATE SLIDERS PANEL (RIGHT SIDE, NOT ON IMAGE) ====================
-function createSlidersPanel(item) {
-  let slidersPanel = document.getElementById("sliders-panel");
-  if (slidersPanel) slidersPanel.remove();
+// ==================== OVERLAY SYSTEM (SAVED TO DB + VISIBLE ON GALLERY) ====================
+function createOverlayElement(ov, item) {
+  const overlay = document.createElement("div");
+  overlay.className = "lightbox-overlay";
+  overlay.style.position = "absolute";
+  overlay.style.top = ov.top;
+  overlay.style.left = ov.left;
+  overlay.style.fontSize = ov.fontSize || "16px";
+  overlay.style.color = ov.color || "#ff0000";
+  overlay.style.zIndex = "1003";
+  overlay.style.userSelect = "none";
+  overlay.style.cursor = "move";
+  overlay.style.opacity = ov.opacity || "1";
+  overlay.style.pointerEvents = "auto";
 
-  slidersPanel = document.createElement("div");
-  slidersPanel.id = "sliders-panel";
-  slidersPanel.style = `position:absolute; top:200px; right:20px; width:200px; background:rgba(0,0,0,0.85); padding:15px; border-radius:12px; z-index:1004; display:none;`;
+  if (ov.type === "text") {
+    overlay.textContent = ov.content;
+    overlay.style.background = "none";
+  } else if (ov.type === "emoji") {
+    overlay.textContent = ov.content;
+  } else if (ov.type === "snapchat") {
+    overlay.style.width = "100%";
+    overlay.style.background = ov.background || "rgba(0,0,0,0.45)";
+    overlay.style.padding = ov.padding || "12px 20px";
+    overlay.style.textAlign = "center";
 
-  slidersPanel.innerHTML = `
-    <h4 style="margin:0 0 10px 0; color:#ff5a5f;">Text Controls</h4>
-    <label style="font-size:12px;">Size:</label>
-    <input type="range" id="slider-size" min="12" max="80" value="32" style="width:100%; margin:5px 0;">
-    <label style="font-size:12px;">Color:</label>
-    <input type="color" id="slider-color" value="#ff0000" style="width:100%; margin:5px 0;">
-    <label style="font-size:12px;">Opacity:</label>
-    <input type="range" id="slider-opacity" min="0.3" max="1" step="0.05" value="1" style="width:100%; margin:5px 0;">
-    <button id="close-sliders-btn" style="width:100%;margin-top:10px;padding:8px;background:#666;border:none;color:white;border-radius:6px;">Close</button>
-  `;
+    const textSpan = document.createElement("span");
+    textSpan.style.color = ov.color || "#fff";
+    textSpan.style.fontSize = ov.fontSize || "26px";
+    textSpan.style.fontWeight = "bold";
+    textSpan.textContent = ov.content;
+    overlay.appendChild(textSpan);
+  }
 
-  document.querySelector(".lightbox-content").appendChild(slidersPanel);
-
-  slidersPanel.querySelector("#close-sliders-btn").addEventListener("click", () => {
-    slidersPanel.style.display = "none";
-  });
-
-  return slidersPanel;
-}
-
-function addDraggableTextWithSliders(item) {
-  const txt = prompt("Tattoo text:", "text");
-  if (!txt) return;
-
-  const el = createDraggableElementNoPanel(txt.toUpperCase(), 32, item);
-  el.style.fontFamily = "'Comic Sans MS', cursive";
-  el.style.color = "#ff0000";
-  el.style.textShadow = "2px 2px 4px #000";
-
-  // Show sliders panel
-  const slidersPanel = createSlidersPanel(item);
-  slidersPanel.style.display = "block";
-
-  const sizeSlider = slidersPanel.querySelector("#slider-size");
-  const colorPicker = slidersPanel.querySelector("#slider-color");
-  const opacitySlider = slidersPanel.querySelector("#slider-opacity");
-
-  sizeSlider.oninput = () => el.style.fontSize = sizeSlider.value + "px";
-  colorPicker.oninput = () => el.style.color = colorPicker.value;
-  opacitySlider.oninput = () => el.style.opacity = opacitySlider.value;
-}
-
-function addSnapchatText(item) {
-  const txt = prompt("Snapchat text:", "text");
-  if (!txt) return;
-
-  // Snapchat-style: transparent strip across entire image
-  const el = document.createElement("div");
-  el.className = "overlay-element snapchat-text";
-  el.style = `position:absolute; top:70%; left:0; width:100%; background:rgba(0,0,0,0.45); padding:12px 20px; text-align:center; z-index:1003; cursor:move; user-select:none;`;
-  
-  const textSpan = document.createElement("span");
-  textSpan.style = `color:white; font-size:26px; font-weight:bold;`;
-  textSpan.textContent = txt;
-  el.appendChild(textSpan);
-
-  document.querySelector(".lightbox-content").appendChild(el);
-  makeDraggable(el, item);
-  el.style.pointerEvents = "auto";
-}
-
-function addSpeechBubbleWithSlider(item) {
-  const txt = prompt("What does she say?", "text");
-  if (!txt) return;
-  const el = createDraggableElementNoPanel(txt, 18, item);
-  el.style.background = "rgba(255,255,255,0.95)";
-  el.style.color = "#000";
-  el.style.padding = "12px 18px";
-  el.style.borderRadius = "20px";
-  el.style.maxWidth = "260px";
-}
-
-function createDraggableElementNoPanel(text, fontSize, item) {
-  const el = document.createElement("div");
-  el.className = "overlay-element";
-  el.style.position = "absolute";
-  el.style.top = "30%";
-  el.style.left = "40%";
-  el.style.fontSize = fontSize + "px";
-  el.style.color = "#ff0000";
-  el.style.cursor = "move";
-  el.style.zIndex = "1003";
-  el.style.userSelect = "none";
-  el.style.background = "rgba(0,0,0,0.7)";
-  el.style.padding = "8px 16px";
-  el.style.borderRadius = "8px";
-  el.textContent = text;
-  el.style.pointerEvents = "auto";
-
-  makeDraggable(el, item);
-  document.querySelector(".lightbox-content").appendChild(el);
-  return el;
+  document.querySelector(".lightbox-content").appendChild(overlay);
+  makeDraggable(overlay, item);
 }
 
 function makeDraggable(el, item) {
@@ -1113,6 +1158,8 @@ function makeDraggable(el, item) {
     isDragging = true;
     startX = e.clientX;
     startY = e.clientY;
+    const container = document.querySelector(".lightbox-content");
+    const rect = container.getBoundingClientRect();
     startLeft = el.offsetLeft;
     startTop = el.offsetTop;
     el.style.cursor = "grabbing";
@@ -1131,22 +1178,21 @@ function makeDraggable(el, item) {
     if (isDragging) {
       isDragging = false;
       el.style.cursor = "move";
+      
+      // Update overlay position in item
+      if (activeOverlay && item.overlays) {
+        const ov = item.overlays.find(o => o === activeOverlay);
+        if (ov) {
+          ov.left = el.style.left;
+          ov.top = el.style.top;
+        }
+      }
     }
   });
 }
 
-async function saveCurrentOverlays(item) {
-  const overlays = [];
-  
-  document.querySelectorAll(".overlay-element").forEach(el => {
-    overlays.push({
-      content: el.textContent,
-      top: el.style.top,
-      left: el.style.left,
-      fontSize: el.style.fontSize,
-      color: el.style.color
-    });
-  });
+async function saveOverlaysToDB(item) {
+  const overlays = item.overlays || [];
 
   const res = await fetch("/api/overlay/save", {
     method: "POST",
@@ -1160,7 +1206,7 @@ async function saveCurrentOverlays(item) {
 
   const data = await res.json();
   if (data.success) {
-    alert("✅ Overlays saved!");
+    alert("✅ Overlays saved! They will show on gallery images.");
   } else {
     alert("Failed to save overlays");
   }
@@ -1169,20 +1215,106 @@ async function saveCurrentOverlays(item) {
 function loadSavedOverlays(item) {
   if (!item.overlays || !item.overlays.length) return;
   item.overlays.forEach(ov => {
-    const el = document.createElement("div");
-    el.className = "overlay-element";
-    el.style.position = "absolute";
-    el.style.top = ov.top;
-    el.style.left = ov.left;
-    el.style.fontSize = ov.fontSize || "28px";
-    el.style.color = ov.color || "#ff0000";
-    el.style.cursor = "move";
-    el.style.zIndex = "1003";
-    el.style.userSelect = "none";
-    el.style.pointerEvents = "auto";
-    el.textContent = ov.content;
-    document.querySelector(".lightbox-content").appendChild(el);
-    makeDraggable(el, item);
+    createOverlayElement(ov, item);
+  });
+}
+
+// No box behind tattoo text
+function addDraggableTextNoBox(item) {
+  const txt = prompt("Tattoo text:", "text");
+  if (!txt) return;
+
+  const overlay = {
+    type: "text",
+    content: txt,
+    top: "30%",
+    left: "40%",
+    fontSize: "32px",
+    color: "#ff0000",
+    opacity: "1"
+  };
+  
+  if (!item.overlays) item.overlays = [];
+  item.overlays.push(overlay);
+
+  createOverlayElement(overlay, item);
+  saveOverlaysToDB(item);
+}
+
+function addSnapchatText(item) {
+  const txt = prompt("Snapchat text:", "text");
+  if (!txt) return;
+
+  const overlay = {
+    type: "snapchat",
+    content: txt,
+    top: "70%",
+    left: "0",
+    fontSize: "26px",
+    color: "#fff",
+    background: "rgba(0,0,0,0.45)",
+    padding: "12px 20px",
+    opacity: "1"
+  };
+
+  if (!item.overlays) item.overlays = [];
+  item.overlays.push(overlay);
+
+  createOverlayElement(overlay, item);
+  saveOverlaysToDB(item);
+}
+
+function addSpeechBubbleWithSlider(item) {
+  const txt = prompt("What does she say?", "text");
+  if (!txt) return;
+
+  const overlay = {
+    type: "text",
+    content: txt,
+    top: "30%",
+    left: "40%",
+    fontSize: "18px",
+    color: "#000",
+    background: "rgba(255,255,255,0.95)",
+    padding: "12px 18px",
+    borderRadius: "20px",
+    maxWidth: "260px",
+    opacity: "1"
+  };
+
+  if (!item.overlays) item.overlays = [];
+  item.overlays.push(overlay);
+
+  const el = createOverlayElement(overlay, item);
+  el.style.background = overlay.background;
+  el.style.padding = overlay.padding;
+  el.style.borderRadius = overlay.borderRadius;
+  el.style.maxWidth = overlay.maxWidth;
+  
+  saveOverlaysToDB(item);
+}
+
+// Auto Caption with 20 random texts
+function autoCaption(item) {
+  const captions = [
+    "text 1", "text 2", "text 3", "text 4", "text 5",
+    "text 6", "text 7", "text 8", "text 9", "text 10",
+    "text 11", "text 12", "text 13", "text 14", "text 15",
+    "text 16", "text 17", "text 18", "text 19", "text 20"
+  ];
+  
+  const caption = captions[Math.floor(Math.random() * captions.length)];
+  item.caption = caption;
+
+  fetch("/api/caption", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ public_id: item.public_id, caption: caption, gallery: currentGallery })
+  }).then(res => res.json()).then(data => {
+    if (data.success) {
+      alert(`✅ Auto caption: ${caption}`);
+      loadMedia();
+    }
   });
 }
 
@@ -1413,8 +1545,8 @@ async function addToAlbum(item) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ 
       albumName: album.name, 
-      public_id: item.public_id,
-      gallery: currentGallery 
+      public_id: item.public_id
+                     gallery: currentGallery 
     })
   });
 
@@ -1448,12 +1580,17 @@ async function showAlbums() {
   if (album) {
     openAlbumViewer(album);
   } else {
-    await fetch("/api/albums/create", {
+    const createRes = await fetch("/api/albums/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: action })
     });
-    alert("Album created!");
+    const createData = await createRes.json();
+    if (createData.success) {
+      alert("Album created!");
+    } else {
+      alert("Failed to create: " + createData.error);
+    }
   }
 }
 
@@ -1465,33 +1602,43 @@ async function openAlbumViewer(album) {
   modal.id = "album-viewer-modal";
   modal.style = `position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.9); z-index:10003; display:flex; align-items:center; justify-content:center;`;
 
+  const gridDiv = document.createElement("div");
+  gridDiv.style = `display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:10px;`;
+  gridDiv.setAttribute("data-grid", "true");
+
   modal.innerHTML = `
     <div style="background:#111; padding:20px; border-radius:12px; width:90%; max-width:800px; color:white; max-height:90vh; overflow-y:auto;">
       <h2 style="text-align:center; margin-bottom:20px;">📁 ${album.name}</h2>
-      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:10px;">
     </div>
     <button id="close-album-btn" style="width:100%; padding:12px; margin-top:15px; background:#666; border:none; color:white; font-weight:bold; border-radius:8px;">Close</button>
   </div>`;
 
-  const grid = modal.querySelector("div[data-grid]") || modal.querySelector("div").querySelector("div");
+  const contentDiv = modal.querySelector("div:not([style*='grid'])");
   
   if (!album.items || !album.items.length) {
-    grid.innerHTML = `<p style="text-align:center; color:#666; grid-column:1/-1;">No items in this album.</p>`;
+    const empty = document.createElement("p");
+    empty.textContent = "No items in this album.";
+    empty.style = "text-align:center; color:#666; grid-column:1/-1;";
+    contentDiv.appendChild(empty);
   } else {
-    album.items.forEach(item => {
+    contentDiv.appendChild(gridDiv);
+    for (const item of album.items) {
+      // Fetch full item data
+      const res = await fetch(`/api/media/${item.public_id}`);
+      const data = await res.json();
+      if (!data.success || !data.item) continue;
+      
+      const fullItem = data.item;
+      
       const img = document.createElement("img");
-      img.src = item.url;
+      img.src = fullItem.url;
       img.style = `width:100%; height:100px; object-fit:cover; border-radius:8px; cursor:pointer;`;
       img.addEventListener("click", () => {
-        // Find full item and open lightbox
-        const fullItem = items.find(i => i.public_id === item.public_id);
-        if (fullItem) {
-          const idx = items.findIndex(i => i.public_id === item.public_id);
-          openLightbox(idx);
-        }
+        const idx = items.findIndex(i => i.public_id === item.public_id);
+        if (idx >= 0) openLightbox(idx);
       });
-      grid.appendChild(img);
-    });
+      gridDiv.appendChild(img);
+    }
   }
 
   modal.querySelector("#close-album-btn").addEventListener("click", () => modal.remove());
