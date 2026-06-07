@@ -611,11 +611,12 @@ function showLightboxItem(index) {
     lightboxVideo.play().catch(() => {});
   }
 
-  // Clear old overlays and panels
-  document.querySelectorAll(".overlay-element, #depravity-panel").forEach(el => el.remove());
+  // Clear old panels
+  document.querySelectorAll("#rating-panel, #depravity-panel, .overlay-element").forEach(el => el.remove());
 
   if (isAdmin && currentGallery === "private") {
-    createDepravityPanel(item);
+    createRatingPanel(item, index);     // LEFT SIDE
+    createDepravityPanel(item);         // RIGHT SIDE
   }
 }
 function closeLightbox() {
@@ -1098,4 +1099,78 @@ async function addToAlbum(public_id) {
     body: JSON.stringify({ name })
   });
   alert("Added to album!");
+}
+// ======================== LEFT: RATING PANEL (keep your existing) ========================
+function createRatingPanel(item, index) {
+  // Your existing createRatingPanel function (keep it as is)
+  // ... paste your current createRatingPanel here if needed ...
+}
+
+// ======================== RIGHT: DEPRIVITY TOOLS PANEL ========================
+function createDepravityPanel(item) {
+  const panel = document.createElement("div");
+  panel.id = "depravity-panel";
+  panel.style = `position:absolute; top:20px; right:20px; width:380px; background:rgba(0,0,0,0.95); padding:20px; border-radius:14px; color:#fff; z-index:1002; max-height:80vh; overflow-y:auto;`;
+
+  panel.innerHTML = `
+    <h3 style="text-align:center;color:#ff5a5f">🔥 Depravity Tools</h3>
+    <button id="emoji-btn" style="width:100%;padding:12px;margin:6px 0;background:#ff1493;border:none;color:white;border-radius:8px;">😈 Draggable Emoji</button>
+    <button id="text-btn" style="width:100%;padding:12px;margin:6px 0;background:#ff4500;border:none;color:white;border-radius:8px;">✍️ Tattoo Text</button>
+    <button id="snapchat-btn" style="width:100%;padding:12px;margin:6px 0;background:#00ff7f;border:none;color:black;border-radius:8px;">📱 Snapchat Text</button>
+    <button id="bubble-btn" style="width:100%;padding:12px;margin:6px 0;background:#8a2be2;border:none;color:white;border-radius:8px;">💬 Speech Bubble</button>
+    <button id="auto-caption-btn" style="width:100%;padding:12px;margin:6px 0;background:#e60023;border:none;color:white;border-radius:8px;">🤖 Auto Filthy Caption</button>
+    <button id="album-btn" style="width:100%;padding:12px;margin:6px 0;background:#32cd32;border:none;color:white;border-radius:8px;">📁 Add to Album</button>
+    <button id="tierlist-btn" style="width:100%;padding:12px;margin:6px 0;background:#00bfff;border:none;color:white;border-radius:8px;">🏆 Tier List Maker</button>
+    <button id="delete-btn" style="width:100%;padding:12px;margin:12px 0 0 0;background:#333;border:none;color:white;border-radius:8px;">🗑️ Delete Image</button>
+  `;
+
+  document.querySelector(".lightbox-content").appendChild(panel);
+
+  panel.querySelector("#emoji-btn").onclick = () => addDraggableEmoji(item);
+  panel.querySelector("#text-btn").onclick = () => addDraggableText(item);
+  panel.querySelector("#snapchat-btn").onclick = () => addSnapchatText(item);
+  panel.querySelector("#bubble-btn").onclick = () => addSpeechBubble(item);
+  panel.querySelector("#auto-caption-btn").onclick = () => autoDepravedCaption(item.public_id);
+  panel.querySelector("#album-btn").onclick = () => addToAlbum(item.public_id);
+  panel.querySelector("#tierlist-btn").onclick = () => alert("Tier List Maker coming soon!");
+  panel.querySelector("#delete-btn").onclick = () => deleteSingleItem(item.public_id);
+}
+
+// Draggable Emoji, Text, Snapchat Text, Bubble, etc. (add the functions from previous response)
+
+function addSnapchatText(item) {
+  const txt = prompt("Snapchat text:", "I need to be fucked so bad");
+  if (!txt) return;
+  const el = createDraggableElement(txt, 24, item);
+  el.style.background = "rgba(0,0,0,0.7)";
+  el.style.color = "white";
+  el.style.padding = "8px 20px";
+  el.style.borderRadius = "4px";
+  el.style.fontWeight = "bold";
+  el.style.textAlign = "center";
+  el.style.width = "80%";
+}
+
+async function addToAlbum(public_id) {
+  const name = prompt("Enter album name:");
+  if (!name) return;
+  await fetch("/api/albums/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name })
+  });
+  alert("Added to album!");
+}
+
+async function autoDepravedCaption(public_id) {
+  const res = await fetch("/api/auto-caption", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ public_id, gallery: currentGallery })
+  });
+  const data = await res.json();
+  if (data.success) {
+    alert("Filthy caption added!");
+    await loadMedia();
+  }
 }
