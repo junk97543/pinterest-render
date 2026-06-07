@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require("crypto");
 const { MongoClient } = require("mongodb");
 const session = require("express-session");
 const dotenv = require("dotenv");
-const cloudinary = require("cloudinary").v4;
+const cloudinary = require("cloudinary");
 
 dotenv.config();
 
@@ -80,16 +80,10 @@ const upload = multer({
 });
 
 // Cloudinary config
-const privateCloudinary = cloudinary.config({
+cloudinary.config({
   cloud_name: process.env.PRIVATE_CLOUDINARY_CLOUD_NAME,
   api_key: process.env.PRIVATE_CLOUDINARY_API_KEY,
   api_secret: process.env.PRIVATE_CLOUDINARY_API_SECRET
-});
-
-const familyCloudinary = cloudinary.config({
-  cloud_name: process.env.FAMILY_CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.FAMILY_CLOUDINARY_API_KEY,
-  api_secret: process.env.FAMILY_CLOUDINARY_API_SECRET
 });
 
 function isAdmin(req) {
@@ -160,7 +154,7 @@ async function saveState(state) {
   }
 }
 
-// AUTO LOAD FROM CLOUDINARY ON STARTUP
+// AUTO LOAD FROM CLOUDINARY ON FIRST REQUEST
 async function syncFromCloudinary() {
   try {
     console.log("Starting Cloudinary sync...");
@@ -780,12 +774,16 @@ app.get("/api/albums", async (req, res) => {
   }
 });
 
-// AUTO SYNC ON STARTUP
+// RUN SYNC ON FIRST REQUEST
+let syncDone = false;
 app.use(async (req, res, next) => {
-  try {
-    await syncFromCloudinary();
-  } catch (err) {
-    console.error("Auto sync error:", err);
+  if (!syncDone) {
+    syncDone = true;
+    try {
+      await syncFromCloudinary();
+    } catch (err) {
+      console.error("Auto sync error:", err);
+    }
   }
   next();
 });
