@@ -412,7 +412,6 @@ function getFilteredItems() {
 function render() {
   gallery.innerHTML = "";
   const displayItems = getFilteredItems();
-
   if (!displayItems.length) {
     gallery.innerHTML = "<p style='padding:20px;'>No matching images or videos.</p>";
     return;
@@ -439,6 +438,7 @@ function render() {
       div.appendChild(vid);
     }
 
+    // Tags
     const tagsWrap = document.createElement("div");
     tagsWrap.className = "media-tags";
     (item.tags || []).forEach(tag => {
@@ -462,36 +462,30 @@ function render() {
       div.appendChild(captionLine);
     }
 
+    // Actions
     const actions = document.createElement("div");
     actions.className = "media-actions";
 
     const tagBtn = document.createElement("button");
     tagBtn.className = "add-tag-btn";
     tagBtn.textContent = "Add Tag";
-    tagBtn.addEventListener("click", async e => {
-      e.stopPropagation();
-      await addTagToItem(item.public_id);
-    });
+    tagBtn.addEventListener("click", e => { e.stopPropagation(); addTagToItem(item.public_id); });
     actions.appendChild(tagBtn);
 
     if (isAdmin) {
       const capBtn = document.createElement("button");
       capBtn.className = "add-tag-btn";
       capBtn.textContent = "Edit Caption";
-      capBtn.addEventListener("click", async e => {
-        e.stopPropagation();
-        await editCaption(item.public_id);
-      });
+      capBtn.addEventListener("click", e => { e.stopPropagation(); editCaption(item.public_id); });
       actions.appendChild(capBtn);
     }
-
     div.appendChild(actions);
 
+    // Like button
     const likeDiv = document.createElement("div");
     likeDiv.className = "like-container";
     likeDiv.innerHTML = `<button class="like-btn">❤️ <span class="like-count">${item.likes || 0}</span></button>`;
     div.appendChild(likeDiv);
-
     likeDiv.querySelector(".like-btn").addEventListener("click", async e => {
       e.stopPropagation();
       const res = await fetch("/api/like", {
@@ -502,15 +496,20 @@ function render() {
       const data = await res.json();
       if (data.success) {
         e.currentTarget.querySelector(".like-count").textContent = data.likes;
-        await loadMedia();
       }
     });
 
-    div.addEventListener("click", () => openLightbox(originalIndex));
+    // FIXED CLICK TO OPEN LIGHTBOX
+    div.addEventListener("click", (e) => {
+      if (e.target.tagName === "BUTTON" || e.target.closest("button") || e.target.closest(".media-tag")) {
+        return;
+      }
+      openLightbox(originalIndex);
+    });
+
     gallery.appendChild(div);
   });
 }
-
 async function addTagToItem(publicId) {
   const tag = prompt("Enter a tag for this item:");
   if (!tag) return;
