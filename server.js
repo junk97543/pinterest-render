@@ -440,6 +440,7 @@ app.post("/api/chat", async (req, res) => {
 app.get("/", (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
+
 // ======================== RATING SYSTEM ========================
 app.post("/api/rate", async (req, res) => {
   try {
@@ -536,7 +537,7 @@ app.post("/api/overlay/save", async (req, res) => {
   }
 });
 
-// AUTO  CAPTION
+// AUTO CAPTION
 app.post("/api/auto-caption", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
@@ -559,6 +560,7 @@ app.post("/api/auto-caption", async (req, res) => {
     res.status(500).json({ success: false });
   }
 });
+
 // ======================== ALBUMS SYSTEM ========================
 app.get("/api/albums", async (req, res) => {
   try {
@@ -610,6 +612,50 @@ app.post("/api/albums/add", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: "Failed to add to album" });
+  }
+});
+
+// ======================== SYNC GALLERY (Cloudinary) ========================
+app.post("/api/sync-gallery", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
+    const { gallery } = req.body || {};
+    const target = gallery === "private" ? "private" : "family";
+    
+    configureCloudinary(target);
+    
+    const database = await connectDB();
+    const cloudinaryResult = await cloudinary.uploader.search()
+      .folder(target === "private" ? "private_gallery" : "family_gallery")
+      .resource_type(target === "private" ? "video" : "image")
+      .execute();
+    
+    const state = await loadState();
+    const existingIds = new Set(state[target].map(item => item.public_id));
+    
+    if (cloudinaryResult.resources) {
+      cloudinaryResult.resources.forEach(resource => {
+        if (!existingIds.has(resource.public_id)) {
+          const isVideo = resource.resource_type === "video";
+          state[target].push({
+            public_id: resource.public_id,
+            url: resource.secure_url,
+            type: isVideo ? "video" : "image",
+            likes: 0,
+            tags: [],
+            caption: "",
+            createdAt: resource.created_at,
+            gallery: target
+          });
+        }
+      });
+    }
+    
+    await saveState(state);
+    res.json({ success: true, synced: cloudinaryResult.resources?.length || 0 });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Sync failed" });
   }
 });
 
