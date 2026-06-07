@@ -6,6 +6,7 @@ const { v4: uuidv4 } = require("crypto");
 const { MongoClient } = require("mongodb");
 const session = require("express-session");
 const dotenv = require("dotenv");
+const cloudinary = require("cloudinary").v4;
 
 dotenv.config();
 
@@ -14,6 +15,7 @@ const uploadDir = path.join(process.cwd(), "uploads");
 const dbUrl = process.env.MONGODB_URI || "mongodb://localhost:27017";
 const dbName = process.env.DB_NAME || "gallery";
 
+// Session middleware
 app.use(session({
   secret: "gallery-secret-key",
   resave: false,
@@ -25,7 +27,7 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// MongoDB client
+// MongoDB
 let mongoClient;
 let db;
 let collection;
@@ -52,6 +54,7 @@ app.use(async (req, res, next) => {
 app.use(express.json());
 app.use(express.static("public"));
 
+// Multer
 const storage = multer.diskStorage({
   destination: uploadDir,
   filename: (req, file, cb) => {
@@ -74,6 +77,19 @@ const upload = multer({
       cb(new Error("Unsupported file type"));
     }
   }
+});
+
+// Cloudinary config
+const privateCloudinary = cloudinary.config({
+  cloud_name: process.env.PRIVATE_CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.PRIVATE_CLOUDINARY_API_KEY,
+  api_secret: process.env.PRIVATE_CLOUDINARY_API_SECRET
+});
+
+const familyCloudinary = cloudinary.config({
+  cloud_name: process.env.FAMILY_CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.FAMILY_CLOUDINARY_API_KEY,
+  api_secret: process.env.FAMILY_CLOUDINARY_API_SECRET
 });
 
 function isAdmin(req) {
@@ -144,7 +160,97 @@ async function saveState(state) {
   }
 }
 
-// FIXED: Uses ADMIN_PASSWORD from .env
+// AUTO LOAD FROM CLOUDINARY ON STARTUP
+async function syncFromCloudinary() {
+  try {
+    console.log("Starting Cloudinary sync...");
+    
+    const state = await loadState();
+    const existingPrivateIds = new Set(state.private.map(i => i.public_id));
+    const existingFamilyIds = new Set(state.family.map(i => i.public_id));
+    
+    // Sync private gallery
+    const privateCloudName = process.env.PRIVATE_CLOUDINARY_CLOUD_NAME;
+    if (privateCloudName) {
+      const privateResult = await cloudinary.search()
+        .expression(`folder:${privateCloudName}/private`)
+        .max_results(1000)
+        .execute();
+      
+      if (privateResult && privateResult.resources) {
+        for (const resource of privateResult.resources) {
+          if (!existingPrivateIds.has(resource.public_id)) {
+            const item = {
+              public_id: resource.public_id,
+              url: resource.url,
+              type: resource.resource_type === "image" ? "image" : "video",
+              gallery: "private",
+              mimetype: resource.format === "jpg" || resource.format === "png" ? `image/${resource.format}` : `video/${resource.format}`,
+              caption: resource.metadata?.caption || "",
+              tags: resource.metadata?.tags || [],
+              likes: 0,
+              createdAt: new Date(resource.created_at),
+              overlays: []
+            };
+            await collection.insertOne(item);
+            console.log(`Added private item: ${resource.public_id}`);
+          }
+        }
+      }
+    }
+    
+    // Sync family gallery
+    const familyCloudName = process.env.FAMILY_CLOUDINARY_CLOUD_NAME;
+    if (familyCloudName) {
+      const familyResult = await cloudinary.search()
+        .expression(`folder:${familyCloudName}/family`)
+        .max_results(1000)
+        .execute();
+      
+      if (familyResult && familyResult.resources) {
+        for (const resource of familyResult.resources) {
+          if (!existingFamilyIds.has(resource.public_id)) {
+            const item = {
+              public_id: resource.public_id,
+              url: resource.url,
+              type: resource.resource_type === "image" ? "image" : "video",
+              gallery: "family",
+              mimetype: resource.format === "jpg" || resource.format === "png" ? `image/${resource.format}` : `video/${resource.format}`,
+              caption: resource.metadata?.caption || "",
+              tags: resource.metadata?.tags || [],
+              likes: 0,
+              createdAt: new Date(resource.created_at),
+              overlays: []
+            };
+            await collection.insertOne(item);
+            console.log(`Added family item: ${resource.public_id}`);
+          }
+        }
+      }
+    }
+    
+    console.log("Cloudinary sync completed");
+  } catch (err) {
+    console.error("Cloudinary sync error:", err);
+  }
+}
+
+// SYNC ROUTE
+app.post("/api/sync-cloudinary", async (req, res) => {
+  try {
+    if (!isAdmin(req)) {
+      return res.status(401).json({ error: "Admin only" });
+    }
+    
+    await syncFromCloudinary();
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Sync failed" });
+  }
+});
+
+// AUTH ROUTES
 app.post("/api/admin-login", async (req, res) => {
   try {
     const { password } = req.body;
@@ -166,7 +272,6 @@ app.post("/api/admin-logout", async (req, res) => {
   res.json({ success: true });
 });
 
-// FIXED: Uses FAMILY_GALLERY_CODE from .env
 app.post("/api/family-unlock", async (req, res) => {
   try {
     const { code } = req.body;
@@ -214,6 +319,7 @@ app.get("/api/status", async (req, res) => {
   }
 });
 
+// EXCLUDED TAGS
 app.get("/api/excluded-tags", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
@@ -279,6 +385,7 @@ app.post("/api/excluded-tags/remove", async (req, res) => {
   }
 });
 
+// UPLOAD
 app.post("/upload", upload.array("files", 1000), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
@@ -336,6 +443,7 @@ app.post("/upload", upload.array("files", 1000), async (req, res) => {
   }
 });
 
+// MEDIA
 app.get("/media", async (req, res) => {
   try {
     const sort = req.query.sort || "random";
@@ -384,6 +492,7 @@ app.get("/api/media/:public_id", async (req, res) => {
   }
 });
 
+// LIKE
 app.post("/api/like", async (req, res) => {
   try {
     const { public_id, gallery } = req.body;
@@ -411,6 +520,7 @@ app.post("/api/like", async (req, res) => {
   }
 });
 
+// TAG
 app.post("/api/tag", async (req, res) => {
   try {
     const { public_id, tag, gallery } = req.body;
@@ -442,6 +552,7 @@ app.post("/api/tag", async (req, res) => {
   }
 });
 
+// CAPTION
 app.post("/api/caption", async (req, res) => {
   try {
     const { public_id, caption, gallery } = req.body;
@@ -468,6 +579,7 @@ app.post("/api/caption", async (req, res) => {
   }
 });
 
+// RATE
 app.post("/api/rate", async (req, res) => {
   try {
     const { public_id, ratings, gallery } = req.body;
@@ -502,6 +614,7 @@ app.post("/api/rate", async (req, res) => {
   }
 });
 
+// OVERLAY
 app.post("/api/overlay/save", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
@@ -530,6 +643,7 @@ app.post("/api/overlay/save", async (req, res) => {
   }
 });
 
+// DELETE
 app.post("/delete-all", async (req, res) => {
   try {
     const { gallery } = req.body;
@@ -566,6 +680,7 @@ app.post("/api/delete-item", async (req, res) => {
   }
 });
 
+// TIER LISTS
 app.post("/api/tierlists/save", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
@@ -601,6 +716,7 @@ app.get("/api/tierlists", async (req, res) => {
   }
 });
 
+// ALBUMS
 app.post("/api/albums/create", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
@@ -662,6 +778,16 @@ app.get("/api/albums", async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "Failed" });
   }
+});
+
+// AUTO SYNC ON STARTUP
+app.use(async (req, res, next) => {
+  try {
+    await syncFromCloudinary();
+  } catch (err) {
+    console.error("Auto sync error:", err);
+  }
+  next();
 });
 
 const PORT = process.env.PORT || 3000;
