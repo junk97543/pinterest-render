@@ -5,10 +5,13 @@ const fs = require("fs");
 const { v4: uuidv4 } = require("crypto");
 const { MongoClient } = require("mongodb");
 const session = require("express-session");
+const dotenv = require("dotenv");
+
+dotenv.config();
 
 const app = express();
 const uploadDir = path.join(process.cwd(), "uploads");
-const dbUrl = process.env.DB_URL || "mongodb://localhost:27017";
+const dbUrl = process.env.MONGODB_URI || "mongodb://localhost:27017";
 const dbName = process.env.DB_NAME || "gallery";
 
 app.use(session({
@@ -36,7 +39,6 @@ async function initDb() {
   }
 }
 
-// Ensure MongoDB is connected
 app.use(async (req, res, next) => {
   try {
     await initDb();
@@ -50,7 +52,6 @@ app.use(async (req, res, next) => {
 app.use(express.json());
 app.use(express.static("public"));
 
-// Multer for file uploads
 const storage = multer.diskStorage({
   destination: uploadDir,
   filename: (req, file, cb) => {
@@ -75,12 +76,10 @@ const upload = multer({
   }
 });
 
-// Admin check
 function isAdmin(req) {
   return req.session?.isAdmin === true;
 }
 
-// Session-based gallery access
 function canAccessGallery(req, gallery) {
   if (gallery === "family") {
     return req.session?.familyAccess === true || isAdmin(req);
@@ -91,7 +90,6 @@ function canAccessGallery(req, gallery) {
   return false;
 }
 
-// Load state from MongoDB
 async function loadState() {
   const state = {
     family: [],
@@ -120,7 +118,6 @@ async function loadState() {
   return state;
 }
 
-// Save state to MongoDB
 async function saveState(state) {
   try {
     await collection.deleteMany({});
@@ -147,11 +144,12 @@ async function saveState(state) {
   }
 }
 
-// Auth routes
+// FIXED: Uses ADMIN_PASSWORD from .env
 app.post("/api/admin-login", async (req, res) => {
   try {
     const { password } = req.body;
-    if (password === "admin123") {
+    const adminPassword = process.env.ADMIN_PASSWORD || "Maymay499";
+    if (password === adminPassword) {
       req.session.isAdmin = true;
       res.json({ success: true });
     } else {
@@ -168,10 +166,12 @@ app.post("/api/admin-logout", async (req, res) => {
   res.json({ success: true });
 });
 
+// FIXED: Uses FAMILY_GALLERY_CODE from .env
 app.post("/api/family-unlock", async (req, res) => {
   try {
     const { code } = req.body;
-    if (code && code.trim().toLowerCase() === "family123".toLowerCase()) {
+    const familyCode = process.env.FAMILY_GALLERY_CODE || "Dwinellfam";
+    if (code && code.trim() === familyCode) {
       req.session.familyAccess = true;
       res.json({ success: true });
     } else {
@@ -214,7 +214,6 @@ app.get("/api/status", async (req, res) => {
   }
 });
 
-// Get excluded tags
 app.get("/api/excluded-tags", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
@@ -234,7 +233,6 @@ app.get("/api/excluded-tags", async (req, res) => {
   }
 });
 
-// Add excluded tag
 app.post("/api/excluded-tags/add", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
@@ -258,7 +256,6 @@ app.post("/api/excluded-tags/add", async (req, res) => {
   }
 });
 
-// Remove excluded tag
 app.post("/api/excluded-tags/remove", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
@@ -282,7 +279,6 @@ app.post("/api/excluded-tags/remove", async (req, res) => {
   }
 });
 
-// Upload route
 app.post("/upload", upload.array("files", 1000), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
@@ -340,7 +336,6 @@ app.post("/upload", upload.array("files", 1000), async (req, res) => {
   }
 });
 
-// Media route
 app.get("/media", async (req, res) => {
   try {
     const sort = req.query.sort || "random";
@@ -366,7 +361,6 @@ app.get("/media", async (req, res) => {
   }
 });
 
-// Get single media item
 app.get("/api/media/:public_id", async (req, res) => {
   try {
     const { public_id } = req.params;
@@ -390,7 +384,6 @@ app.get("/api/media/:public_id", async (req, res) => {
   }
 });
 
-// Like route
 app.post("/api/like", async (req, res) => {
   try {
     const { public_id, gallery } = req.body;
@@ -418,7 +411,6 @@ app.post("/api/like", async (req, res) => {
   }
 });
 
-// Tag route
 app.post("/api/tag", async (req, res) => {
   try {
     const { public_id, tag, gallery } = req.body;
@@ -450,7 +442,6 @@ app.post("/api/tag", async (req, res) => {
   }
 });
 
-// Caption route
 app.post("/api/caption", async (req, res) => {
   try {
     const { public_id, caption, gallery } = req.body;
@@ -477,7 +468,6 @@ app.post("/api/caption", async (req, res) => {
   }
 });
 
-// Rate route
 app.post("/api/rate", async (req, res) => {
   try {
     const { public_id, ratings, gallery } = req.body;
@@ -512,7 +502,6 @@ app.post("/api/rate", async (req, res) => {
   }
 });
 
-// Save overlays
 app.post("/api/overlay/save", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
@@ -541,7 +530,6 @@ app.post("/api/overlay/save", async (req, res) => {
   }
 });
 
-// Delete route
 app.post("/delete-all", async (req, res) => {
   try {
     const { gallery } = req.body;
@@ -559,12 +547,12 @@ app.post("/delete-all", async (req, res) => {
   }
 });
 
-// Delete single item
 app.post("/api/delete-item", async (req, res) => {
   try {
     const { public_id, gallery, password } = req.body;
     
-    if (password !== "admin123") {
+    const adminPassword = process.env.ADMIN_PASSWORD || "Maymay499";
+    if (password !== adminPassword) {
       return res.status(401).json({ error: "Wrong password" });
     }
 
@@ -578,7 +566,6 @@ app.post("/api/delete-item", async (req, res) => {
   }
 });
 
-// Tier lists
 app.post("/api/tierlists/save", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
@@ -614,7 +601,6 @@ app.get("/api/tierlists", async (req, res) => {
   }
 });
 
-// Albums
 app.post("/api/albums/create", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
@@ -678,7 +664,6 @@ app.get("/api/albums", async (req, res) => {
   }
 });
 
-// Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
