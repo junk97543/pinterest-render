@@ -230,13 +230,24 @@ function setSortActive(btn) {
 
 async function unlockFamily() {
   const code = familyCodeInput.value.trim();
-  if (!code) return;
+  if (!code) {
+    gateMessage.textContent = "Please enter the code.";
+    return;
+  }
+  
+  console.log("Sending code:", code); // Debug log
+  
   const res = await fetch("/api/family-unlock", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code })
+    body: JSON.stringify({ code: code })
   });
+  
+  console.log("Response status:", res.status); // Debug log
+  
   const data = await res.json();
+  console.log("Response data:", data); // Debug log
+  
   if (data.success) {
     familyAccess = true;
     currentGallery = "family";
@@ -245,7 +256,9 @@ async function unlockFamily() {
     sortButtons.style.display = "flex";
     await refreshStatus();
     await loadMedia();
-  } else gateMessage.textContent = "Wrong code. Try again.";
+  } else {
+    gateMessage.textContent = "Wrong code. Try again.";
+  }
 }
 
 async function refreshStatus() {
