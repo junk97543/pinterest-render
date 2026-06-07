@@ -452,9 +452,10 @@ app.post("/api/rate", async (req, res) => {
     if (!item) return res.status(404).json({ success: false, error: "Media not found" });
 
     item.ratings = ratings || {};
+    
     const numeric = Object.values(item.ratings).filter(v => typeof v === "number");
     if (numeric.length) {
-      item.overallRating = parseFloat((numeric.reduce((a,b)=>a+b,0) / numeric.length).toFixed(2));
+      item.overallRating = parseFloat((numeric.reduce((a,b)=>a+b,0)/numeric.length).toFixed(2));
     }
 
     const autoTags = generateAutoTags(item.ratings, item.overallRating);
@@ -474,19 +475,22 @@ function generateAutoTags(r, overall) {
   if (r.breast === "huge") tags.push("mommy-milkers", "huge-tits");
   if (r.breast === "big") tags.push("big-tits");
   if (r.breast === "flat") tags.push("flat-chest");
+
   if (r.bodyShape === "thick" || r.bodyShape === "bbw") tags.push("thick", "curvy", "bbw");
   if (r.build === "chubby") tags.push("chubby", "soft");
+
   if (r.fuckability >= 9) tags.push("extremely-fuckable");
   if (r.cuteness >= 8.5) tags.push("adorable");
   if (r.beauty >= 9) tags.push("goddess");
   if (r.hotness >= 9) tags.push("smoking-hot");
   if (r.sluttiness >= 8) tags.push("total-slut");
+
   if (overall >= 9) tags.push("god-tier");
   if (overall >= 8.5) tags.push("top-tier");
   return tags;
 }
 
-// SINGLE DELETE
+// Single Delete
 app.post("/api/delete-item", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });

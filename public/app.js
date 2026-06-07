@@ -627,6 +627,7 @@ function showLightboxItem(index) {
     createDepravityPanel(item);         // RIGHT SIDE - Tools
   }
 }
+
 function closeLightbox() {
   lightbox.classList.remove("active");
   lightboxImg.src = "";
@@ -1370,5 +1371,140 @@ async function showAlbums() {
       body: JSON.stringify({ name: newName.trim() })
     });
     alert("Album created!");
+  }
+}
+function createRatingPanel(item, index) {
+  const panel = document.createElement("div");
+  panel.id = "rating-panel";
+  panel.style = `position:absolute; top:20px; left:20px; width:420px; background:rgba(0,0,0,0.95); padding:20px; border-radius:16px; color:#fff; z-index:1002; max-height:85vh; overflow-y:auto;`;
+
+  panel.innerHTML = `
+    <h3 style="text-align:center; color:#ff5a5f; margin:0 0 15px 0;">Rate This Nude</h3>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:14px;">
+      <div>
+        <label>Boobs:</label><br>
+        <select id="r-breast" style="width:100%;padding:8px;margin:4px 0;">
+          <option value="flat">Flat / Prepubescent</option>
+          <option value="small">Small Perky</option>
+          <option value="medium">Medium Teardrop</option>
+          <option value="big">Big Full</option>
+          <option value="huge" selected>Mommy Milkers / Massive</option>
+        </select>
+      </div>
+      <div>
+        <label>Body Shape:</label><br>
+        <select id="r-body" style="width:100%;padding:8px;margin:4px 0;">
+          <option value="slim">Slim / Skinny</option>
+          <option value="athletic">Athletic / Toned</option>
+          <option value="curvy">Curvy / Hourglass</option>
+          <option value="thick">Thick / Juicy</option>
+          <option value="bbw">BBW / Voluptuous</option>
+        </select>
+      </div>
+      <div>
+        <label>Build:</label><br>
+        <select id="r-build" style="width:100%;padding:8px;margin:4px 0;">
+          <option value="skinny">Skinny</option>
+          <option value="chubby">Chubby / Soft</option>
+          <option value="fat">Fat / Plump</option>
+          <option value="athletic">Athletic</option>
+        </select>
+      </div>
+
+      <div><label>Fuckability (0-10)</label><br><input type="number" id="r-fuck" step="0.1" min="0" max="10" value="${item.ratings?.fuckability || 7.5}" style="width:100%;padding:8px;"></div>
+      <div><label>Cuteness (0-10)</label><br><input type="number" id="r-cute" step="0.1" min="0" max="10" value="${item.ratings?.cuteness || 7}" style="width:100%;padding:8px;"></div>
+      <div><label>Beauty (0-10)</label><br><input type="number" id="r-beauty" step="0.1" min="0" max="10" value="${item.ratings?.beauty || 7}" style="width:100%;padding:8px;"></div>
+      <div><label>Hotness (0-10)</label><br><input type="number" id="r-hot" step="0.1" min="0" max="10" value="${item.ratings?.hotness || 8}" style="width:100%;padding:8px;"></div>
+      <div><label>Sluttiness (0-10)</label><br><input type="number" id="r-slut" step="0.1" min="0" max="10" value="${item.ratings?.sluttiness || 6}" style="width:100%;padding:8px;"></div>
+      <div><label>Submissiveness (0-10)</label><br><input type="number" id="r-sub" step="0.1" min="0" max="10" value="${item.ratings?.submissiveness || 5}" style="width:100%;padding:8px;"></div>
+    </div>
+
+    <button id="save-rating-btn" style="margin-top:15px;width:100%;padding:12px;background:#e60023;border:none;color:white;font-weight:bold;border-radius:8px;">💾 Save Ratings & Tags</button>
+    <button id="add-emoji-btn" style="margin-top:8px;width:100%;padding:10px;background:#ff1493;border:none;color:white;font-weight:bold;border-radius:8px;">😈 Add Porn Emoji</button>
+    <button id="delete-item-btn" style="margin-top:8px;width:100%;padding:10px;background:#333;border:none;color:white;font-weight:bold;border-radius:8px;">🗑️ Delete This Image</button>
+  `;
+
+  document.querySelector(".lightbox-content").appendChild(panel);
+
+  document.getElementById("save-rating-btn").addEventListener("click", saveRatings);
+  document.getElementById("add-emoji-btn").addEventListener("click", () => showEmojiPicker(item));
+  document.getElementById("delete-item-btn").addEventListener("click", () => deleteSingleItem(item.public_id));
+}
+
+async function saveRatings() {
+  const ratings = {
+    breast: document.getElementById("r-breast").value,
+    bodyShape: document.getElementById("r-body").value,
+    build: document.getElementById("r-build").value,
+    fuckability: parseFloat(document.getElementById("r-fuck").value),
+    cuteness: parseFloat(document.getElementById("r-cute").value),
+    beauty: parseFloat(document.getElementById("r-beauty").value),
+    hotness: parseFloat(document.getElementById("r-hot").value),
+    sluttiness: parseFloat(document.getElementById("r-slut").value),
+    submissiveness: parseFloat(document.getElementById("r-sub").value),
+  };
+
+  const res = await fetch("/api/rate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ public_id: items[lightboxIndex].public_id, gallery: currentGallery, ratings })
+  });
+  const data = await res.json();
+  if (data.success) {
+    alert(`✅ Saved! Overall Rating: ${data.overallRating}`);
+    await loadMedia();
+  }
+}
+
+function showEmojiPicker(item) {
+  const emojis = ["🍆", "💦", "😈", "🍑", "🔥", "🥵", "💋", "🍼", "😩", "🤤", "👅", "🍒"];
+  let picker = document.getElementById("emoji-picker");
+  if (picker) picker.remove();
+
+  picker = document.createElement("div");
+  picker.id = "emoji-picker";
+  picker.style = `position:absolute; top:20px; right:20px; background:rgba(0,0,0,0.95); padding:15px; border-radius:12px; z-index:1003; display:flex; flex-wrap:wrap; gap:8px; width:280px;`;
+
+  emojis.forEach(emo => {
+    const btn = document.createElement("button");
+    btn.textContent = emo;
+    btn.style = "font-size:28px; background:none; border:none; cursor:pointer; padding:8px;";
+    btn.addEventListener("click", () => addEmojiToImage(emo, item));
+    picker.appendChild(btn);
+  });
+
+  document.querySelector(".lightbox-content").appendChild(picker);
+}
+
+function addEmojiToImage(emoji, item) {
+  if (!item.emojis) item.emojis = [];
+  if (!item.emojis.includes(emoji)) item.emojis.push(emoji);
+
+  // Visual overlay (you can improve positioning later)
+  const overlay = document.createElement("div");
+  overlay.style = `position:absolute; top:${Math.random()*60 + 20}%; left:${Math.random()*60 + 20}%; font-size:42px; pointer-events:none; z-index:1001; opacity:0.9;`;
+  overlay.textContent = emoji;
+  document.querySelector(".lightbox-content").appendChild(overlay);
+
+  setTimeout(() => overlay.remove(), 8000);
+}
+
+// Single Delete
+async function deleteSingleItem(public_id) {
+  const password = prompt("Enter admin password to delete this image:");
+  if (!password) return;
+
+  const res = await fetch("/api/delete-item", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ public_id, gallery: currentGallery, password })
+  });
+  const data = await res.json();
+  if (data.success) {
+    alert("Image deleted");
+    closeLightbox();
+    await loadMedia();
+  } else {
+    alert(data.error || "Delete failed");
   }
 }
