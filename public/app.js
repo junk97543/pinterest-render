@@ -623,8 +623,8 @@ function showLightboxItem(index) {
   document.querySelectorAll("#rating-panel, #depravity-panel, .overlay-element").forEach(el => el.remove());
 
   if (isAdmin && currentGallery === "private") {
-    createRatingPanel(item, index);   // LEFT SIDE - Rating
-    createDepravityPanel(item);       // RIGHT SIDE - Depravity Tools
+    createRatingPanel(item, index);     // LEFT SIDE - Rating
+    createDepravityPanel(item);         // RIGHT SIDE - Tools
   }
 }
 function closeLightbox() {
@@ -1125,7 +1125,7 @@ function createRatingPanel(item, index) {
   // ... paste your current createRatingPanel here if needed ...
 }
 
-// ======================== RIGHT: DEPRIVITY TOOLS PANEL ========================
+// ======================== RIGHT SIDE: DEPRIVITY TOOLS ========================
 function createDepravityPanel(item) {
   const panel = document.createElement("div");
   panel.id = "depravity-panel";
@@ -1135,7 +1135,6 @@ function createDepravityPanel(item) {
     <h3 style="text-align:center;color:#ff5a5f">🔥 Depravity Tools</h3>
     <button id="emoji-btn" style="width:100%;padding:12px;margin:6px 0;background:#ff1493;border:none;color:white;border-radius:8px;">😈 Draggable Emoji</button>
     <button id="text-btn" style="width:100%;padding:12px;margin:6px 0;background:#ff4500;border:none;color:white;border-radius:8px;">✍️ Tattoo Text</button>
-    <button id="snapchat-btn" style="width:100%;padding:12px;margin:6px 0;background:#00ff7f;border:none;color:black;border-radius:8px;">📱 Snapchat Text</button>
     <button id="bubble-btn" style="width:100%;padding:12px;margin:6px 0;background:#8a2be2;border:none;color:white;border-radius:8px;">💬 Speech Bubble</button>
     <button id="auto-caption-btn" style="width:100%;padding:12px;margin:6px 0;background:#e60023;border:none;color:white;border-radius:8px;">🤖 Auto Filthy Caption</button>
     <button id="album-btn" style="width:100%;padding:12px;margin:6px 0;background:#32cd32;border:none;color:white;border-radius:8px;">📁 Add to Album</button>
@@ -1147,11 +1146,10 @@ function createDepravityPanel(item) {
 
   panel.querySelector("#emoji-btn").onclick = () => addDraggableEmoji(item);
   panel.querySelector("#text-btn").onclick = () => addDraggableText(item);
-  panel.querySelector("#snapchat-btn").onclick = () => addSnapchatText(item);
   panel.querySelector("#bubble-btn").onclick = () => addSpeechBubble(item);
   panel.querySelector("#auto-caption-btn").onclick = () => autoDepravedCaption(item.public_id);
   panel.querySelector("#album-btn").onclick = () => addToAlbum(item.public_id);
-  panel.querySelector("#tierlist-btn").onclick = () => alert("Tier List Maker coming soon!");
+  panel.querySelector("#tierlist-btn").onclick = openTierListMaker;
   panel.querySelector("#delete-btn").onclick = () => deleteSingleItem(item.public_id);
 }
 
@@ -1208,6 +1206,163 @@ async function showAlbums() {
   }
 
   const newName = prompt(message + "\n\nCreate new album (or leave empty to cancel):");
+  if (newName && newName.trim()) {
+    await fetch("/api/albums/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName.trim() })
+    });
+    alert("Album created!");
+  }
+}
+// Draggable Emoji
+function addDraggableEmoji(item) {
+  const emojis = ["🍆","💦","🍑","🥵","😈","🤤","👅","🍼","🔥","😩","🍒"];
+  const emo = emojis[Math.floor(Math.random()*emojis.length)];
+  createDraggableElement(emo, 60, item);
+}
+
+// Draggable Tattoo Text with sliders
+function addDraggableText(item) {
+  const txt = prompt("Tattoo text:", "SLUT");
+  if (!txt) return;
+  const el = createDraggableElement(txt.toUpperCase(), 28, item);
+  el.style.fontFamily = "'Comic Sans MS', cursive";
+  el.style.color = "#ff0000";
+  el.style.textShadow = "2px 2px 4px #000";
+  el.style.transform = "rotate(-8deg)";
+}
+
+// Speech Bubble
+function addSpeechBubble(item) {
+  const txt = prompt("What does she say?", "Please destroy my asshole Daddy 😭");
+  if (!txt) return;
+  const el = createDraggableElement(txt, 18, item);
+  el.style.background = "rgba(255,255,255,0.95)";
+  el.style.color = "#000";
+  el.style.padding = "12px 18px";
+  el.style.borderRadius = "20px";
+  el.style.maxWidth = "240px";
+}
+
+function createDraggableElement(content, fontSize, item) {
+  const el = document.createElement("div");
+  el.className = "overlay-element";
+  el.style.position = "absolute";
+  el.style.fontSize = fontSize + "px";
+  el.style.cursor = "move";
+  el.style.zIndex = "1003";
+  el.style.userSelect = "none";
+  el.textContent = content;
+  document.querySelector(".lightbox-content").appendChild(el);
+  makeDraggable(el, item);
+  return el;
+}
+
+function makeDraggable(el, item) {
+  let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+  el.onmousedown = dragMouseDown;
+
+  function dragMouseDown(e) {
+    e.preventDefault();
+    pos3 = e.clientX; pos4 = e.clientY;
+    document.onmouseup = closeDragElement;
+    document.onmousemove = elementDrag;
+  }
+
+  function elementDrag(e) {
+    e.preventDefault();
+    pos1 = pos3 - e.clientX;
+    pos2 = pos4 - e.clientY;
+    pos3 = e.clientX;
+    pos4 = e.clientY;
+    el.style.top = (el.offsetTop - pos2) + "px";
+    el.style.left = (el.offsetLeft - pos1) + "px";
+  }
+
+  function closeDragElement() {
+    document.onmouseup = null;
+    document.onmousemove = null;
+    saveCurrentOverlays(item);
+  }
+}
+
+async function saveCurrentOverlays(item) {
+  const overlays = [];
+  document.querySelectorAll(".overlay-element").forEach(el => {
+    overlays.push({
+      content: el.textContent,
+      top: el.style.top,
+      left: el.style.left,
+      fontSize: el.style.fontSize,
+      color: el.style.color
+    });
+  });
+  item.overlays = overlays;
+  await fetch("/api/overlay/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ public_id: item.public_id, gallery: currentGallery, overlays })
+  });
+}
+
+// Helper functions
+async function autoDepravedCaption(public_id) {
+  const res = await fetch("/api/auto-caption", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ public_id, gallery: currentGallery })
+  });
+  const data = await res.json();
+  if (data.success) alert("Filthy caption added!");
+}
+
+async function deleteSingleItem(public_id) {
+  const password = prompt("Enter admin password to delete:");
+  if (!password) return;
+  const res = await fetch("/api/delete-item", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ public_id, gallery: currentGallery, password })
+  });
+  const data = await res.json();
+  if (data.success) {
+    alert("Image deleted");
+    closeLightbox();
+    await loadMedia();
+  } else alert(data.error || "Failed");
+}
+
+async function addToAlbum(public_id) {
+  const name = prompt("Enter album name:");
+  if (!name) return;
+  await fetch("/api/albums/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name })
+  });
+  alert("Added to album!");
+}
+
+// Tier List Maker (basic)
+function openTierListMaker() {
+  alert("Tier List Maker\n\nS/A/B/C/F tiers coming in next update.");
+}
+async function showAlbums() {
+  const res = await fetch("/api/albums");
+  const data = await res.json();
+  if (!data.success) return alert("Could not load albums");
+
+  let message = "Current Albums:\n\n";
+  if (data.albums && data.albums.length > 0) {
+    data.albums.forEach(album => {
+      message += `• ${album.name} (${album.items.length} images)\n`;
+    });
+  } else {
+    message += "No albums yet.\n";
+  }
+
+  const newName = prompt(message + "\n\nCreate new album name:");
   if (newName && newName.trim()) {
     await fetch("/api/albums/create", {
       method: "POST",
