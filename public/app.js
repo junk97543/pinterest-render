@@ -68,70 +68,131 @@ document.addEventListener("DOMContentLoaded", () => {
   refreshStatus();
 });
 
-function initTheme() { /* ... same as before ... */ }
+function initTheme() {
+  const theme = localStorage.getItem("theme") || "light";
+  document.body.className = theme;
+  themeToggle.textContent = theme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
+  themeToggle.addEventListener("click", () => {
+    const newTheme = document.body.classList.contains("dark") ? "light" : "dark";
+    document.body.className = newTheme;
+    localStorage.setItem("theme", newTheme);
+    themeToggle.textContent = newTheme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
+  });
+}
 
 function initHandlers() {
-  // Gate
-  familyCodeBtn.addEventListener("click", unlockFamily);
-  familyCodeInput.addEventListener("keydown", e => { if (e.key === "Enter") unlockFamily(); });
+  // Family Code - FIXED
+  if (familyCodeBtn) familyCodeBtn.addEventListener("click", unlockFamily);
+  if (familyCodeInput) {
+    familyCodeInput.addEventListener("keydown", e => {
+      if (e.key === "Enter") unlockFamily();
+    });
+  }
 
-  // Sort
-  sortNewestBtn.addEventListener("click", async () => { currentSort = "newest"; currentLayout = "grid"; setSortActive(sortNewestBtn); await loadMedia(); });
-  sortRandomBtn.addEventListener("click", async () => { currentSort = "random"; currentLayout = "masonry"; setSortActive(sortRandomBtn); await loadMedia(); });
-  sortPopularBtn.addEventListener("click", async () => { currentSort = "popular"; currentLayout = "grid"; setSortActive(sortPopularBtn); await loadMedia(); });
+  // Sort Buttons
+  if (sortNewestBtn) sortNewestBtn.addEventListener("click", async () => {
+    currentSort = "newest"; currentLayout = "grid"; setSortActive(sortNewestBtn); await loadMedia();
+  });
+  if (sortRandomBtn) sortRandomBtn.addEventListener("click", async () => {
+    currentSort = "random"; currentLayout = "masonry"; setSortActive(sortRandomBtn); await loadMedia();
+  });
+  if (sortPopularBtn) sortPopularBtn.addEventListener("click", async () => {
+    currentSort = "popular"; currentLayout = "grid"; setSortActive(sortPopularBtn); await loadMedia();
+  });
 
   // Admin & Gallery
-  adminLoginBtn.addEventListener("click", adminLogin);
-  adminLogoutBtn.addEventListener("click", adminLogout);
-  familyGalleryBtn.addEventListener("click", switchToFamily);
-  privateGalleryBtn.addEventListener("click", switchToPrivate);
-  logoutFamilyBtn.addEventListener("click", familyLogout);
+  if (adminLoginBtn) adminLoginBtn.addEventListener("click", adminLogin);
+  if (adminLogoutBtn) adminLogoutBtn.addEventListener("click", adminLogout);
+  if (familyGalleryBtn) familyGalleryBtn.addEventListener("click", switchToFamily);
+  if (privateGalleryBtn) privateGalleryBtn.addEventListener("click", switchToPrivate);
+  if (logoutFamilyBtn) logoutFamilyBtn.addEventListener("click", familyLogout);
 
-  // Other
-  document.getElementById("tags-tab-btn")?.addEventListener("click", () => tagPanel.style.display = tagPanel.style.display === "none" ? "block" : "none");
-  closeTagPanel.addEventListener("click", () => tagPanel.style.display = "none");
-  clearTagFilter.addEventListener("click", () => { activeTagFilter = ""; render(); renderTags(); });
+  // Tags
+  const tagsTab = document.getElementById("tags-tab-btn");
+  if (tagsTab) tagsTab.addEventListener("click", () => {
+    tagPanel.style.display = tagPanel.style.display === "none" ? "block" : "none";
+  });
+  if (closeTagPanel) closeTagPanel.addEventListener("click", () => tagPanel.style.display = "none");
+  if (clearTagFilter) clearTagFilter.addEventListener("click", () => {
+    activeTagFilter = ""; render(); renderTags();
+  });
 
-  chatToggleBtn.addEventListener("click", toggleChat);
-  chatCloseBtn.addEventListener("click", toggleChat);
-  backToTopBtn.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
-  deleteAllBtn.addEventListener("click", deleteAll);
-  fileInput.addEventListener("change", uploadFiles);
-  videoFeedBtn.addEventListener("click", openPhoneOverlay);
-  phoneCloseBtn.addEventListener("click", closePhoneOverlay);
-  phoneBackBtn.addEventListener("click", closePhoneOverlay);
+  // Chat
+  if (chatToggleBtn) chatToggleBtn.addEventListener("click", toggleChat);
+  if (chatCloseBtn) chatCloseBtn.addEventListener("click", toggleChat);
 
-  lightboxClose.addEventListener("click", closeLightbox);
-  lightbox.addEventListener("click", e => {
+  if (backToTopBtn) backToTopBtn.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+  if (deleteAllBtn) deleteAllBtn.addEventListener("click", deleteAll);
+  if (fileInput) fileInput.addEventListener("change", uploadFiles);
+  if (videoFeedBtn) videoFeedBtn.addEventListener("click", openPhoneOverlay);
+  if (phoneCloseBtn) phoneCloseBtn.addEventListener("click", closePhoneOverlay);
+  if (phoneBackBtn) phoneBackBtn.addEventListener("click", closePhoneOverlay);
+
+  if (lightboxClose) lightboxClose.addEventListener("click", closeLightbox);
+  if (lightbox) lightbox.addEventListener("click", e => {
     if (e.target === lightbox || e.target.classList.contains("lightbox-content")) closeLightbox();
   });
 
   window.addEventListener("keydown", e => {
-    if (e.key === "Escape") { closeLightbox(); closePhoneOverlay(); }
+    if (e.key === "Escape") {
+      closeLightbox();
+      closePhoneOverlay();
+    }
     if (e.key === "ArrowLeft") stepLightbox(-1);
     if (e.key === "ArrowRight") stepLightbox(1);
   });
   window.addEventListener("wheel", handleLightboxWheel, { passive: false });
 }
 
-async function unlockFamily() { /* ... same as before ... */ }
-async function adminLogin() { /* ... */ }
-async function adminLogout() { /* ... */ }
-async function switchToFamily() { /* ... */ }
-async function switchToPrivate() { /* ... */ }
-async function familyLogout() { /* ... */ }
-function toggleChat() { /* ... */ }
-async function deleteAll() { /* ... */ }
+// ======================== AUTH FUNCTIONS ========================
+async function unlockFamily() {
+  const code = familyCodeInput.value.trim();
+  if (!code) return;
 
-// ======================== CORE ========================
-async function refreshStatus() { /* ... keep your current version ... */ }
+  try {
+    const res = await fetch("/api/family-unlock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code })
+    });
+    const data = await res.json();
 
-async function loadMedia() { /* ... keep your current version ... */ }
+    if (data.success) {
+      familyAccess = true;
+      currentGallery = "family";
+      gateScreen.style.display = "none";
+      mainHeader.style.display = "flex";
+      sortButtons.style.display = "flex";
+      await refreshStatus();
+      await loadMedia();
+    } else {
+      gateMessage.textContent = "Wrong code. Try again.";
+      familyCodeInput.value = "";
+      familyCodeInput.focus();
+    }
+  } catch (err) {
+    console.error(err);
+    gateMessage.textContent = "Connection error. Try again.";
+  }
+}
 
-function setSortActive(btn) { /* ... */ }
+async function adminLogin() { /* your original code */ }
+async function adminLogout() { /* your original code */ }
+async function switchToFamily() { /* your original code */ }
+async function switchToPrivate() { /* your original code */ }
+async function familyLogout() { /* your original code */ }
+function toggleChat() { /* your original code */ }
+async function deleteAll() { /* your original code */ }
 
-function shuffleArray(arr) { /* ... */ }
-function getFilteredItems() { /* ... */ }
+// ======================== CORE GALLERY ========================
+async function refreshStatus() { /* your original code */ }
+
+async function loadMedia() { /* your original code */ }
+
+function setSortActive(btn) { /* your original code */ }
+
+function shuffleArray(arr) { /* your original code */ }
+function getFilteredItems() { /* your original code */ }
 
 function render() {
   gallery.innerHTML = "";
@@ -168,7 +229,12 @@ function render() {
       const chip = document.createElement("button");
       chip.className = "media-tag";
       chip.textContent = `#${tag}`;
-      chip.addEventListener("click", e => { e.stopPropagation(); activeTagFilter = tag; render(); renderTags(); });
+      chip.addEventListener("click", e => {
+        e.stopPropagation();
+        activeTagFilter = tag;
+        render();
+        renderTags();
+      });
       tagsWrap.appendChild(chip);
     });
     div.appendChild(tagsWrap);
@@ -182,6 +248,7 @@ function render() {
 
     const actions = document.createElement("div");
     actions.className = "media-actions";
+
     const tagBtn = document.createElement("button");
     tagBtn.className = "add-tag-btn";
     tagBtn.textContent = "Add Tag";
@@ -201,9 +268,13 @@ function render() {
     likeDiv.className = "like-container";
     likeDiv.innerHTML = `<button class="like-btn">❤️ <span class="like-count">${item.likes || 0}</span></button>`;
     div.appendChild(likeDiv);
-    likeDiv.querySelector(".like-btn").addEventListener("click", e => { e.stopPropagation(); likeItem(item.public_id); });
 
-    // FIXED CLICK HANDLER
+    likeDiv.querySelector(".like-btn").addEventListener("click", e => {
+      e.stopPropagation();
+      likeItem(item.public_id);
+    });
+
+    // Click to open lightbox (fixed)
     div.addEventListener("click", (e) => {
       if (e.target.tagName === "BUTTON" || e.target.closest("button")) return;
       openLightbox(originalIndex);
@@ -213,13 +284,13 @@ function render() {
   });
 }
 
-async function likeItem(public_id) { /* ... same as before ... */ }
-async function addTagToItem(publicId) { /* ... */ }
-async function editCaption(publicId) { /* ... */ }
-function renderTags() { /* ... */ }
-async function uploadFiles() { /* ... */ }
+async function likeItem(public_id) { /* your original like code */ }
+async function addTagToItem(publicId) { /* your original */ }
+async function editCaption(publicId) { /* your original */ }
+function renderTags() { /* your original */ }
+async function uploadFiles() { /* your original */ }
 
-// ======================== LIGHTBOX ========================
+// ======================== LIGHTBOX & DEPRIVITY ========================
 function openLightbox(index) {
   lightboxIndex = index;
   showLightboxItem(index);
@@ -247,7 +318,6 @@ function showLightboxItem(index) {
     lightboxVideo.play().catch(() => {});
   }
 
-  // Clear old overlays
   document.querySelectorAll(".overlay-element").forEach(el => el.remove());
 
   if (isAdmin && currentGallery === "private") {
@@ -264,17 +334,14 @@ function closeLightbox() {
   document.querySelectorAll(".overlay-element").forEach(el => el.remove());
 }
 
-function handleLightboxWheel(e) { /* ... */ }
-function stepLightbox(direction) { /* ... */ }
-
 // ======================== DEPRIVITY PANEL ========================
 function createDepravityPanel(item) {
   const panel = document.createElement("div");
   panel.id = "depravity-panel";
-  panel.style = `position:absolute;top:20px;left:20px;width:400px;background:rgba(0,0,0,0.95);padding:20px;border-radius:14px;color:#fff;z-index:1002;max-height:80vh;overflow-y:auto;`;
+  panel.style = `position:absolute; top:20px; left:20px; width:400px; background:rgba(0,0,0,0.95); padding:20px; border-radius:14px; color:#fff; z-index:1002; max-height:80vh; overflow-y:auto;`;
 
   panel.innerHTML = `
-    <h3 style="text-align:center;color:#ff5a5f;margin-bottom:15px;">🔥 Depravity Tools</h3>
+    <h3 style="text-align:center;color:#ff5a5f">🔥 Depravity Tools</h3>
     <button id="emoji-btn" style="width:100%;padding:12px;margin:6px 0;background:#ff1493;border:none;color:white;border-radius:8px;">😈 Draggable Emoji</button>
     <button id="text-btn" style="width:100%;padding:12px;margin:6px 0;background:#ff4500;border:none;color:white;border-radius:8px;">✍️ Tattoo Text</button>
     <button id="bubble-btn" style="width:100%;padding:12px;margin:6px 0;background:#8a2be2;border:none;color:white;border-radius:8px;">💬 Speech Bubble</button>
@@ -291,11 +358,14 @@ function createDepravityPanel(item) {
   panel.querySelector("#delete-btn").onclick = () => deleteSingleItem(item.public_id);
 }
 
-// Draggable functions (emoji, text, bubble) - add the ones from my previous message
+// Add the draggable functions (emoji, text, bubble) and other helpers from previous messages here.
+// For brevity, I recommend you paste the draggable functions I gave you earlier.
 
-// ... (add makeDraggable, saveOverlays, etc. from previous response)
+async function autoDepravedCaption(public_id) { /* your auto caption function */ }
+async function deleteSingleItem(public_id) { /* your delete function */ }
 
-async function autoDepravedCaption(public_id) { /* ... from previous */ }
-async function deleteSingleItem(public_id) { /* ... from previous */ }
-
-// Keep the rest of your functions (phone overlay, escapeHtml, etc.)
+// Keep all your phone overlay functions at the bottom
+async function openPhoneOverlay() { /* ... */ }
+function closePhoneOverlay() { /* ... */ }
+async function buildPhoneFeed() { /* ... */ }
+function escapeHtml(text) { /* ... */ }
