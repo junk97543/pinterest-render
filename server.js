@@ -516,7 +516,40 @@ app.post("/api/delete-item", async (req, res) => {
     console.error(err);
     res.status(500).json({ success: false, error: "Delete failed" });
   }
-// ======================== ALBUMS ========================
+// ======================== CHAT ROUTES ========================
+app.get("/api/chat", async (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ success: false, error: "Admin only" });
+  res.json(await loadChat());
+});
+
+app.post("/api/chat", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(403).json({ success: false, error: "Admin only" });
+    const { name, message } = req.body || {};
+    if (!name || !message) return res.status(400).json({ success: false, error: "Missing name or message" });
+
+    const chat = await loadChat();
+    chat.push({
+      name: String(name).slice(0, 40),
+      message: String(message).slice(0, 500),
+      timestamp: new Date().toISOString()
+    });
+
+    await saveChat(chat);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Chat failed" });
+  }
+});
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "index.html"));
+});
+
+// ======================== NEW FEATURES - ALBUMS, OVERLAYS, AUTO CAPTION ========================
+
+// ALBUMS
 app.post("/api/albums", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
@@ -534,7 +567,11 @@ app.post("/api/albums/create", async (req, res) => {
     const { name } = req.body;
     const state = await loadState();
     if (!state.albums) state.albums = [];
-    state.albums.push({ id: Date.now().toString(), name: name || "New Album", items: [] });
+    state.albums.push({ 
+      id: Date.now().toString(), 
+      name: name || "New Album", 
+      items: [] 
+    });
     await saveState(state);
     res.json({ success: true, albums: state.albums });
   } catch (err) {
@@ -547,14 +584,60 @@ app.post("/api/albums/add", async (req, res) => {
     if (!isAdmin(req)) return res.status(401).json({ success: false });
     const { albumId, public_id } = req.body;
     const state = await loadState();
-    const album = state.albums.find(a => a.id === albumId);
+    const album = state.albums?.find(a => a.id === albumId);
     if (album) {
       if (!album.items.includes(public_id)) album.items.push(public_id);
       await saveState(state);
       res.json({ success: true });
-    } else res.status(404).json({ success: false });
+    } else {
+      res.status(404).json({ success: false, error: "Album not found" });
+    }
   } catch (err) {
     res.status(500).json({ success: false });
   }
-}
-});app.listen(PORT, () => console.log(`Server running on ${PORT}`));
+});
+
+// OVERLAY SAVE (for emojis, tattoo text, etc.)
+app.post("/api/overlay/save", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ success: false });
+    const { public_id, gallery, overlays } = req.body;
+    const target = gallery === "private" ? "private" : "family";
+    const state = await loadState();
+    const item = state[target].find(m => m.public_id === public_id);
+    if (item) {
+      item.overlays = overlays || [];
+      await saveState(state);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+});
+
+// AUTO FILTHY CAPTION
+app.post("/api/auto-caption", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
+    const { public_id, gallery } = req.body;
+    const filthyCaptions = [
+      "Daddy's worthless cumrag", "Use me like a free use whore", "Break my holes", 
+      "Breed me raw", "Cumdump in training", "Mommy needs to be ruined", 
+      "I exist to be fucked and discarded"
+    ];
+    const caption = filthyCaptions[Math.floor(Math.random() * filthyCaptions.length)];
+
+    const state = await loadState();
+    const target = gallery === "private" ? "private" : "family";
+    const item = state[target].find(m => m.public_id === public_id);
+    if (item) {
+      item.caption = caption;
+      await saveState(state);
+    }
+    res.json({ success: true, caption });
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+});
+
+app.listen(PORT, () => console.log(`Server running on ${PORT}`));
