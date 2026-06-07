@@ -431,6 +431,7 @@ function render() {
       div.appendChild(vid);
     }
 
+    // Tags
     const tagsWrap = document.createElement("div");
     tagsWrap.className = "media-tags";
     (item.tags || []).forEach(tag => {
@@ -476,7 +477,6 @@ function render() {
       });
       actions.appendChild(capBtn);
     }
-
     div.appendChild(actions);
 
     const likeDiv = document.createElement("div");
@@ -498,12 +498,17 @@ function render() {
       }
     });
 
-    div.addEventListener("click", () => openLightbox(originalIndex));
+    // FIXED CLICK HANDLER - this is the most important part
+    div.addEventListener("click", (e) => {
+      if (e.target.tagName === "BUTTON" || e.target.closest("button") || e.target.closest(".media-tag")) {
+        return;
+      }
+      openLightbox(originalIndex);
+    });
+
     gallery.appendChild(div);
   });
-}
-
-async function addTagToItem(publicId) {
+}async function addTagToItem(publicId) {
   const tag = prompt("Enter a tag for this item:");
   if (!tag) return;
   const clean = tag.trim().replace(/^#/, "").replace(/\s+/g, " ");
@@ -611,10 +616,12 @@ function showLightboxItem(index) {
     lightboxVideo.play().catch(() => {});
   }
 
-  document.querySelectorAll(".overlay-element").forEach(el => el.remove());
+  // Remove old panels
+  document.querySelectorAll("#rating-panel, #depravity-panel").forEach(el => el.remove());
 
   if (isAdmin && currentGallery === "private") {
-    createDepravityPanel(item);
+    createRatingPanel(item, index);   // your existing rating panel
+    // createDepravityPanel(item);    // uncomment when you add the new panel
   }
 }
 function closeLightbox() {
