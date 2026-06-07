@@ -490,6 +490,24 @@ function render() {
             textSpan.textContent = ov.content;
             overlay.appendChild(textSpan);
             imgContainer.appendChild(overlay);
+          } else if (ov.type === "speech") {
+            const overlay = document.createElement("div");
+            overlay.style.position = "absolute";
+            overlay.style.top = ov.top;
+            overlay.style.left = ov.left;
+            overlay.style.fontSize = ov.fontSize || "18px";
+            overlay.style.color = ov.color || "#000";
+            overlay.style.background = ov.background || "rgba(255,255,255,0.95)";
+            overlay.style.padding = ov.padding || "12px 18px";
+            overlay.style.borderRadius = ov.borderRadius || "20px";
+            overlay.style.maxWidth = ov.maxWidth || "260px";
+            overlay.style.zIndex = "2";
+            overlay.style.userSelect = "none";
+            overlay.style.pointerEvents = "none";
+            overlay.style.opacity = ov.opacity || "1";
+            overlay.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)";
+            overlay.textContent = ov.content;
+            imgContainer.appendChild(overlay);
           }
         });
       }
@@ -575,6 +593,7 @@ function render() {
     gallery.appendChild(div);
   });
 }
+
 async function addTagToItem(publicId) {
   const tag = prompt("Enter a tag for this item:");
   if (!tag) return;
@@ -705,7 +724,7 @@ function closeLightbox() {
   lightboxVideo.src = "";
   lightboxCaption.classList.remove("show");
   lightboxCaption.textContent = "";
-  document.querySelectorAll("#rating-panel, #toolbox-panel, #sliders-panel, .lightbox-overlay, #emoji-picker, #tier-list-modal, #tier-viewer-modal, #album-viewer-modal").forEach(el => el.remove());
+  document.querySelectorAll("#rating-panel, #toolbox-panel, #sliders-panel, #emoji-picker, #tier-list-modal, #tier-viewer-modal, #album-viewer-modal").forEach(el => el.remove());
   activeOverlay = null;
 }
 
@@ -758,8 +777,7 @@ async function buildPhoneFeed() {
   phoneFeed.innerHTML = "";
 
   if (!phoneVideos.length) {
-    phoneFeed.innerHTML = "<div class='phone-item'><div class='phone-overlay-ui'><div class='phone-caption'>No videos uploaded yet.</div></div></div>";
-    return;
+    phoneFeed.innerHTML = "<div class='phone-item'><div class='phone-overlay-ui'><div class='phone-caption'>No videos uploaded yet.</div></
   }
 
   phoneVideos.forEach((item, idx) => {
@@ -899,6 +917,7 @@ function escapeHtml(text) {
   div.textContent = text;
   return div.innerHTML;
 }
+
 function createRatingPanel(item, index) {
   const panel = document.createElement("div");
   panel.id = "rating-panel";
@@ -1002,11 +1021,15 @@ async function saveRatings() {
 }
 
 function showEmojiPickerWithMove(item) {
+  const existingPicker = document.getElementById("emoji-picker");
+  if (existingPicker) {
+    existingPicker.remove();
+    return;
+  }
+  
   const emojis = ["🍆", "💦", "😈", "🍑", "🔥", "🥵", "💋", "🍼", "😩", "🤤", "👅", "🍒"];
-  let picker = document.getElementById("emoji-picker");
-  if (picker) picker.remove();
-
-  picker = document.createElement("div");
+  
+  const picker = document.createElement("div");
   picker.id = "emoji-picker";
   picker.style = `position:absolute; top:20px; right:20px; background:rgba(0,0,0,0.95); padding:15px; border-radius:12px; z-index:1003; display:flex; flex-wrap:wrap; gap:8px; width:280px;`;
 
@@ -1017,6 +1040,12 @@ function showEmojiPickerWithMove(item) {
     btn.addEventListener("click", () => addEmojiToImageWithMove(emo, item));
     picker.appendChild(btn);
   });
+  
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "✕ Close";
+  closeBtn.style = "width:100%; padding:8px; margin-top:10px; background:#666; border:none; color:white; border-radius:6px;";
+  closeBtn.addEventListener("click", () => picker.remove());
+  picker.appendChild(closeBtn);
 
   document.querySelector(".lightbox-content").appendChild(picker);
 }
@@ -1074,6 +1103,7 @@ function createToolbox(item) {
       <button id="add-tier-btn" style="width:100%;padding:10px;margin:5px 0;background:#4CAF50;border:none;color:white;font-weight:bold;border-radius:8px;">📊 Add to Tier List</button>
       <button id="add-to-album-btn" style="width:100%;padding:10px;margin:5px 0;background:#2196F3;border:none;color:white;font-weight:bold;border-radius:8px;">📁 Add to Album</button>
       <button id="auto-caption-btn" style="width:100%;padding:10px;margin:5px 0;background:#9C27B0;border:none;color:white;font-weight:bold;border-radius:8px;">✨ Auto Caption</button>
+      <button id="remove-all-overlays-btn" style="width:100%;padding:10px;margin:5px 0;background:#f44336;border:none;color:white;font-weight:bold;border-radius:8px;">🗑️ Remove All Overlays</button>
       <button id="save-overlays-btn" style="width:100%;padding:10px;margin:5px 0;background:#e60023;border:none;color:white;font-weight:bold;border-radius:8px;">💾 Save Overlays</button>
     </div>
   `;
@@ -1100,6 +1130,7 @@ function createToolbox(item) {
   panel.querySelector("#add-tier-btn").addEventListener("click", () => openTierListMaker(item));
   panel.querySelector("#add-to-album-btn").addEventListener("click", () => addToAlbum(item));
   panel.querySelector("#auto-caption-btn").addEventListener("click", () => autoCaption(item));
+  panel.querySelector("#remove-all-overlays-btn").addEventListener("click", () => removeAllOverlays(item));
   panel.querySelector("#save-overlays-btn").addEventListener("click", () => saveOverlaysToDB(item));
 }
 
@@ -1134,6 +1165,13 @@ function createOverlayElement(ov, item) {
     textSpan.style.fontWeight = "bold";
     textSpan.textContent = ov.content;
     overlay.appendChild(textSpan);
+  } else if (ov.type === "speech") {
+    overlay.textContent = ov.content;
+    overlay.style.background = ov.background || "rgba(255,255,255,0.95)";
+    overlay.style.padding = ov.padding || "12px 18px";
+    overlay.style.borderRadius = ov.borderRadius || "20px";
+    overlay.style.maxWidth = ov.maxWidth || "260px";
+    overlay.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)";
   }
 
   document.querySelector(".lightbox-content").appendChild(overlay);
@@ -1167,14 +1205,6 @@ function makeDraggable(el, item) {
     if (isDragging) {
       isDragging = false;
       el.style.cursor = "move";
-      
-      if (item.overlays) {
-        const ov = item.overlays.find(o => o.top === el.style.top && o.left === el.style.left);
-        if (ov) {
-          ov.left = el.style.left;
-          ov.top = el.style.top;
-        }
-      }
     }
   });
 }
@@ -1224,7 +1254,8 @@ function addDraggableTextNoBox(item) {
   if (!item.overlays) item.overlays = [];
   item.overlays.push(overlay);
 
-  createOverlayElement(overlay, item);
+  const el = createOverlayElement(overlay, item);
+  addSlidersToOverlay(overlay, item, el);
   saveOverlaysToDB(item);
 }
 
@@ -1247,7 +1278,8 @@ function addSnapchatText(item) {
   if (!item.overlays) item.overlays = [];
   item.overlays.push(overlay);
 
-  createOverlayElement(overlay, item);
+  const el = createOverlayElement(overlay, item);
+  addSlidersToOverlay(overlay, item, el);
   saveOverlaysToDB(item);
 }
 
@@ -1256,7 +1288,7 @@ function addSpeechBubbleWithSlider(item) {
   if (!txt) return;
 
   const overlay = {
-    type: "text",
+    type: "speech",
     content: txt,
     top: "30%",
     left: "40%",
@@ -1273,10 +1305,80 @@ function addSpeechBubbleWithSlider(item) {
   item.overlays.push(overlay);
 
   const el = createOverlayElement(overlay, item);
-  el.style.background = overlay.background;
-  el.style.padding = overlay.padding;
-  el.style.borderRadius = overlay.borderRadius;
-  el.style.maxWidth = overlay.maxWidth;
+  addSlidersToOverlay(overlay, item, el);
+  saveOverlaysToDB(item);
+}
+
+function addSlidersToOverlay(overlay, item, overlayEl) {
+  const sliderPanel = document.createElement("div");
+  sliderPanel.id = "sliders-panel";
+  sliderPanel.style = `position:absolute; top:20px; left:20px; width:200px; background:rgba(0,0,0,0.95); border-radius:12px; color:#fff; z-index:1004; padding:15px;`;
+  
+  sliderPanel.innerHTML = `
+    <div style="margin-bottom:10px;">
+      <label style="display:block; margin-bottom:5px;">Size: <span id="size-value">${overlay.fontSize || "32px"}</span></label>
+      <input type="range" id="size-slider" min="12" max="72" value="${parseInt(overlay.fontSize) || 32}" style="width:100%;">
+    </div>
+    <div style="margin-bottom:10px;">
+      <label style="display:block; margin-bottom:5px;">Transparency: <span id="opacity-value">${(parseFloat(overlay.opacity) || 1).toFixed(1)}</span></label>
+      <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="${overlay.opacity || 1}" style="width:100%;">
+    </div>
+    <div style="margin-bottom:10px;">
+      <label style="display:block; margin-bottom:5px;">Color</label>
+      <input type="color" id="color-picker" value="${overlay.color || '#ff0000'}" style="width:100%;">
+    </div>
+    <button id="close-sliders-btn" style="width:100%; padding:8px; background:#666; border:none; color:white; border-radius:6px; margin-top:10px;">Close</button>
+  `;
+  
+  document.querySelector(".lightbox-content").appendChild(sliderPanel);
+  
+  const sizeSlider = sliderPanel.querySelector("#size-slider");
+  const opacitySlider = sliderPanel.querySelector("#opacity-slider");
+  const colorPicker = sliderPanel.querySelector("#color-picker");
+  const sizeValue = sliderPanel.querySelector("#size-value");
+  const opacityValue = sliderPanel.querySelector("#opacity-value");
+  
+  sizeSlider.addEventListener("input", () => {
+    const size = sizeSlider.value + "px";
+    overlay.fontSize = size;
+    sizeValue.textContent = size;
+    overlayEl.style.fontSize = size;
+    saveOverlaysToDB(item);
+  });
+  
+  opacitySlider.addEventListener("input", () => {
+    const opacity = opacitySlider.value;
+    overlay.opacity = opacity;
+    opacityValue.textContent = opacity;
+    overlayEl.style.opacity = opacity;
+    saveOverlaysToDB(item);
+  });
+  
+  colorPicker.addEventListener("input", () => {
+    const color = colorPicker.value;
+    overlay.color = color;
+    overlayEl.style.color = color;
+    if (overlay.type === "snapchat") {
+      const span = overlayEl.querySelector("span");
+      if (span) span.style.color = color;
+    }
+    saveOverlaysToDB(item);
+  });
+  
+  sliderPanel.querySelector("#close-sliders-btn").addEventListener("click", () => sliderPanel.remove());
+}
+
+function removeAllOverlays(item) {
+  if (!item.overlays || !item.overlays.length) {
+    alert("No overlays to remove");
+    return;
+  }
+  
+  if (!confirm("Remove ALL overlays from this image? This cannot be undone.")) return;
+  
+  item.overlays = [];
+  document.querySelectorAll(".lightbox-overlay").forEach(el => el.remove());
+  document.querySelectorAll("#rating-panel, #toolbox-panel, #sliders-panel, #emoji-picker").forEach(el => el.remove());
   
   saveOverlaysToDB(item);
 }
@@ -1472,7 +1574,9 @@ async function openTierListViewer() {
       tierListDiv.innerHTML += `
         <div style="display:grid; grid-template-columns:80px 1fr; gap:10px; margin-bottom:8px;">
           <div style="background:${tierColors[tierName]}; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px;">${tierName}</div>
-          <div style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;">
+          <div style="background:#333; min
+
+-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;">
             ${images.length > 0 ? images.map(img => `<img src="${img.url}" style="width:50px; height:50px; object-fit:cover; border-radius:4px;">`).join("") : '<span style="color:#666;">Empty</span>'}
           </div>
         </div>
@@ -1548,34 +1652,60 @@ async function showAlbums() {
   const res = await fetch("/api/albums");
   const data = await res.json();
   
-  let msg = "Albums:\n\n";
   const albums = data.albums || [];
+  
   if (!albums.length) {
-    msg = "No albums yet. Create one:\n\n";
-  } else {
-    albums.forEach((a, i) => msg += `${i + 1}. ${a.name} (${a.items ? a.items.length : 0} items)\n`);
-  }
-  
-  const action = prompt(msg + "\n\nType album name to view, or create new:");
-  if (!action) return;
-
-  const album = albums.find(a => a.name.toLowerCase() === action.toLowerCase());
-  
-  if (album) {
-    openAlbumViewer(album);
-  } else {
+    const name = prompt("No albums yet. Create one by typing a name:");
+    if (!name) return;
+    
     const createRes = await fetch("/api/albums/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: action })
+      body: JSON.stringify({ name })
     });
     const createData = await createRes.json();
     if (createData.success) {
       alert("Album created!");
+      openAlbumViewer(createData.album);
     } else {
       alert("Failed to create: " + createData.error);
     }
+    return;
   }
+  
+  let msg = "Select an album to view:\n\n";
+  albums.forEach((a, i) => msg += `${i + 1}. ${a.name} (${a.items ? a.items.length : 0} items)\n`);
+  msg += "\nType the number (or 'new' to create):";
+  
+  const choice = prompt(msg);
+  if (!choice) return;
+  
+  if (choice.toLowerCase() === "new") {
+    const name = prompt("Enter album name:");
+    if (!name) return;
+    
+    const createRes = await fetch("/api/albums/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name })
+    });
+    const createData = await createRes.json();
+    if (createData.success) {
+      alert("Album created!");
+      openAlbumViewer(createData.album);
+    } else {
+      alert("Failed to create: " + createData.error);
+    }
+    return;
+  }
+  
+  const idx = parseInt(choice) - 1;
+  if (isNaN(idx) || idx < 0 || idx >= albums.length) {
+    alert("Invalid selection");
+    return;
+  }
+  
+  openAlbumViewer(albums[idx]);
 }
 
 async function openAlbumViewer(album) {
@@ -1624,6 +1754,6 @@ async function openAlbumViewer(album) {
     }
   }
 
-  modal.querySelector("#close-album-btn").addEventListener("click", () => modal.remove());
+   modal.querySelector("#close-album-btn").addEventListener("click", () => modal.remove());
   document.body.appendChild(modal);
 }
