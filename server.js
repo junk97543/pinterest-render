@@ -557,4 +557,4 @@ app.post("/api/albums/add", async (req, res) => {
     res.status(500).json({ success: false });
   }
 });
-});app.listen(PORT, () => console.log(`Server running on ${PORT}`));
+app.listen(PORT, () => console.log(`Server running on ${PORT}`));
