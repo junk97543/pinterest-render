@@ -56,6 +56,7 @@ let phoneVideos = [];
 let wheelLock = false;
 let familyLogoTimer = null;
 let excludedTags = [];
+let currentTierListName = "My Tier List";
 
 initTheme();
 initHandlers();
@@ -192,6 +193,12 @@ function initHandlers() {
   albumsBtn.addEventListener("click", showAlbums);
   mainHeader.appendChild(albumsBtn);
 
+  const tierListBtn = document.createElement("button");
+  tierListBtn.textContent = "📊 Tier Lists";
+  tierListBtn.className = "feed-btn";
+  tierListBtn.addEventListener("click", openTierListViewer);
+  mainHeader.appendChild(tierListBtn);
+
   phoneCloseBtn.addEventListener("click", closePhoneOverlay);
   phoneBackBtn.addEventListener("click", closePhoneOverlay);
 
@@ -205,6 +212,7 @@ function initHandlers() {
     if (e.key === "Escape") {
       closeLightbox();
       closePhoneOverlay();
+      closeAnyModal();
     }
     if (e.key === "ArrowLeft") stepLightbox(-1);
     if (e.key === "ArrowRight") stepLightbox(1);
@@ -437,7 +445,6 @@ function render() {
       div.appendChild(vid);
     }
 
-    // Tags
     const tagsWrap = document.createElement("div");
     tagsWrap.className = "media-tags";
     (item.tags || []).forEach(tag => {
@@ -461,7 +468,6 @@ function render() {
       div.appendChild(captionLine);
     }
 
-    // Actions
     const actions = document.createElement("div");
     actions.className = "media-actions";
 
@@ -480,7 +486,6 @@ function render() {
     }
     div.appendChild(actions);
 
-    // Like button
     const likeDiv = document.createElement("div");
     likeDiv.className = "like-container";
     likeDiv.innerHTML = `<button class="like-btn">❤️ <span class="like-count">${item.likes || 0}</span></button>`;
@@ -498,7 +503,6 @@ function render() {
       }
     });
 
-    // FIXED: Click to open lightbox (only when not clicking buttons)
     div.addEventListener("click", (e) => {
       if (e.target.tagName === "BUTTON" || e.target.closest("button") || e.target.closest(".media-tag")) {
         return;
@@ -607,13 +611,14 @@ function showLightboxItem(index) {
   lightboxCaption.textContent = item.caption || "";
   if (item.caption) lightboxCaption.classList.add("show");
 
-  // Remove old panels
-  document.querySelectorAll("#rating-panel, #toolbox-panel, .overlay-element, #emoji-picker, #tier-list-modal").forEach(el => el.remove());
+  // Remove all old panels and overlays
+  document.querySelectorAll("#rating-panel, #toolbox-panel, #sliders-panel, .overlay-element, #emoji-picker, #tier-list-modal, #tier-viewer-modal, #album-viewer-modal").forEach(el => el.remove());
 
   if (isAdmin && currentGallery === "private") {
-    createRatingPanel(item, index);   // LEFT: Rating
-    createToolbox(item);              // RIGHT: Toolbox
-    loadSavedOverlays(item);          // Load previously saved emojis/text
+    createRatingPanel(item, index);
+    createToolbox(item);
+    createSlidersPanel(item);  // NEW: Separate sliders panel on right
+    loadSavedOverlays(item);
   }
 
   if (item.type === "image") {
@@ -635,7 +640,7 @@ function closeLightbox() {
   lightboxVideo.src = "";
   lightboxCaption.classList.remove("show");
   lightboxCaption.textContent = "";
-  document.querySelectorAll("#rating-panel, #toolbox-panel, .overlay-element, #emoji-picker, #tier-list-modal").forEach(el => el.remove());
+  document.querySelectorAll("#rating-panel, #toolbox-panel, #sliders-panel, .overlay-element, #emoji-picker, #tier-list-modal, #tier-viewer-modal, #album-viewer-modal").forEach(el => el.remove());
 }
 
 function handleLightboxWheel(e) {
@@ -658,6 +663,10 @@ function enableAudioOnFirstGesture() {
   if (!lightboxVideo || !lightboxVideo.src) return;
   lightboxVideo.muted = false;
   lightboxVideo.play().catch(() => {});
+}
+
+function closeAnyModal() {
+  document.querySelectorAll("#tier-list-modal, #tier-viewer-modal, #album-viewer-modal").forEach(el => el.remove());
 }
 
 async function openPhoneOverlay() {
@@ -825,6 +834,7 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// ==================== RATING PANEL (LEFT SIDE) ====================
 function createRatingPanel(item, index) {
   const panel = document.createElement("div");
   panel.id = "rating-panel";
@@ -879,7 +889,7 @@ function createRatingPanel(item, index) {
   document.querySelector(".lightbox-content").appendChild(panel);
 
   panel.querySelector("#save-rating-btn").addEventListener("click", saveRatings);
-  panel.querySelector("#add-emoji-btn").addEventListener("click", () => showEmojiPicker(item));
+  panel.querySelector("#add-emoji-btn").addEventListener("click", () => showEmojiPickerWithMove(item));
   panel.querySelector("#delete-item-btn").addEventListener("click", () => deleteSingleItem(item.public_id));
 }
 
@@ -908,7 +918,7 @@ async function saveRatings() {
   }
 }
 
-function showEmojiPicker(item) {
+function showEmojiPickerWithMove(item) {
   const emojis = ["🍆", "💦", "😈", "🍑", "🔥", "🥵", "💋", "🍼", "😩", "🤤", "👅", "🍒"];
   let picker = document.getElementById("emoji-picker");
   if (picker) picker.remove();
@@ -921,23 +931,30 @@ function showEmojiPicker(item) {
     const btn = document.createElement("button");
     btn.textContent = emo;
     btn.style = "font-size:28px; background:none; border:none; cursor:pointer; padding:8px;";
-    btn.addEventListener("click", () => addEmojiToImage(emo, item));
+    btn.addEventListener("click", () => addEmojiToImageWithMove(emo, item));
     picker.appendChild(btn);
   });
 
   document.querySelector(".lightbox-content").appendChild(picker);
 }
 
-function addEmojiToImage(emoji, item) {
+function addEmojiToImageWithMove(emoji, item) {
   if (!item.emojis) item.emojis = [];
   if (!item.emojis.includes(emoji)) item.emojis.push(emoji);
 
   const overlay = document.createElement("div");
-  overlay.style = `position:absolute; top:${Math.random()*60 + 20}%; left:${Math.random()*60 + 20}%; font-size:42px; pointer-events:none; z-index:1001; opacity:0.9;`;
+  overlay.className = "overlay-element emoji-overlay";
+  overlay.style = `position:absolute; top:50%; left:50%; font-size:42px; pointer-events:none; z-index:1001; opacity:0.9; cursor:move; user-select:none;`;
   overlay.textContent = emoji;
   document.querySelector(".lightbox-content").appendChild(overlay);
-
-  setTimeout(() => overlay.remove(), 8000);
+  
+  // Make emoji draggable
+  makeDraggable(overlay, item);
+  overlay.style.pointerEvents = "auto";
+  
+  setTimeout(() => {
+    overlay.style.opacity = "0.9";
+  }, 100);
 }
 
 async function deleteSingleItem(public_id) {
@@ -959,6 +976,7 @@ async function deleteSingleItem(public_id) {
   }
 }
 
+// ==================== TOOLBOX PANEL (RIGHT SIDE) ====================
 function createToolbox(item) {
   const panel = document.createElement("div");
   panel.id = "toolbox-panel";
@@ -969,7 +987,7 @@ function createToolbox(item) {
     <button id="add-tattoo-btn" style="width:100%;padding:10px;margin:5px 0;background:#ff6b35;border:none;color:white;font-weight:bold;border-radius:8px;">📝 Tattoo Text</button>
     <button id="add-snapchat-btn" style="width:100%;padding:10px;margin:5px 0;background:#fffc00;color:black;border:none;font-weight:bold;border-radius:8px;">📱 Snapchat Text</button>
     <button id="add-speech-btn" style="width:100%;padding:10px;margin:5px 0;background:#ffffff;border:none;color:black;font-weight:bold;border-radius:8px;">💬 Speech Bubble</button>
-    <button id="add-tier-btn" style="width:100%;padding:10px;margin:5px 0;background:#4CAF50;border:none;color:white;font-weight:bold;border-radius:8px;">📊 Tier List</button>
+    <button id="add-tier-btn" style="width:100%;padding:10px;margin:5px 0;background:#4CAF50;border:none;color:white;font-weight:bold;border-radius:8px;">📊 Add to Tier List</button>
     <button id="add-to-album-btn" style="width:100%;padding:10px;margin:5px 0;background:#2196F3;border:none;color:white;font-weight:bold;border-radius:8px;">📁 Add to Album</button>
     <button id="save-overlays-btn" style="width:100%;padding:10px;margin:5px 0;background:#e60023;border:none;color:white;font-weight:bold;border-radius:8px;">💾 Save Overlays</button>
   `;
@@ -984,27 +1002,51 @@ function createToolbox(item) {
   panel.querySelector("#save-overlays-btn").addEventListener("click", () => saveCurrentOverlays(item));
 }
 
+// ==================== SEPARATE SLIDERS PANEL (RIGHT SIDE, NOT ON IMAGE) ====================
+function createSlidersPanel(item) {
+  let slidersPanel = document.getElementById("sliders-panel");
+  if (slidersPanel) slidersPanel.remove();
+
+  slidersPanel = document.createElement("div");
+  slidersPanel.id = "sliders-panel";
+  slidersPanel.style = `position:absolute; top:200px; right:20px; width:200px; background:rgba(0,0,0,0.85); padding:15px; border-radius:12px; z-index:1004; display:none;`;
+
+  slidersPanel.innerHTML = `
+    <h4 style="margin:0 0 10px 0; color:#ff5a5f;">Text Controls</h4>
+    <label style="font-size:12px;">Size:</label>
+    <input type="range" id="slider-size" min="12" max="80" value="32" style="width:100%; margin:5px 0;">
+    <label style="font-size:12px;">Color:</label>
+    <input type="color" id="slider-color" value="#ff0000" style="width:100%; margin:5px 0;">
+    <label style="font-size:12px;">Opacity:</label>
+    <input type="range" id="slider-opacity" min="0.3" max="1" step="0.05" value="1" style="width:100%; margin:5px 0;">
+    <button id="close-sliders-btn" style="width:100%;margin-top:10px;padding:8px;background:#666;border:none;color:white;border-radius:6px;">Close</button>
+  `;
+
+  document.querySelector(".lightbox-content").appendChild(slidersPanel);
+
+  slidersPanel.querySelector("#close-sliders-btn").addEventListener("click", () => {
+    slidersPanel.style.display = "none";
+  });
+
+  return slidersPanel;
+}
+
 function addDraggableTextWithSliders(item) {
   const txt = prompt("Tattoo text:", "text");
   if (!txt) return;
 
-  const el = createDraggableElement(txt.toUpperCase(), 32, item);
+  const el = createDraggableElementNoPanel(txt.toUpperCase(), 32, item);
   el.style.fontFamily = "'Comic Sans MS', cursive";
   el.style.color = "#ff0000";
   el.style.textShadow = "2px 2px 4px #000";
 
-  const controls = document.createElement("div");
-  controls.style = "position:absolute; top: -40px; left:0; background:rgba(0,0,0,0.8); padding:5px; border-radius:6px; font-size:12px; z-index:1004;";
-  controls.innerHTML = `
-    Size: <input type="range" id="size-slider" min="12" max="80" value="32"> 
-    Color: <input type="color" id="color-picker" value="#ff0000">
-    Opacity: <input type="range" id="opacity-slider" min="0.3" max="1" step="0.05" value="1">
-  `;
-  el.appendChild(controls);
+  // Show sliders panel
+  const slidersPanel = createSlidersPanel(item);
+  slidersPanel.style.display = "block";
 
-  const sizeSlider = controls.querySelector("#size-slider");
-  const colorPicker = controls.querySelector("#color-picker");
-  const opacitySlider = controls.querySelector("#opacity-slider");
+  const sizeSlider = slidersPanel.querySelector("#slider-size");
+  const colorPicker = slidersPanel.querySelector("#slider-color");
+  const opacitySlider = slidersPanel.querySelector("#slider-opacity");
 
   sizeSlider.oninput = () => el.style.fontSize = sizeSlider.value + "px";
   colorPicker.oninput = () => el.style.color = colorPicker.value;
@@ -1014,20 +1056,26 @@ function addDraggableTextWithSliders(item) {
 function addSnapchatText(item) {
   const txt = prompt("Snapchat text:", "text");
   if (!txt) return;
-  const el = createDraggableElement(txt, 26, item);
-  el.style.background = "rgba(0,0,0,0.75)";
-  el.style.color = "white";
-  el.style.padding = "8px 30px";
-  el.style.borderRadius = "4px";
-  el.style.fontWeight = "bold";
-  el.style.textAlign = "center";
-  el.style.width = "280px";
+
+  // Snapchat-style: transparent strip across entire image
+  const el = document.createElement("div");
+  el.className = "overlay-element snapchat-text";
+  el.style = `position:absolute; top:70%; left:0; width:100%; background:rgba(0,0,0,0.45); padding:12px 20px; text-align:center; z-index:1003; cursor:move; user-select:none;`;
+  
+  const textSpan = document.createElement("span");
+  textSpan.style = `color:white; font-size:26px; font-weight:bold;`;
+  textSpan.textContent = txt;
+  el.appendChild(textSpan);
+
+  document.querySelector(".lightbox-content").appendChild(el);
+  makeDraggable(el, item);
+  el.style.pointerEvents = "auto";
 }
 
 function addSpeechBubbleWithSlider(item) {
   const txt = prompt("What does she say?", "text");
   if (!txt) return;
-  const el = createDraggableElement(txt, 18, item);
+  const el = createDraggableElementNoPanel(txt, 18, item);
   el.style.background = "rgba(255,255,255,0.95)";
   el.style.color = "#000";
   el.style.padding = "12px 18px";
@@ -1035,7 +1083,7 @@ function addSpeechBubbleWithSlider(item) {
   el.style.maxWidth = "260px";
 }
 
-function createDraggableElement(text, fontSize, item) {
+function createDraggableElementNoPanel(text, fontSize, item) {
   const el = document.createElement("div");
   el.className = "overlay-element";
   el.style.position = "absolute";
@@ -1050,6 +1098,7 @@ function createDraggableElement(text, fontSize, item) {
   el.style.padding = "8px 16px";
   el.style.borderRadius = "8px";
   el.textContent = text;
+  el.style.pointerEvents = "auto";
 
   makeDraggable(el, item);
   document.querySelector(".lightbox-content").appendChild(el);
@@ -1064,9 +1113,10 @@ function makeDraggable(el, item) {
     isDragging = true;
     startX = e.clientX;
     startY = e.clientY;
-    startLeft = parseInt(el.style.left || 0);
-    startTop = parseInt(el.style.top || 0);
+    startLeft = el.offsetLeft;
+    startTop = el.offsetTop;
     el.style.cursor = "grabbing";
+    e.preventDefault();
   });
 
   document.addEventListener("mousemove", (e) => {
@@ -1129,12 +1179,14 @@ function loadSavedOverlays(item) {
     el.style.cursor = "move";
     el.style.zIndex = "1003";
     el.style.userSelect = "none";
+    el.style.pointerEvents = "auto";
     el.textContent = ov.content;
     document.querySelector(".lightbox-content").appendChild(el);
     makeDraggable(el, item);
   });
 }
 
+// ==================== TIER LIST MAKER ====================
 function openTierListMaker(currentItem) {
   const existing = document.getElementById("tier-list-modal");
   if (existing) existing.remove();
@@ -1175,7 +1227,8 @@ function openTierListMaker(currentItem) {
         </div>
       </div>
       <div style="display:flex; gap:10px; margin-top:15px;">
-        <button id="save-tier-btn" style="flex:1; padding:12px; background:#4CAF50; border:none; color:white; font-weight:bold; border-radius:8px;">💾 Save Tier</button>
+        <input type="text" id="tier-list-name" placeholder="Tier list name" value="${currentTierListName}" style="flex:1; padding:10px; border:none; border-radius:6px;">
+        <button id="save-tier-btn" style="flex:1; padding:12px; background:#4CAF50; border:none; color:white; font-weight:bold; border-radius:8px;">💾 Save Tier List</button>
         <button id="close-tier-btn" style="flex:1; padding:12px; background:#666; border:none; color:white; font-weight:bold; border-radius:8px;">Close</button>
       </div>
     </div>
@@ -1212,6 +1265,7 @@ function openTierListMaker(currentItem) {
       img.src = item.url;
       img.style = "width:50px; height:50px; object-fit:cover; border-radius:4px; cursor:grab;";
       img.draggable = true;
+      img.dataset.publicId = item.public_id;
       
       img.addEventListener("dragstart", (dragE) => {
         dragE.dataTransfer.setData("text/plain", JSON.stringify(item));
@@ -1226,36 +1280,31 @@ function openTierListMaker(currentItem) {
   });
 
   modal.querySelector("#save-tier-btn").addEventListener("click", async () => {
+    const tierListName = modal.querySelector("#tier-list-name").value || "My Tier List";
+    currentTierListName = tierListName;
+    
     const tiers = {};
     dropZones.forEach(zone => {
       const tierName = zone.dataset.tier;
       const images = Array.from(zone.querySelectorAll("img")).map(img => ({
         url: img.src,
-        public_id: currentItem.public_id
+        public_id: img.dataset.publicId
       }));
       if (images.length > 0) {
         tiers[tierName] = images;
       }
     });
 
-    if (!currentItem.ratings) currentItem.ratings = {};
-    currentItem.ratings.tierList = tiers;
-
-    const res = await fetch("/api/rate", {
+    const res = await fetch("/api/tierlists/save", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        public_id: currentItem.public_id, 
-        gallery: currentGallery, 
-        ratings: currentItem.ratings 
-      })
+      body: JSON.stringify({ name: tierListName, tiers })
     });
 
     const data = await res.json();
     if (data.success) {
       alert("✅ Tier list saved!");
       modal.remove();
-      await loadMedia();
     } else {
       alert("Failed to save tier: " + data.error);
     }
@@ -1264,6 +1313,69 @@ function openTierListMaker(currentItem) {
   modal.querySelector("#close-tier-btn").addEventListener("click", () => modal.remove());
 }
 
+async function openTierListViewer() {
+  if (!isAdmin) return alert("Admin only");
+  
+  const res = await fetch("/api/tierlists");
+  const data = await res.json();
+  
+  if (!data.success || !data.tierLists || !data.tierLists.length) {
+    return alert("No tier lists found. Create one first!");
+  }
+
+  const existing = document.getElementById("tier-viewer-modal");
+  if (existing) existing.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "tier-viewer-modal";
+  modal.style = `position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.9); z-index:10002; display:flex; align-items:center; justify-content:center;`;
+
+  modal.innerHTML = `
+    <div style="background:#111; padding:20px; border-radius:12px; width:90%; max-width:800px; color:white; max-height:90vh; overflow-y:auto;">
+      <h2 style="text-align:center; margin-bottom:20px;">📊 Tier Lists</h2>
+    </div>
+  `;
+
+  const content = modal.querySelector("div");
+  
+  data.tierLists.forEach(tierList => {
+    const tierListDiv = document.createElement("div");
+    tierListDiv.style = `margin-bottom:30px;`;
+    
+    tierListDiv.innerHTML = `
+      <h3 style="text-align:center; color:#ff5a5f; margin-bottom:15px;">${tierList.name}</h3>
+      <div style="background:#222; padding:15px; border-radius:8px;">
+    `;
+
+    const tierOrder = ["S", "A", "B", "C", "F"];
+    const tierColors = { S: "#4CAF50", A: "#8BC34A", B: "#FFEB3B", C: "#FF9800", F: "#F44336" };
+
+    tierOrder.forEach(tierName => {
+      const images = tierList.tiers?.[tierName] || [];
+      tierListDiv.innerHTML += `
+        <div style="display:grid; grid-template-columns:80px 1fr; gap:10px; margin-bottom:8px;">
+          <div style="background:${tierColors[tierName]}; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px;">${tierName}</div>
+          <div style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;">
+            ${images.length > 0 ? images.map(img => `<img src="${img.url}" style="width:50px; height:50px; object-fit:cover; border-radius:4px;">`).join("") : '<span style="color:#666;">Empty</span>'}
+          </div>
+        </div>
+      `;
+    });
+
+    tierListDiv.innerHTML += `</div>`;
+    content.appendChild(tierListDiv);
+  });
+
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "Close";
+  closeBtn.style = `width:100%; padding:12px; margin-top:15px; background:#666; border:none; color:white; font-weight:bold; border-radius:8px;`;
+  closeBtn.addEventListener("click", () => modal.remove());
+  content.appendChild(closeBtn);
+
+  document.body.appendChild(modal);
+}
+
+// ==================== ALBUMS ====================
 async function addToAlbum(item) {
   const res = await fetch("/api/albums");
   const data = await res.json();
@@ -1315,6 +1427,8 @@ async function addToAlbum(item) {
 }
 
 async function showAlbums() {
+  if (!isAdmin) return alert("Admin only");
+  
   const res = await fetch("/api/albums");
   const data = await res.json();
   
@@ -1326,13 +1440,60 @@ async function showAlbums() {
     albums.forEach((a, i) => msg += `${i + 1}. ${a.name} (${a.items ? a.items.length : 0} items)\n`);
   }
   
-  const name = prompt(msg + "\n\nNew album name:");
-  if (name) {
+  const action = prompt(msg + "\n\nType album name to view, or create new:");
+  if (!action) return;
+
+  const album = albums.find(a => a.name.toLowerCase() === action.toLowerCase());
+  
+  if (album) {
+    openAlbumViewer(album);
+  } else {
     await fetch("/api/albums/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name })
+      body: JSON.stringify({ name: action })
     });
     alert("Album created!");
   }
+}
+
+async function openAlbumViewer(album) {
+  const existing = document.getElementById("album-viewer-modal");
+  if (existing) existing.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "album-viewer-modal";
+  modal.style = `position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.9); z-index:10003; display:flex; align-items:center; justify-content:center;`;
+
+  modal.innerHTML = `
+    <div style="background:#111; padding:20px; border-radius:12px; width:90%; max-width:800px; color:white; max-height:90vh; overflow-y:auto;">
+      <h2 style="text-align:center; margin-bottom:20px;">📁 ${album.name}</h2>
+      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:10px;">
+    </div>
+    <button id="close-album-btn" style="width:100%; padding:12px; margin-top:15px; background:#666; border:none; color:white; font-weight:bold; border-radius:8px;">Close</button>
+  </div>`;
+
+  const grid = modal.querySelector("div[data-grid]") || modal.querySelector("div").querySelector("div");
+  
+  if (!album.items || !album.items.length) {
+    grid.innerHTML = `<p style="text-align:center; color:#666; grid-column:1/-1;">No items in this album.</p>`;
+  } else {
+    album.items.forEach(item => {
+      const img = document.createElement("img");
+      img.src = item.url;
+      img.style = `width:100%; height:100px; object-fit:cover; border-radius:8px; cursor:pointer;`;
+      img.addEventListener("click", () => {
+        // Find full item and open lightbox
+        const fullItem = items.find(i => i.public_id === item.public_id);
+        if (fullItem) {
+          const idx = items.findIndex(i => i.public_id === item.public_id);
+          openLightbox(idx);
+        }
+      });
+      grid.appendChild(img);
+    });
+  }
+
+  modal.querySelector("#close-album-btn").addEventListener("click", () => modal.remove());
+  document.body.appendChild(modal);
 }

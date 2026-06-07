@@ -537,30 +537,6 @@ app.post("/api/overlay/save", async (req, res) => {
   }
 });
 
-// AUTO CAPTION
-app.post("/api/auto-caption", async (req, res) => {
-  try {
-    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
-    const { public_id, gallery } = req.body;
-    const Captions = [
-      "caption text 1", "caption text 2", "caption text 3", 
-      "caption text 4", "caption text 5", "caption text 6"
-    ];
-    const caption = Captions[Math.floor(Math.random() * Captions.length)];
-
-    const state = await loadState();
-    const target = gallery === "private" ? "private" : "family";
-    const item = state[target].find(m => m.public_id === public_id);
-    if (item) {
-      item.caption = caption;
-      await saveState(state);
-    }
-    res.json({ success: true, caption });
-  } catch (err) {
-    res.status(500).json({ success: false });
-  }
-});
-
 // ======================== ALBUMS SYSTEM ========================
 app.get("/api/albums", async (req, res) => {
   try {
@@ -615,47 +591,98 @@ app.post("/api/albums/add", async (req, res) => {
   }
 });
 
-// ======================== SYNC GALLERY (Cloudinary) ========================
-app.post("/api/sync-gallery", async (req, res) => {
+app.get("/api/albums/view", async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
-    const { gallery } = req.body || {};
-    const target = gallery === "private" ? "private" : "family";
-    
-    configureCloudinary(target);
-    
+    const { albumName } = req.query;
+    if (!albumName) return res.status(400).json({ success: false, error: "Missing albumName" });
+
     const database = await connectDB();
-    const cloudinaryResult = await cloudinary.uploader.search()
-      .folder(target === "private" ? "private_gallery" : "family_gallery")
-      .resource_type(target === "private" ? "video" : "image")
-      .execute();
-    
-    const state = await loadState();
-    const existingIds = new Set(state[target].map(item => item.public_id));
-    
-    if (cloudinaryResult.resources) {
-      cloudinaryResult.resources.forEach(resource => {
-        if (!existingIds.has(resource.public_id)) {
-          const isVideo = resource.resource_type === "video";
-          state[target].push({
-            public_id: resource.public_id,
-            url: resource.secure_url,
-            type: isVideo ? "video" : "image",
-            likes: 0,
-            tags: [],
-            caption: "",
-            createdAt: resource.created_at,
-            gallery: target
-          });
-        }
-      });
-    }
-    
-    await saveState(state);
-    res.json({ success: true, synced: cloudinaryResult.resources?.length || 0 });
+    const album = await database.collection("albums").findOne({ name: albumName });
+    if (!album) return res.status(404).json({ success: false, error: "Album not found" });
+
+    res.json({ success: true, album });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, error: "Sync failed" });
+    res.status(500).json({ success: false, error: "Failed to load album" });
+  }
+});
+
+// ======================== TIER LISTS SYSTEM ========================
+app.get("/api/tierlists", async (req, res) => {
+  try {
+    const database = await connectDB();
+    const tierLists = await database.collection("tierlists").find({}).toArray();
+    res.json({ success: true, tierLists });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Failed to load tier lists" });
+  }
+});
+
+app.post("/api/tierlists/create", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ success: false, error: "Missing name" });
+
+    const database = await connectDB();
+    const result = await database.collection("tierlists").insertOne({
+      name: String(name).slice(0, 50),
+      tiers: {},
+      createdAt: new Date().toISOString()
+    });
+
+    res.json({ success: true, tierList: { _id: result.insertedId, name, tiers: {} } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Failed to create tier list" });
+  }
+});
+
+app.post("/api/tierlists/save", async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(401).json({ success: false, error: "Admin only" });
+    const { name, tiers } = req.body;
+    if (!name || !tiers) return res.status(400).json({ success: false, error: "Missing name or tiers" });
+
+    const database = await connectDB();
+    
+    await database.collection("tierlists").updateOne(
+      { name: name },
+      { 
+        $set: { 
+          tiers: tiers,
+          updatedAt: new Date().toISOString()
+        }
+      },
+      { upsert: true }
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Failed to save tier list" });
+  }
+});
+
+// NEW: Get media by public_id
+app.get("/api/media/:public_id", async (req, res) => {
+  try {
+    const state = await loadState();
+    let item = null;
+    
+    for (const gallery of ["family", "private"]) {
+      item = state[gallery].find(m => m.public_id === req.params.public_id);
+      if (item) break;
+    }
+    
+    if (!item) return res.status(404).json({ success: false, error: "Media not found" });
+    
+    res.json({ success: true, item });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Failed to load media" });
   }
 });
 
