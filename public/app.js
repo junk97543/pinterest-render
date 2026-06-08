@@ -1141,734 +1141,726 @@ function createToolbox(item) {
 
 
 function createOverlayElement(ov, item) {
-  const overlay = document.createElement("div");
-  overlay.className = "lightbox-overlay";
-  overlay.style.position = "absolute";
-  overlay.style.zIndex = "1003";
-  overlay.style.userSelect = "none";
-  overlay.style.cursor = "move";
-  overlay.style.pointerEvents = "auto";
-  
-  const lightboxContent = document.querySelector(".lightbox-content");
-  if (lightboxContent) {
-    const rect = lightboxContent.getBoundingClientRect();
+    const overlay = document.createElement("div");
+    overlay.className = "lightbox-overlay";
+    overlay.style.position = "absolute";
+    overlay.style.zIndex = "1003";
+    overlay.style.userSelect = "none";
+    overlay.style.cursor = "move";
+    overlay.style.pointerEvents = "auto";
     
-    // Store original percentages for scaling
-    let topPercent = ov.topPercent;
-    let leftPercent = ov.leftPercent;
-    
-    // If we don't have percentages yet, convert from pixels
-    if (topPercent === undefined || topPercent === null) {
-      if (typeof ov.top === "string" && ov.top.endsWith("%")) {
-        topPercent = parseFloat(ov.top);
-      } else {
-        topPercent = (parseFloat(ov.top) / rect.height) * 100;
-      }
+    const lightboxContent = document.querySelector(".lightbox-content");
+    if (lightboxContent) {
+        const rect = lightboxContent.getBoundingClientRect();
+        
+        let topPercent = ov.topPercent;
+        let leftPercent = ov.leftPercent;
+        
+        if (topPercent === undefined || topPercent === null) {
+            if (typeof ov.top === "string" && ov.top.endsWith("%")) {
+                topPercent = parseFloat(ov.top);
+            } else {
+                topPercent = (parseFloat(ov.top) / rect.height) * 100;
+            }
+        }
+        
+        if (leftPercent === undefined || leftPercent === null) {
+            if (typeof ov.left === "string" && ov.left.endsWith("%")) {
+                leftPercent = parseFloat(ov.left);
+            } else {
+                leftPercent = (parseFloat(ov.left) / rect.width) * 100;
+            }
+        }
+        
+        overlay.style.top = topPercent + "%";
+        overlay.style.left = leftPercent + "%";
+        overlay.style.transform = "translate(-50%, -50%)";
+        
+        ov.topPercent = topPercent;
+        ov.leftPercent = leftPercent;
+        ov.top = topPercent + "%";
+        ov.left = leftPercent + "%";
+        
+        const fontSizePercent = ov.fontSizePercent || (parseInt(ov.fontSize || "32") / rect.width * 100);
+        overlay.style.fontSize = fontSizePercent + "%";
+        ov.fontSizePercent = fontSizePercent;
+    } else {
+        overlay.style.top = ov.top;
+        overlay.style.left = ov.left;
+        overlay.style.transform = "translate(-50%, -50%)";
+        overlay.style.fontSize = ov.fontSize;
     }
-    
-    if (leftPercent === undefined || leftPercent === null) {
-      if (typeof ov.left === "string" && ov.left.endsWith("%")) {
-        leftPercent = parseFloat(ov.left);
-      } else {
-        leftPercent = (parseFloat(ov.left) / rect.width) * 100;
-      }
+
+    overlay.style.color = ov.color || "#ff0000";
+    overlay.style.opacity = ov.opacity || "1";
+
+    if (ov.type === "text") {
+        overlay.textContent = ov.content;
+        overlay.style.background = "none";
+    } else if (ov.type === "emoji") {
+        overlay.textContent = ov.content;
+    } else if (ov.type === "snapchat") {
+        overlay.style.width = "100%";
+        overlay.style.background = ov.background || "rgba(0,0,0,0.45)";
+        overlay.style.padding = "12px 20px";
+        overlay.style.textAlign = "center";
+        overlay.style.transform = "translate(-50%, -50%)";
+
+        const textSpan = document.createElement("span");
+        textSpan.style.color = ov.color || "#fff";
+        textSpan.style.fontSize = "26px";
+        textSpan.style.fontWeight = "bold";
+        textSpan.textContent = ov.content;
+        overlay.appendChild(textSpan);
+    } else if (ov.type === "speech") {
+        overlay.textContent = ov.content;
+        overlay.style.background = ov.background || "rgba(255,255,255,0.95)";
+        overlay.style.padding = "12px 18px";
+        overlay.style.borderRadius = "20px";
+        overlay.style.maxWidth = "260px";
+        overlay.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)";
     }
-    
-    // Use percentages for positioning
-    overlay.style.top = topPercent + "%";
-    overlay.style.left = leftPercent + "%";
-    overlay.style.transform = "translate(-50%, -50%)";
-    
-    // Store percentages back to overlay object
-    ov.topPercent = topPercent;
-    ov.leftPercent = leftPercent;
-    ov.top = topPercent + "%";
-    ov.left = leftPercent + "%";
-    
-    // Calculate font size as percentage of image width for proportional scaling
-    const fontSizePercent = ov.fontSizePercent || (parseInt(ov.fontSize || "32") / rect.width * 100);
-    overlay.style.fontSize = fontSizePercent + "%";
-    ov.fontSizePercent = fontSizePercent;
-  } else {
-    overlay.style.top = ov.top;
-    overlay.style.left = ov.left;
-    overlay.style.transform = "translate(-50%, -50%)";
-    overlay.style.fontSize = ov.fontSize;
-  }
 
-  overlay.style.color = ov.color || "#ff0000";
-  overlay.style.opacity = ov.opacity || "1";
-
-  if (ov.type === "text") {
-    overlay.textContent = ov.content;
-    overlay.style.background = "none";
-  } else if (ov.type === "emoji") {
-    overlay.textContent = ov.content;
-  } else if (ov.type === "snapchat") {
-    overlay.style.width = "100%";
-    overlay.style.background = ov.background || "rgba(0,0,0,0.45)";
-    overlay.style.padding = "12px 20px";
-    overlay.style.textAlign = "center";
-    overlay.style.transform = "translate(-50%, -50%) none";
-
-    const textSpan = document.createElement("span");
-    textSpan.style.color = ov.color || "#fff";
-    textSpan.style.fontSize = "26px";
-    textSpan.style.fontWeight = "bold";
-    textSpan.textContent = ov.content;
-    overlay.appendChild(textSpan);
-  } else if (ov.type === "speech") {
-    overlay.textContent = ov.content;
-    overlay.style.background = ov.background || "rgba(255,255,255,0.95)";
-    overlay.style.padding = "12px 18px";
-    overlay.style.borderRadius = "20px";
-    overlay.style.maxWidth = "260px";
-    overlay.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)";
-  }
-
-  document.querySelector(".lightbox-content").appendChild(overlay);
-  makeDraggable(overlay, item, ov);
-  return overlay;
+    document.querySelector(".lightbox-content").appendChild(overlay);
+    makeDraggable(overlay, item, ov);
+    return overlay;
 }
 
 function makeDraggable(el, item, ov) {
-  let isDragging = false;
-  let startX, startY, startTopPercent, startLeftPercent;
+    let isDragging = false;
+    let startX, startY, startTopPercent, startLeftPercent;
 
-  el.addEventListener("mousedown", (e) => {
-    isDragging = true;
-    startX = e.clientX;
-    startY = e.clientY;
-    startTopPercent = ov.topPercent || parseFloat(el.style.top);
-    startLeftPercent = ov.leftPercent || parseFloat(el.style.left);
-    el.style.cursor = "grabbing";
-    e.preventDefault();
-  });
+    el.addEventListener("mousedown", (e) => {
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        startTopPercent = ov.topPercent || parseFloat(el.style.top);
+        startLeftPercent = ov.leftPercent || parseFloat(el.style.left);
+        el.style.cursor = "grabbing";
+        e.preventDefault();
+    });
 
-  document.addEventListener("mousemove", (e) => {
-    if (!isDragging) return;
-    
-    const lightboxContent = document.querySelector(".lightbox-content");
-    if (!lightboxContent) return;
-    
-    const rect = lightboxContent.getBoundingClientRect();
-    
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-    
-    const dxPercent = (dx / rect.width) * 100;
-    const dyPercent = (dy / rect.height) * 100;
-    
-    const newTopPercent = startTopPercent + dyPercent;
-    const newLeftPercent = startLeftPercent + dxPercent;
-    
-    el.style.top = newTopPercent + "%";
-    el.style.left = newLeftPercent + "%";
-    
-    ov.topPercent = newTopPercent;
-    ov.leftPercent = newLeftPercent;
-    ov.top = newTopPercent + "%";
-    ov.left = newLeftPercent + "%";
-  });
+    document.addEventListener("mousemove", (e) => {
+        if (!isDragging) return;
+        
+        const lightboxContent = document.querySelector(".lightbox-content");
+        if (!lightboxContent) return;
+        
+        const rect = lightboxContent.getBoundingClientRect();
+        
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        
+        const dxPercent = (dx / rect.width) * 100;
+        const dyPercent = (dy / rect.height) * 100;
+        
+        const newTopPercent = startTopPercent + dyPercent;
+        const newLeftPercent = startLeftPercent + dxPercent;
+        
+        el.style.top = newTopPercent + "%";
+        el.style.left = newLeftPercent + "%";
+        
+        ov.topPercent = newTopPercent;
+        ov.leftPercent = newLeftPercent;
+        ov.top = newTopPercent + "%";
+        ov.left = newLeftPercent + "%";
+    });
 
-  document.addEventListener("mouseup", () => {
-    if (isDragging) {
-      isDragging = false;
-      el.style.cursor = "move";
-    }
-  });
+    document.addEventListener("mouseup", () => {
+        if (isDragging) {
+            isDragging = false;
+            el.style.cursor = "move";
+        }
+    });
 }
 
 function loadSavedOverlays(item) {
-  if (!item.overlays || !item.overlays.length) return;
-  
-  // Clear existing overlays first to prevent duplicates
-  document.querySelectorAll(".lightbox-overlay").forEach(el => el.remove());
-  
-  item.overlays.forEach(ov => {
-    createOverlayElement(ov, item);
-  });
+    if (!item.overlays || !item.overlays.length) return;
+    
+    document.querySelectorAll(".lightbox-overlay").forEach(el => el.remove());
+    
+    item.overlays.forEach(ov => {
+        createOverlayElement(ov, item);
+    });
 }
 
 function addDraggableTextNoBox(item) {
-  const txt = prompt("Tattoo text:", "text");
-  if (!txt) return;
+    const txt = prompt("Tattoo text:", "text");
+    if (!txt) return;
 
-  const lightboxContent = document.querySelector(".lightbox-content");
-  const rect = lightboxContent.getBoundingClientRect();
-  
-  const overlay = {
-    type: "text",
-    content: txt,
-    top: "50%",
-    left: "50%",
-    topPercent: 50,
-    leftPercent: 50,
-    fontSize: "32px",
-    fontSizePercent: (32 / rect.width) * 100,
-    color: "#ff0000",
-    opacity: "1"
-  };
-  
-  if (!item.overlays) item.overlays = [];
-  item.overlays.push(overlay);
+    const lightboxContent = document.querySelector(".lightbox-content");
+    const rect = lightboxContent.getBoundingClientRect();
+    
+    const overlay = {
+        type: "text",
+        content: txt,
+        top: "50%",
+        left: "50%",
+        topPercent: 50,
+        leftPercent: 50,
+        fontSize: "32px",
+        fontSizePercent: (32 / rect.width) * 100,
+        color: "#ff0000",
+        opacity: "1"
+    };
+    
+    if (!item.overlays) item.overlays = [];
+    item.overlays.push(overlay);
 
-  const el = createOverlayElement(overlay, item);
-  addSlidersToOverlay(overlay, item, el);
+    const el = createOverlayElement(overlay, item);
+    addSlidersToOverlay(overlay, item, el);
 }
 
 function addSnapchatText(item) {
-  const txt = prompt("Snapchat text:", "text");
-  if (!txt) return;
+    const txt = prompt("Snapchat text:", "text");
+    if (!txt) return;
 
-  const lightboxContent = document.querySelector(".lightbox-content");
-  const rect = lightboxContent.getBoundingClientRect();
-  
-  const overlay = {
-    type: "snapchat",
-    content: txt,
-    top: "70%",
-    left: "50%",
-    topPercent: 70,
-    leftPercent: 50,
-    fontSize: "26px",
-    fontSizePercent: (26 / rect.width) * 100,
-    color: "#fff",
-    background: "rgba(0,0,0,0.45)",
-    padding: "12px 20px",
-    opacity: "1"
-  };
+    const lightboxContent = document.querySelector(".lightbox-content");
+    const rect = lightboxContent.getBoundingClientRect();
+    
+    const overlay = {
+        type: "snapchat",
+        content: txt,
+        top: "70%",
+        left: "50%",
+        topPercent: 70,
+        leftPercent: 50,
+        fontSize: "26px",
+        fontSizePercent: (26 / rect.width) * 100,
+        color: "#fff",
+        background: "rgba(0,0,0,0.45)",
+        padding: "12px 20px",
+        opacity: "1"
+    };
 
-  if (!item.overlays) item.overlays = [];
-  item.overlays.push(overlay);
+    if (!item.overlays) item.overlays = [];
+    item.overlays.push(overlay);
 
-  const el = createOverlayElement(overlay, item);
-  addSlidersToOverlay(overlay, item, el);
+    const el = createOverlayElement(overlay, item);
+    addSlidersToOverlay(overlay, item, el);
 }
 
 function addSpeechBubbleWithSlider(item) {
-  const txt = prompt("What does she say?", "text");
-  if (!txt) return;
+    const txt = prompt("What does she say?", "text");
+    if (!txt) return;
 
-  const lightboxContent = document.querySelector(".lightbox-content");
-  const rect = lightboxContent.getBoundingClientRect();
-  
-  const overlay = {
-    type: "speech",
-    content: txt,
-    top: "30%",
-    left: "50%",
-    topPercent: 30,
-    leftPercent: 50,
-    fontSize: "18px",
-    fontSizePercent: (18 / rect.width) * 100,
-    color: "#000",
-    background: "rgba(255,255,255,0.95)",
-    padding: "12px 18px",
-    borderRadius: "20px",
-    maxWidth: "260px",
-    opacity: "1"
-  };
+    const lightboxContent = document.querySelector(".lightbox-content");
+    const rect = lightboxContent.getBoundingClientRect();
+    
+    const overlay = {
+        type: "speech",
+        content: txt,
+        top: "30%",
+        left: "50%",
+        topPercent: 30,
+        leftPercent: 50,
+        fontSize: "18px",
+        fontSizePercent: (18 / rect.width) * 100,
+        color: "#000",
+        background: "rgba(255,255,255,0.95)",
+        padding: "12px 18px",
+        borderRadius: "20px",
+        maxWidth: "260px",
+        opacity: "1"
+    };
 
-  if (!item.overlays) item.overlays = [];
-  item.overlays.push(overlay);
+    if (!item.overlays) item.overlays = [];
+    item.overlays.push(overlay);
 
-  const el = createOverlayElement(overlay, item);
-  addSlidersToOverlay(overlay, item, el);
+    const el = createOverlayElement(overlay, item);
+    addSlidersToOverlay(overlay, item, el);
 }
 
 function addEmojiToImageWithMove(emoji, item) {
-  if (!item.overlays) item.overlays = [];
-  
-  const lightboxContent = document.querySelector(".lightbox-content");
-  const rect = lightboxContent.getBoundingClientRect();
-  
-  const overlay = {
-    type: "emoji",
-    content: emoji,
-    top: "50%",
-    left: "50%",
-    topPercent: 50,
-    leftPercent: 50,
-    fontSize: "42px",
-    fontSizePercent: (42 / rect.width) * 100,
-    opacity: "0.9"
-  };
-  
-  item.overlays.push(overlay);
+    if (!item.overlays) item.overlays = [];
+    
+    const lightboxContent = document.querySelector(".lightbox-content");
+    const rect = lightboxContent.getBoundingClientRect();
+    
+    const overlay = {
+        type: "emoji",
+        content: emoji,
+        top: "50%",
+        left: "50%",
+        topPercent: 50,
+        leftPercent: 50,
+        fontSize: "42px",
+        fontSizePercent: (42 / rect.width) * 100,
+        opacity: "0.9"
+    };
+    
+    item.overlays.push(overlay);
 
-  const el = createOverlayElement(overlay, item);
+    const el = createOverlayElement(overlay, item);
 }
 
 function addSlidersToOverlay(overlay, item, overlayEl) {
-  const sliderPanel = document.createElement("div");
-  sliderPanel.id = "sliders-panel";
-  sliderPanel.style = `position:absolute; top:20px; left:20px; width:200px; background:rgba(0,0,0,0.95); border-radius:12px; color:#fff; z-index:1004; padding:15px;`;
-  
-  const fontSizeVal = overlay.fontSizePercent ? (overlay.fontSizePercent * (document.querySelector(".lightbox-content").getBoundingClientRect().width / 100)).toFixed(0) : "32";
-  
-  sliderPanel.innerHTML = `
-    <div style="margin-bottom:10px;">
-      <label style="display:block; margin-bottom:5px;">Size: <span id="size-value">${fontSizeVal}px</span></label>
-      <input type="range" id="size-slider" min="12" max="72" value="${parseInt(fontSizeVal) || 32}" style="width:100%;">
-    </div>
-    <div style="margin-bottom:10px;">
-      <label style="display:block; margin-bottom:5px;">Transparency: <span id="opacity-value">${(parseFloat(overlay.opacity) || 1).toFixed(1)}</span></label>
-      <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="${overlay.opacity || 1}" style="width:100%;">
-    </div>
-    <div style="margin-bottom:10px;">
-      <label style="display:block; margin-bottom:5px;">Color</label>
-      <input type="color" id="color-picker" value="${overlay.color || '#ff0000'}" style="width:100%;">
-    </div>
-    <button id="save-sliders-btn" style="width:100%; padding:8px; background:#e60023; border:none; color:white; border-radius:6px; margin-top:10px;">💾 Save Changes</button>
-    <button id="close-sliders-btn" style="width:100%; padding:8px; background:#666; border:none; color:white; border-radius:6px; margin-top:5px;">Close</button>
-  `;
-  
-  document.querySelector(".lightbox-content").appendChild(sliderPanel);
-  
-  const sizeSlider = sliderPanel.querySelector("#size-slider");
-  const opacitySlider = sliderPanel.querySelector("#opacity-slider");
-  const colorPicker = sliderPanel.querySelector("#color-picker");
-  const sizeValue = sliderPanel.querySelector("#size-value");
-  const opacityValue = sliderPanel.querySelector("#opacity-value");
-  
-  sizeSlider.addEventListener("input", () => {
-    const sizePx = sizeSlider.value;
-    const lightboxContent = document.querySelector(".lightbox-content");
-    const rect = lightboxContent.getBoundingClientRect();
-    const fontSizePercent = (sizePx / rect.width) * 100;
+    const sliderPanel = document.createElement("div");
+    sliderPanel.id = "sliders-panel";
+    sliderPanel.style = `position:absolute; top:20px; left:20px; width:200px; background:rgba(0,0,0,0.95); border-radius:12px; color:#fff; z-index:1004; padding:15px;`;
     
-    overlay.fontSize = sizePx + "px";
-    overlay.fontSizePercent = fontSizePercent;
-    sizeValue.textContent = sizePx + "px";
-    overlayEl.style.fontSize = fontSizePercent + "%";
-  });
-  
-  opacitySlider.addEventListener("input", () => {
-    const opacity = opacitySlider.value;
-    overlay.opacity = opacity;
-    opacityValue.textContent = opacity;
-    overlayEl.style.opacity = opacity;
-  });
-  
-  colorPicker.addEventListener("input", () => {
-    const color = colorPicker.value;
-    overlay.color = color;
-    overlayEl.style.color = color;
-    if (overlay.type === "snapchat") {
-      const span = overlayEl.querySelector("span");
-      if (span) span.style.color = color;
-    }
-  });
-  
-  sliderPanel.querySelector("#save-sliders-btn").addEventListener("click", () => {
-    saveOverlaysToDB(item);
-    alert("✅ Sliders saved!");
-  });
-  
-  sliderPanel.querySelector("#close-sliders-btn").addEventListener("click", () => sliderPanel.remove());
+    const fontSizeVal = overlay.fontSizePercent ? (overlay.fontSizePercent * (document.querySelector(".lightbox-content").getBoundingClientRect().width / 100)).toFixed(0) : "32";
+    
+    sliderPanel.innerHTML = `
+        <div style="margin-bottom:10px;">
+            <label style="display:block; margin-bottom:5px;">Size: <span id="size-value">${fontSizeVal}px</span></label>
+            <input type="range" id="size-slider" min="12" max="72" value="${parseInt(fontSizeVal) || 32}" style="width:100%;">
+        </div>
+        <div style="margin-bottom:10px;">
+            <label style="display:block; margin-bottom:5px;">Transparency: <span id="opacity-value">${(parseFloat(overlay.opacity) || 1).toFixed(1)}</span></label>
+            <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="${overlay.opacity || 1}" style="width:100%;">
+        </div>
+        <div style="margin-bottom:10px;">
+            <label style="display:block; margin-bottom:5px;">Color</label>
+            <input type="color" id="color-picker" value="${overlay.color || '#ff0000'}" style="width:100%;">
+        </div>
+        <button id="save-sliders-btn" style="width:100%; padding:8px; background:#e60023; border:none; color:white; border-radius:6px; margin-top:10px;">💾 Save Changes</button>
+        <button id="close-sliders-btn" style="width:100%; padding:8px; background:#666; border:none; color:white; border-radius:6px; margin-top:5px;">Close</button>
+    `;
+    
+    document.querySelector(".lightbox-content").appendChild(sliderPanel);
+    
+    const sizeSlider = sliderPanel.querySelector("#size-slider");
+    const opacitySlider = sliderPanel.querySelector("#opacity-slider");
+    const colorPicker = sliderPanel.querySelector("#color-picker");
+    const sizeValue = sliderPanel.querySelector("#size-value");
+    const opacityValue = sliderPanel.querySelector("#opacity-value");
+    
+    sizeSlider.addEventListener("input", () => {
+        const sizePx = sizeSlider.value;
+        const lightboxContent = document.querySelector(".lightbox-content");
+        const rect = lightboxContent.getBoundingClientRect();
+        const fontSizePercent = (sizePx / rect.width) * 100;
+        
+        overlay.fontSize = sizePx + "px";
+        overlay.fontSizePercent = fontSizePercent;
+        sizeValue.textContent = sizePx + "px";
+        overlayEl.style.fontSize = fontSizePercent + "%";
+    });
+    
+    opacitySlider.addEventListener("input", () => {
+        const opacity = opacitySlider.value;
+        overlay.opacity = opacity;
+        opacityValue.textContent = opacity;
+        overlayEl.style.opacity = opacity;
+    });
+    
+    colorPicker.addEventListener("input", () => {
+        const color = colorPicker.value;
+        overlay.color = color;
+        overlayEl.style.color = color;
+        if (overlay.type === "snapchat") {
+            const span = overlayEl.querySelector("span");
+            if (span) span.style.color = color;
+        }
+    });
+    
+    sliderPanel.querySelector("#save-sliders-btn").addEventListener("click", () => {
+        saveOverlaysToDB(item);
+        alert("✅ Sliders saved!");
+    });
+    
+    sliderPanel.querySelector("#close-sliders-btn").addEventListener("click", () => sliderPanel.remove());
 }
 
-
-
-
-
-
-
-
-
-
-
 function removeAllOverlays(item) {
-  if (!item.overlays || !item.overlays.length) {
-    alert("No overlays to remove");
-    return;
-  }
-  
-  if (!confirm("Remove ALL overlays from this image? This cannot be undone.")) return;
-  
-  item.overlays = [];
-  document.querySelectorAll(".lightbox-overlay").forEach(el => el.remove());
-  document.querySelectorAll("#rating-panel, #toolbox-panel, #sliders-panel, #emoji-picker").forEach(el => el.remove());
-  
-  saveOverlaysToDB(item);
+    if (!item.overlays || !item.overlays.length) {
+        alert("No overlays to remove");
+        return;
+    }
+    
+    if (!confirm("Remove ALL overlays from this image? This cannot be undone.")) return;
+    
+    item.overlays = [];
+    document.querySelectorAll(".lightbox-overlay").forEach(el => el.remove());
+    document.querySelectorAll("#rating-panel, #toolbox-panel, #sliders-panel, #emoji-picker").forEach(el => el.remove());
+    
+    saveOverlaysToDB(item);
 }
 
 function autoCaption(item) {
-  const captions = [
-    "text 1", "text 2", "text 3", "text 4", "text 5",
-    "text 6", "text 7", "text 8", "text 9", "text 10",
-    "text 11", "text 12", "text 13", "text 14", "text 15",
-    "text 16", "text 17", "text 18", "text 19", "text 20"
-  ];
-  
-  const caption = captions[Math.floor(Math.random() * captions.length)];
-  item.caption = caption;
+    const captions = [
+        "text 1", "text 2", "text 3", "text 4", "text 5",
+        "text 6", "text 7", "text 8", "text 9", "text 10",
+        "text 11", "text 12", "text 13", "text 14", "text 15",
+        "text 16", "text 17", "text 18", "text 19", "text 20"
+    ];
+    
+    const caption = captions[Math.floor(Math.random() * captions.length)];
+    item.caption = caption;
 
-  fetch("/api/caption", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ public_id: item.public_id, caption: caption, gallery: currentGallery })
-  }).then(res => res.json()).then(data => {
-    if (data.success) {
-      alert(`✅ Auto caption: ${caption}`);
-      loadMedia();
-    }
-  });
+    fetch("/api/caption", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ public_id: item.public_id, caption: caption, gallery: currentGallery })
+    }).then(res => res.json()).then(data => {
+        if (data.success) {
+            alert(`✅ Auto caption: ${caption}`);
+            loadMedia();
+        }
+    });
 }
 
 function openTierListMaker(currentItem) {
-  const existing = document.getElementById("tier-list-modal");
-  if (existing) existing.remove();
+    const existing = document.getElementById("tier-list-modal");
+    if (existing) existing.remove();
 
-  const modal = document.createElement("div");
-  modal.id = "tier-list-modal";
-  modal.style = `position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); z-index:10001; display:flex; align-items:center; justify-content:center;`;
+    const modal = document.createElement("div");
+    modal.id = "tier-list-modal";
+    modal.style = `position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); z-index:10001; display:flex; align-items:center; justify-content:center;`;
 
-  modal.innerHTML = `
-    <div style="background:#111; padding:20px; border-radius:12px; width:90%; max-width:700px; color:white; max-height:85vh; overflow-y:auto;">
-      <h2 style="text-align:center; margin-bottom:15px;">📊 Tier List Maker</h2>
-      <div style="margin-bottom:15px;">
-        <p style="font-size:13px; color:#aaa;">Drag this image into any tier below:</p>
-        <div style="display:flex; justify-content:center; gap:10px; margin:10px 0;">
-          <img src="${currentItem.url}" style="width:100px; height:100px; object-fit:cover; border:3px solid #ff5a5f; border-radius:8px; cursor:grab;" id="tier-drag-image">
+    modal.innerHTML = `
+        <div style="background:#111; padding:20px; border-radius:12px; width:90%; max-width:700px; color:white; max-height:85vh; overflow-y:auto;">
+            <h2 style="text-align:center; margin-bottom:15px;">📊 Tier List Maker</h2>
+            <div style="margin-bottom:15px;">
+                <p style="font-size:13px; color:#aaa;">Drag this image into any tier below:</p>
+                <div style="display:flex; justify-content:center; gap:10px; margin:10px 0;">
+                    <img src="${currentItem.url}" style="width:100px; height:100px; object-fit:cover; border:3px solid #ff5a5f; border-radius:8px; cursor:grab;" id="tier-drag-image">
+                </div>
+            </div>
+            <div style="background:#222; padding:15px; border-radius:8px;">
+                <div style="display:grid; grid-template-columns:80px 1fr; gap:10px; margin-bottom:8px;">
+                    <div style="background:#4CAF50; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px;">S</div>
+                    <div class="tier-drop-zone" data-tier="S" style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;"></div>
+                </div>
+                <div style="display:grid; grid-template-columns:80px 1fr; gap:10px; margin-bottom:8px;">
+                    <div style="background:#8BC34A; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px;">A</div>
+                    <div class="tier-drop-zone" data-tier="A" style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;"></div>
+                </div>
+                <div style="display:grid; grid-template-columns:80px 1fr; gap:10px; margin-bottom:8px;">
+                    <div style="background:#FFEB3B; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px; color:black;">B</div>
+                    <div class="tier-drop-zone" data-tier="B" style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;"></div>
+                </div>
+                <div style="display:grid; grid-template-columns:80px 1fr; gap:10px; margin-bottom:8px;">
+                    <div style="background:#FF9800; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px;">C</div>
+                    <div class="tier-drop-zone" data-tier="C" style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;"></div>
+                </div>
+                <div style="display:grid; grid-template-columns:80px 1fr; gap:10px;">
+                    <div style="background:#F44336; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px;">F</div>
+                    <div class="tier-drop-zone" data-tier="F" style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;"></div>
+                </div>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:15px;">
+                <input type="text" id="tier-list-name" placeholder="Tier list name" value="${currentTierListName}" style="flex:1; padding:10px; border:none; border-radius:6px;">
+                <button id="save-tier-btn" style="flex:1; padding:12px; background:#4CAF50; border:none; color:white; font-weight:bold; border-radius:8px;">💾 Save Tier List</button>
+                <button id="close-tier-btn" style="flex:1; padding:12px; background:#666; border:none; color:white; font-weight:bold; border-radius:8px;">Close</button>
+            </div>
         </div>
-      </div>
-      <div style="background:#222; padding:15px; border-radius:8px;">
-        <div style="display:grid; grid-template-columns:80px 1fr; gap:10px; margin-bottom:8px;">
-          <div style="background:#4CAF50; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px;">S</div>
-          <div class="tier-drop-zone" data-tier="S" style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;"></div>
-        </div>
-        <div style="display:grid; grid-template-columns:80px 1fr; gap:10px; margin-bottom:8px;">
-          <div style="background:#8BC34A; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px;">A</div>
-          <div class="tier-drop-zone" data-tier="A" style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;"></div>
-        </div>
-        <div style="display:grid; grid-template-columns:80px 1fr; gap:10px; margin-bottom:8px;">
-          <div style="background:#FFEB3B; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px; color:black;">B</div>
-          <div class="tier-drop-zone" data-tier="B" style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;"></div>
-        </div>
-        <div style="display:grid; grid-template-columns:80px 1fr; gap:10px; margin-bottom:8px;">
-          <div style="background:#FF9800; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px;">C</div>
-          <div class="tier-drop-zone" data-tier="C" style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;"></div>
-        </div>
-        <div style="display:grid; grid-template-columns:80px 1fr; gap:10px;">
-          <div style="background:#F44336; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px;">F</div>
-          <div class="tier-drop-zone" data-tier="F" style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;"></div>
-        </div>
-      </div>
-      <div style="display:flex; gap:10px; margin-top:15px;">
-        <input type="text" id="tier-list-name" placeholder="Tier list name" value="${currentTierListName}" style="flex:1; padding:10px; border:none; border-radius:6px;">
-        <button id="save-tier-btn" style="flex:1; padding:12px; background:#4CAF50; border:none; color:white; font-weight:bold; border-radius:8px;">💾 Save Tier List</button>
-        <button id="close-tier-btn" style="flex:1; padding:12px; background:#666; border:none; color:white; font-weight:bold; border-radius:8px;">Close</button>
-      </div>
-    </div>
-  `;
+    `;
 
-  document.body.appendChild(modal);
+    document.body.appendChild(modal);
 
-  const dragImage = modal.querySelector("#tier-drag-image");
-  dragImage.draggable = true;
-  
-  dragImage.addEventListener("dragstart", (e) => {
-    e.dataTransfer.setData("text/plain", JSON.stringify(currentItem));
-    e.dataTransfer.effectAllowed = "move";
-  });
-
-  const dropZones = modal.querySelectorAll(".tier-drop-zone");
-  dropZones.forEach(zone => {
-    zone.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      zone.style.background = "#444";
-    });
-
-    zone.addEventListener("dragleave", () => {
-      zone.style.background = "#333";
-    });
-
-    zone.addEventListener("drop", (e) => {
-      e.preventDefault();
-      zone.style.background = "#333";
-      const item = JSON.parse(e.dataTransfer.getData("text/plain"));
-      
-      const img = document.createElement("img");
-      img.src = item.url;
-      img.style = "width:50px; height:50px; object-fit:cover; border-radius:4px; cursor:grab;";
-      img.draggable = true;
-      img.dataset.publicId = item.public_id;
-      
-      img.addEventListener("dragstart", (dragE) => {
-        dragE.dataTransfer.setData("text/plain", JSON.stringify(item));
-      });
-
-      img.addEventListener("click", () => {
-        if(confirm("Remove from tier?")) img.remove();
-      });
-
-      zone.appendChild(img);
-    });
-  });
-
-  modal.querySelector("#save-tier-btn").addEventListener("click", async () => {
-    const tierListName = modal.querySelector("#tier-list-name").value || "My Tier List";
-    currentTierListName = tierListName;
+    const dragImage = modal.querySelector("#tier-drag-image");
+    dragImage.draggable = true;
     
-    const tiers = {};
+    dragImage.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/plain", JSON.stringify(currentItem));
+        e.dataTransfer.effectAllowed = "move";
+    });
+
+    const dropZones = modal.querySelectorAll(".tier-drop-zone");
     dropZones.forEach(zone => {
-      const tierName = zone.dataset.tier;
-      const images = Array.from(zone.querySelectorAll("img")).map(img => ({
-        url: img.src,
-        public_id: img.dataset.publicId
-      }));
-      if (images.length > 0) {
-        tiers[tierName] = images;
-      }
+        zone.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            zone.style.background = "#444";
+        });
+
+        zone.addEventListener("dragleave", () => {
+            zone.style.background = "#333";
+        });
+
+        zone.addEventListener("drop", (e) => {
+            e.preventDefault();
+            zone.style.background = "#333";
+            const item = JSON.parse(e.dataTransfer.getData("text/plain"));
+            
+            const img = document.createElement("img");
+            img.src = item.url;
+            img.style = "width:50px; height:50px; object-fit:cover; border-radius:4px; cursor:grab;";
+            img.draggable = true;
+            img.dataset.publicId = item.public_id;
+            
+            img.addEventListener("dragstart", (dragE) => {
+                dragE.dataTransfer.setData("text/plain", JSON.stringify(item));
+            });
+
+            img.addEventListener("click", () => {
+                if(confirm("Remove from tier?")) img.remove();
+            });
+
+            zone.appendChild(img);
+        });
     });
 
-    const res = await fetch("/api/tierlists/save", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: tierListName, tiers })
+    modal.querySelector("#save-tier-btn").addEventListener("click", async () => {
+        const tierListName = modal.querySelector("#tier-list-name").value || "My Tier List";
+        currentTierListName = tierListName;
+        
+        const tiers = {};
+        dropZones.forEach(zone => {
+            const tierName = zone.dataset.tier;
+            const images = Array.from(zone.querySelectorAll("img")).map(img => ({
+                url: img.src,
+                public_id: img.dataset.publicId
+            }));
+            if (images.length > 0) {
+                tiers[tierName] = images;
+            }
+        });
+
+        const res = await fetch("/api/tierlists/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: tierListName, tiers })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+            alert("✅ Tier list saved!");
+            modal.remove();
+        } else {
+            alert("Failed to save tier: " + data.error);
+        }
     });
 
-    const data = await res.json();
-    if (data.success) {
-      alert("✅ Tier list saved!");
-      modal.remove();
-    } else {
-      alert("Failed to save tier: " + data.error);
-    }
-  });
-
-  modal.querySelector("#close-tier-btn").addEventListener("click", () => modal.remove());
+    modal.querySelector("#close-tier-btn").addEventListener("click", () => modal.remove());
 }
 
 async function openTierListViewer() {
-  if (!isAdmin) return alert("Admin only");
-  
-  const res = await fetch("/api/tierlists");
-  const data = await res.json();
-  
-  if (!data.success || !data.tierLists || !data.tierLists.length) {
-    return alert("No tier lists found. Create one first!");
-  }
-
-  const existing = document.getElementById("tier-viewer-modal");
-  if (existing) existing.remove();
-
-  const modal = document.createElement("div");
-  modal.id = "tier-viewer-modal";
-  modal.style = `position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.9); z-index:10002; display:flex; align-items:center; justify-content:center;`;
-
-  modal.innerHTML = `
-    <div style="background:#111; padding:20px; border-radius:12px; width:90%; max-width:800px; color:white; max-height:90vh; overflow-y:auto;">
-      <h2 style="text-align:center; margin-bottom:20px;">📊 Tier Lists</h2>
-    </div>
-  `;
-
-  const content = modal.querySelector("div");
-  
-  data.tierLists.forEach(tierList => {
-    const tierListDiv = document.createElement("div");
-    tierListDiv.style = `margin-bottom:30px;`;
+    if (!isAdmin) return alert("Admin only");
     
-    tierListDiv.innerHTML = `
-      <h3 style="text-align:center; color:#ff5a5f; margin-bottom:15px;">${tierList.name}</h3>
-      <div style="background:#222; padding:15px; border-radius:8px;">
+    const res = await fetch("/api/tierlists");
+    const data = await res.json();
+    
+    if (!data.success || !data.tierLists || !data.tierLists.length) {
+        return alert("No tier lists found. Create one first!");
+    }
+
+    const existing = document.getElementById("tier-viewer-modal");
+    if (existing) existing.remove();
+
+    const modal = document.createElement("div");
+    modal.id = "tier-viewer-modal";
+    modal.style = `position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.9); z-index:10002; display:flex; align-items:center; justify-content:center;`;
+
+    modal.innerHTML = `
+        <div style="background:#111; padding:20px; border-radius:12px; width:90%; max-width:800px; color:white; max-height:90vh; overflow-y:auto;">
+            <h2 style="text-align:center; margin-bottom:20px;">📊 Tier Lists</h2>
+        </div>
     `;
 
-    const tierOrder = ["S", "A", "B", "C", "F"];
-    const tierColors = { S: "#4CAF50", A: "#8BC34A", B: "#FFEB3B", C: "#FF9800", F: "#F44336" };
+    const content = modal.querySelector("div");
+    
+    data.tierLists.forEach(tierList => {
+        const tierListDiv = document.createElement("div");
+        tierListDiv.style = `margin-bottom:30px;`;
+        
+        tierListDiv.innerHTML = `
+            <h3 style="text-align:center; color:#ff5a5f; margin-bottom:15px;">${tierList.name}</h3>
+            <div style="background:#222; padding:15px; border-radius:8px;">
+        `;
 
-    tierOrder.forEach(tierName => {
-      const images = tierList.tiers?.[tierName] || [];
-      tierListDiv.innerHTML += `
-        <div style="display:grid; grid-template-columns:80px 1fr; gap:10px; margin-bottom:8px;">
-          <div style="background:${tierColors[tierName]}; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px;">${tierName}</div>
-          <div style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;">
-            ${images.length > 0 ? images.map(img => `<img src="${img.url}" style="width:50px; height:50px; object-fit:cover; border-radius:4px;">`).join("") : '<span style="color:#666;">Empty</span>'}
-          </div>
-        </div>
-      `;
+        const tierOrder = ["S", "A", "B", "C", "F"];
+        const tierColors = { S: "#4CAF50", A: "#8BC34A", B: "#FFEB3B", C: "#FF9800", F: "#F44336" };
+
+        tierOrder.forEach(tierName => {
+            const images = tierList.tiers?.[tierName] || [];
+            tierListDiv.innerHTML += `
+                <div style="display:grid; grid-template-columns:80px 1fr; gap:10px; margin-bottom:8px;">
+                    <div style="background:${tierColors[tierName]}; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px;">${tierName}</div>
+                    <div style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;">
+                        ${images.length > 0 ? images.map(img => `<img src="${img.url}" style="width:50px; height:50px; object-fit:cover; border-radius:4px;">`).join("") : '<span style="color:#666;">Empty</span>'}
+                    </div>
+                </div>
+            `;
+        });
+
+        tierListDiv.innerHTML += `</div>`;
+        content.appendChild(tierListDiv);
     });
 
-    tierListDiv.innerHTML += `</div>`;
-    content.appendChild(tierListDiv);
-  });
+    const closeBtn = document.createElement("button");
+    closeBtn.textContent = "Close";
+    closeBtn.style = `width:100%; padding:12px; margin-top:15px; background:#666; border:none; color:white; font-weight:bold; border-radius:8px;`;
+    closeBtn.addEventListener("click", () => modal.remove());
+    content.appendChild(closeBtn);
 
-  const closeBtn = document.createElement("button");
-  closeBtn.textContent = "Close";
-  closeBtn.style = `width:100%; padding:12px; margin-top:15px; background:#666; border:none; color:white; font-weight:bold; border-radius:8px;`;
-  closeBtn.addEventListener("click", () => modal.remove());
-  content.appendChild(closeBtn);
-
-  document.body.appendChild(modal);
+    document.body.appendChild(modal);
 }
 
 async function addToAlbum(item) {
-  const res = await fetch("/api/albums");
-  const data = await res.json();
-  
-  let msg = "Albums:\n\n";
-  const albums = data.albums || [];
-  if (!albums.length) {
-    msg = "No albums yet. Create one first:\n\n";
-  } else {
-    albums.forEach((a, i) => msg += `${i + 1}. ${a.name} (${a.items ? a.items.length : 0} items)\n`);
-  }
-  
-  msg += "\nType album name (or create new):";
-  const name = prompt(msg);
-  if (!name) return;
-
-  let album = albums.find(a => a.name.toLowerCase() === name.toLowerCase());
-  
-  if (!album) {
-    const createRes = await fetch("/api/albums/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name })
-    });
-    const createData = await createRes.json();
-    if (!createData.success) {
-      alert("Failed to create album: " + createData.error);
-      return;
+    const res = await fetch("/api/albums");
+    const data = await res.json();
+    
+    let msg = "Albums:\n\n";
+    const albums = data.albums || [];
+    if (!albums.length) {
+        msg = "No albums yet. Create one first:\n\n";
+    } else {
+        albums.forEach((a, i) => msg += `${i + 1}. ${a.name} (${a.items ? a.items.length : 0} items)\n`);
     }
-    album = createData.album;
-  }
+    
+    msg += "\nType album name (or create new):";
+    const name = prompt(msg);
+    if (!name) return;
 
-  const addRes = await fetch("/api/albums/add", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ 
-      albumName: album.name, 
-      public_id: item.public_id,
-      gallery: currentGallery 
-    })
-  });
+    let album = albums.find(a => a.name.toLowerCase() === name.toLowerCase());
+    
+    if (!album) {
+        const createRes = await fetch("/api/albums/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name })
+        });
+        const createData = await createRes.json();
+        if (!createData.success) {
+            alert("Failed to create album: " + createData.error);
+            return;
+        }
+        album = createData.album;
+    }
 
-  const addData = await addRes.json();
-  if (addData.success) {
-    alert(`✅ Added to "${album.name}"!`);
-  } else {
-    alert("Failed: " + addData.error);
-  }
+    const addRes = await fetch("/api/albums/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+            albumName: album.name, 
+            public_id: item.public_id,
+            gallery: currentGallery 
+        })
+    });
+
+    const addData = await addRes.json();
+    if (addData.success) {
+        alert(`✅ Added to "${album.name}"!`);
+    } else {
+        alert("Failed: " + addData.error);
+    }
 }
 
 async function showAlbums() {
-  if (!isAdmin) return alert("Admin only");
-  
-  const res = await fetch("/api/albums");
-  const data = await res.json();
-  
-  const albums = data.albums || [];
-  
-  if (!albums.length) {
-    const name = prompt("No albums yet. Create one by typing a name:");
-    if (!name) return;
+    if (!isAdmin) return alert("Admin only");
     
-    const createRes = await fetch("/api/albums/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name })
-    });
-    const createData = await createRes.json();
-    if (createData.success) {
-      alert("Album created!");
-      openAlbumViewer(createData.album);
-    } else {
-      alert("Failed to create: " + createData.error);
-    }
-    return;
-  }
-  
-  let msg = "Select an album:\n\n";
-  albums.forEach((a, i) => msg += `${i + 1}. ${a.name} (${a.items ? a.items.length : 0} items)\n`);
-  msg += "\nEnter the NUMBER (1, 2, 3...) OR type the EXACT album name:\nOr type 'new' to create:";
-  
-  const choice = prompt(msg);
-  if (!choice) return;
-  
-  if (choice.toLowerCase() === "new") {
-    const name = prompt("Enter album name:");
-    if (!name) return;
+    const res = await fetch("/api/albums");
+    const data = await res.json();
     
-    const createRes = await fetch("/api/albums/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name })
-    });
-    const createData = await createRes.json();
-    if (createData.success) {
-      alert("Album created!");
-      openAlbumViewer(createData.album);
-    } else {
-      alert("Failed to create: " + createData.error);
+    const albums = data.albums || [];
+    
+    if (!albums.length) {
+        const name = prompt("No albums yet. Create one by typing a name:");
+        if (!name) return;
+        
+        const createRes = await fetch("/api/albums/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name })
+        });
+        const createData = await createRes.json();
+        if (createData.success) {
+            alert("Album created!");
+            openAlbumViewer(createData.album);
+        } else {
+            alert("Failed to create: " + createData.error);
+        }
+        return;
     }
-    return;
-  }
-  
-  const idx = parseInt(choice) - 1;
-  if (!isNaN(idx) && idx >= 0 && idx < albums.length) {
-    openAlbumViewer(albums[idx]);
-    return;
-  }
-  
-  const album = albums.find(a => a.name.toLowerCase() === choice.toLowerCase());
-  if (album) {
-    openAlbumViewer(album);
-    return;
-  }
-  
-  alert("Invalid selection. Try the number or exact album name.");
+    
+    let msg = "Select an album:\n\n";
+    albums.forEach((a, i) => msg += `${i + 1}. ${a.name} (${a.items ? a.items.length : 0} items)\n`);
+    msg += "\nEnter the NUMBER (1, 2, 3...) OR type the EXACT album name:\nOr type 'new' to create:";
+    
+    const choice = prompt(msg);
+    if (!choice) return;
+    
+    if (choice.toLowerCase() === "new") {
+        const name = prompt("Enter album name:");
+        if (!name) return;
+        
+        const createRes = await fetch("/api/albums/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name })
+        });
+        const createData = await createRes.json();
+        if (createData.success) {
+            alert("Album created!");
+            openAlbumViewer(createData.album);
+        } else {
+            alert("Failed to create: " + createData.error);
+        }
+        return;
+    }
+    
+    const idx = parseInt(choice) - 1;
+    if (!isNaN(idx) && idx >= 0 && idx < albums.length) {
+        openAlbumViewer(albums[idx]);
+        return;
+    }
+    
+    const album = albums.find(a => a.name.toLowerCase() === choice.toLowerCase());
+    if (album) {
+        openAlbumViewer(album);
+        return;
+    }
+    
+    alert("Invalid selection. Try the number or exact album name.");
 }
 
 async function openAlbumViewer(album) {
-  const existing = document.getElementById("album-viewer-modal");
-  if (existing) existing.remove();
+    const existing = document.getElementById("album-viewer-modal");
+    if (existing) existing.remove();
 
-  const modal = document.createElement("div");
-  modal.id = "album-viewer-modal";
-  modal.style = `position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.9); z-index:10003; display:flex; align-items:center; justify-content:center;`;
+    const modal = document.createElement("div");
+    modal.id = "album-viewer-modal";
+    modal.style = `position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.9); z-index:10003; display:flex; align-items:center; justify-content:center;`;
 
-  const gridDiv = document.createElement("div");
-  gridDiv.style = `display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:10px;`;
-  gridDiv.setAttribute("data-grid", "true");
+    const gridDiv = document.createElement("div");
+    gridDiv.style = `display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:10px;`;
+    gridDiv.setAttribute("data-grid", "true");
 
-  modal.innerHTML = `
-    <div style="background:#111; padding:20px; border-radius:12px; width:90%; max-width:800px; color:white; max-height:90vh; overflow-y:auto;">
-      <h2 style="text-align:center; margin-bottom:20px;">📁 ${album.name}</h2>
-    </div>
-    <button id="close-album-btn" style="width:100%; padding:12px; margin-top:15px; background:#666; border:none; color:white; font-weight:bold; border-radius:8px;">Close</button>
-  </div>`;
+    modal.innerHTML = `
+        <div style="background:#111; padding:20px; border-radius:12px; width:90%; max-width:800px; color:white; max-height:90vh; overflow-y:auto;">
+            <h2 style="text-align:center; margin-bottom:20px;">📁 ${album.name}</h2>
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:10px;"></div>
+        </div>
+        <button id="close-album-btn" style="width:100%; padding:12px; margin-top:15px; background:#666; border:none; color:white; font-weight:bold; border-radius:8px;">Close</button>
+    </div>`;
 
-  const contentDiv = modal.querySelector("div:not([style*='grid'])");
-  
-  if (!album.items || !album.items.length) {
-    const empty = document.createElement("p");
-    empty.textContent = "No items in this album.";
-    empty.style = "text-align:center; color:#666; grid-column:1/-1;";
-    contentDiv.appendChild(empty);
-  } else {
-    contentDiv.appendChild(gridDiv);
-    for (const item of album.items) {
-      const res = await fetch(`/api/media/${item.public_id}`);
-      const data = await res.json();
-      if (!data.success || !data.item) continue;
-      
-      const fullItem = data.item;
-      
-      const img = document.createElement("img");
-      img.src = fullItem.url;
-      img.style = `width:100%; height:100px; object-fit:cover; border-radius:8px; cursor:pointer;`;
-      img.addEventListener("click", () => {
-        const idx = items.findIndex(i => i.public_id === item.public_id);
-        if (idx >= 0) openLightbox(idx);
-      });
-      gridDiv.appendChild(img);
+    const contentDiv = modal.querySelector("div[data-grid]");
+    
+    if (!contentDiv) {
+        contentDiv = modal.querySelector("div:not([style*='grid'])");
+        const grid = document.createElement("div");
+        grid.style = `display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:10px;`;
+        contentDiv.appendChild(grid);
+        contentDiv = grid;
     }
-  }
+    
+    if (!album.items || !album.items.length) {
+        const empty = document.createElement("p");
+        empty.textContent = "No items in this album.";
+        empty.style = "text-align:center; color:#666; grid-column:1/-1;";
+        contentDiv.appendChild(empty);
+    } else {
+        for (const item of album.items) {
+            const res = await fetch(`/api/media/${item.public_id}`);
+            const data = await res.json();
+            if (!data.success || !data.item) continue;
+            
+            const fullItem = data.item;
+            
+            const img = document.createElement("img");
+            img.src = fullItem.url;
+            img.style = `width:100%; height:100px; object-fit:cover; border-radius:8px; cursor:pointer;`;
+            img.addEventListener("click", () => {
+                const idx = items.findIndex(i => i.public_id === item.public_id);
+                if (idx >= 0) openLightbox(idx);
+            });
+            contentDiv.appendChild(img);
+        }
+    }
 
-  modal.querySelector("#close-album-btn").addEventListener("click", () => modal.remove());
-  document.body.appendChild(modal);
+    modal.querySelector("#close-album-btn").addEventListener("click", () => modal.remove());
+    document.body.appendChild(modal);
 }
