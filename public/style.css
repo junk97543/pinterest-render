@@ -661,3 +661,30 @@ header {
   font-weight: bold;
   cursor: pointer;
 }
+/* Make image container scale properly */
+.masonry-item {
+    position: relative;
+    width: 100%;
+    height: auto;
+}
+
+.masonry-item img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* Overlays should scale with their container */
+.lightbox-overlay {
+    position: absolute;
+    transform-origin: top left;
+    pointer-events: auto;
+    user-select: none;
+}
+
+/* Gallery image container for overlays */
+.masonry-item .img-container {
+    position: relative;
+    width: 100%;
+    height: auto;
+}

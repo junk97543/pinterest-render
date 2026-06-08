@@ -432,6 +432,7 @@ function render() {
 
         if (item.type === "image") {
             const imgContainer = document.createElement("div");
+            imgContainer.className = "img-container";  
             imgContainer.style.position = "relative";
             imgContainer.style.width = "100%";
             imgContainer.style.height = "auto";
@@ -1144,14 +1145,18 @@ function createToolbox(item) {
 function createOverlayElement(ov, item) {
     const overlay = document.createElement("div");
     overlay.className = "lightbox-overlay";
+    const lightboxContent = document.querySelector(".lightbox-content");
+          if (!lightboxContent) return;
+    
+          const rect = lightboxContent.getBoundingClientRect();
     overlay.style.position = "absolute";
     overlay.style.zIndex = "1003";
     overlay.style.userSelect = "none";
     overlay.style.cursor = "move";
     overlay.style.pointerEvents = "auto";
     
-    overlay.style.top = ov.top;
-    overlay.style.left = ov.left;
+    overlay.style.top = (rect.height * ov.topPercent / 100) + "px";
+    overlay.style.left = (rect.width * ov.leftPercent / 100) + "px";
     overlay.style.fontSize = ov.fontSize || "32px";
     overlay.style.color = ov.color || "#ff0000";
     overlay.style.opacity = ov.opacity || "1";
