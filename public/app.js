@@ -58,6 +58,8 @@ let familyLogoTimer = null;
 let excludedTags = [];
 let currentTierListName = "My Tier List";
 let activeOverlay = null;
+let lightboxImageWidth = 0;
+let lightboxImageHeight = 0;
 
 initTheme();
 initHandlers();
@@ -221,6 +223,11 @@ function initHandlers() {
 
     window.addEventListener("wheel", handleLightboxWheel, { passive: false });
     window.addEventListener("click", enableAudioOnFirstGesture, { once: true });
+    
+    lightboxImg.addEventListener("load", () => {
+        lightboxImageWidth = lightboxImg.offsetWidth;
+        lightboxImageHeight = lightboxImg.offsetHeight;
+    });
 }
 
 function setSortActive(btn) {
@@ -432,10 +439,7 @@ function render() {
 
         if (item.type === "image") {
             const imgContainer = document.createElement("div");
-            imgContainer.className = "img-container";  
-            imgContainer.style.position = "relative";
-            imgContainer.style.width = "100%";
-            imgContainer.style.height = "auto";
+            imgContainer.className = "img-container";
             
             const img = document.createElement("img");
             img.src = item.url;
@@ -445,72 +449,49 @@ function render() {
             imgContainer.appendChild(img);
 
             if (item.overlays && item.overlays.length) {
-                const rect = img.getBoundingClientRect();
                 item.overlays.forEach(ov => {
+                    const overlay = document.createElement("div");
+                    overlay.className = "gallery-overlay";
+                    
+                    const imgRect = img.getBoundingClientRect();
+                    
+                   overlay.style.position = "absolute";
+                    overlay.style.top = (imgRect.height * ov.yRatio) + "px";
+                    overlay.style.left = (imgRect.width * ov.xRatio) + "px";
+                    overlay.style.fontSize = (ov.sizeRatio * imgRect.width) + "px";
+                    overlay.style.color = ov.color || "#ff0000";
+                    overlay.style.opacity = ov.opacity || "1";
+                    overlay.style.zIndex = "2";
+                    overlay.style.userSelect = "none";
+                    overlay.style.pointerEvents = "none";
+
                     if (ov.type === "text") {
-                        const overlay = document.createElement("div");
-                        overlay.style.position = "absolute";
-                        overlay.style.top = ov.top;
-                        overlay.style.left = ov.left;
-                        overlay.style.fontSize = ov.fontSize || "32px";
-                        overlay.style.color = ov.color || "#ff0000";
-                        overlay.style.zIndex = "2";
-                        overlay.style.userSelect = "none";
-                        overlay.style.pointerEvents = "none";
-                        overlay.style.opacity = ov.opacity || "1";
                         overlay.textContent = ov.content;
-                        imgContainer.appendChild(overlay);
+                        overlay.style.background = "none";
                     } else if (ov.type === "emoji") {
-                        const overlay = document.createElement("div");
-                        overlay.style.position = "absolute";
-                        overlay.style.top = ov.top;
-                        overlay.style.left = ov.left;
-                        overlay.style.fontSize = ov.fontSize || "42px";
-                        overlay.style.zIndex = "2";
-                        overlay.style.userSelect = "none";
-                        overlay.style.pointerEvents = "none";
-                        overlay.style.opacity = ov.opacity || "0.9";
                         overlay.textContent = ov.content;
-                        imgContainer.appendChild(overlay);
                     } else if (ov.type === "snapchat") {
-                        const overlay = document.createElement("div");
-                        overlay.style.position = "absolute";
-                        overlay.style.top = ov.top;
-                        overlay.style.left = "0";
                         overlay.style.width = "100%";
                         overlay.style.background = ov.background || "rgba(0,0,0,0.45)";
-                        overlay.style.padding = ov.padding || "12px 20px";
+                        overlay.style.padding = "12px 20px";
                         overlay.style.textAlign = "center";
-                        overlay.style.zIndex = "2";
-                        overlay.style.pointerEvents = "none";
-                        overlay.style.opacity = ov.opacity || "1";
                         
                         const textSpan = document.createElement("span");
                         textSpan.style.color = ov.color || "#fff";
-                        textSpan.style.fontSize = ov.fontSize || "26px";
+                        textSpan.style.fontSize = (ov.sizeRatio * imgRect.width) + "px";
                         textSpan.style.fontWeight = "bold";
                         textSpan.textContent = ov.content;
                         overlay.appendChild(textSpan);
-                        imgContainer.appendChild(overlay);
                     } else if (ov.type === "speech") {
-                        const overlay = document.createElement("div");
-                        overlay.style.position = "absolute";
-                        overlay.style.top = ov.top;
-                        overlay.style.left = ov.left;
-                        overlay.style.fontSize = ov.fontSize || "18px";
-                        overlay.style.color = ov.color || "#000";
-                        overlay.style.background = ov.background || "rgba(255,255,255,0.95)";
-                        overlay.style.padding = ov.padding || "12px 18px";
-                        overlay.style.borderRadius = ov.borderRadius || "20px";
-                        overlay.style.maxWidth = ov.maxWidth || "260px";
-                        overlay.style.zIndex = "2";
-                        overlay.style.userSelect = "none";
-                        overlay.style.pointerEvents = "none";
-                        overlay.style.opacity = ov.opacity || "1";
-                        overlay.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)";
                         overlay.textContent = ov.content;
-                        imgContainer.appendChild(overlay);
+                        overlay.style.background = ov.background || "rgba(255,255,255,0.95)";
+                        overlay.style.padding = "12px 18px";
+                        overlay.style.borderRadius = "20px";
+                        overlay.style.maxWidth = (ov.maxWidthRatio * imgRect.width) + "px";
+                        overlay.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)";
                     }
+
+                    imgContainer.appendChild(overlay);
                 });
             }
 
@@ -702,6 +683,10 @@ function showLightboxItem(index) {
     }
 
     if (item.overlays && item.overlays.length) {
+        const imgRect = lightboxImg.getBoundingClientRect();
+        lightboxImageWidth = imgRect.width;
+        lightboxImageHeight = imgRect.height;
+        
         item.overlays.forEach(ov => {
             createOverlayElement(ov, item);
         });
@@ -710,6 +695,19 @@ function showLightboxItem(index) {
     if (item.type === "image") {
         lightboxImg.src = item.url;
         lightboxImg.style.display = "block";
+        
+        lightboxImg.addEventListener("load", () => {
+            const imgRect = lightboxImg.getBoundingClientRect();
+            lightboxImageWidth = imgRect.width;
+            lightboxImageHeight = imgRect.height;
+            
+            document.querySelectorAll(".lightbox-overlay").forEach(el => el.remove());
+            if (item.overlays && item.overlays.length) {
+                item.overlays.forEach(ov => {
+                    createOverlayElement(ov, item);
+                });
+            }
+        });
     } else {
         lightboxVideo.src = item.url;
         lightboxVideo.style.display = "block";
@@ -728,6 +726,8 @@ function closeLightbox() {
     lightboxCaption.textContent = "";
     document.querySelectorAll("#rating-panel, #toolbox-panel, #sliders-panel, #emoji-picker, #tier-list-modal, #tier-viewer-modal, #album-viewer-modal").forEach(el => el.remove());
     activeOverlay = null;
+    lightboxImageWidth = 0;
+    lightboxImageHeight = 0;
 }
 
 function handleLightboxWheel(e) {
@@ -1039,7 +1039,7 @@ function showEmojiPickerWithMove(item) {
     emojis.forEach(emo => {
         const btn = document.createElement("button");
         btn.textContent = emo;
-        btn.style = "font-size:42px; background:none; border:none; cursor:pointer; padding:8px;";
+        btn.style = "font-size:48px; background:none; border:none; cursor:pointer; padding:8px;";
         btn.addEventListener("click", () => addEmojiToImageWithMove(emo, item));
         picker.appendChild(btn);
     });
@@ -1056,22 +1056,17 @@ function showEmojiPickerWithMove(item) {
 function addEmojiToImageWithMove(emoji, item) {
     if (!item.overlays) item.overlays = [];
     
-    const lightboxContent = document.querySelector(".lightbox-content");
-    if (!lightboxContent) return;
-    
-    const rect = lightboxContent.getBoundingClientRect();
-    
     const overlay = {
         type: "emoji",
         content: emoji,
-        top: (rect.height / 2) + "px",
-        left: (rect.width / 2) + "px",
-        fontSize: "48px",
+        xRatio: 0.5,
+        yRatio: 0.5,
+        sizeRatio: 0.08,
         opacity: "0.9"
     };
     
     item.overlays.push(overlay);
-
+    saveOverlaysToDB(item);
     createOverlayElement(overlay, item);
 }
 
@@ -1145,21 +1140,19 @@ function createToolbox(item) {
 function createOverlayElement(ov, item) {
     const overlay = document.createElement("div");
     overlay.className = "lightbox-overlay";
-    const lightboxContent = document.querySelector(".lightbox-content");
-          if (!lightboxContent) return;
     
-          const rect = lightboxContent.getBoundingClientRect();
+    const imgRect = lightboxImg.getBoundingClientRect();
+    
     overlay.style.position = "absolute";
+    overlay.style.top = (imgRect.height * ov.yRatio) + "px";
+    overlay.style.left = (imgRect.width * ov.xRatio) + "px";
+    overlay.style.fontSize = (ov.sizeRatio * imgRect.width) + "px";
+    overlay.style.color = ov.color || "#ff0000";
+    overlay.style.opacity = ov.opacity || "1";
     overlay.style.zIndex = "1003";
     overlay.style.userSelect = "none";
     overlay.style.cursor = "move";
     overlay.style.pointerEvents = "auto";
-    
-    overlay.style.top = (rect.height * ov.topPercent / 100) + "px";
-    overlay.style.left = (rect.width * ov.leftPercent / 100) + "px";
-    overlay.style.fontSize = ov.fontSize || "32px";
-    overlay.style.color = ov.color || "#ff0000";
-    overlay.style.opacity = ov.opacity || "1";
 
     if (ov.type === "text") {
         overlay.textContent = ov.content;
@@ -1169,22 +1162,24 @@ function createOverlayElement(ov, item) {
     } else if (ov.type === "snapchat") {
         overlay.style.width = "100%";
         overlay.style.background = ov.background || "rgba(0,0,0,0.45)";
-        overlay.style.padding = ov.padding || "12px 20px";
+        overlay.style.padding = "12px 20px";
         overlay.style.textAlign = "center";
+        overlay.style.pointerEvents = "none";
 
         const textSpan = document.createElement("span");
         textSpan.style.color = ov.color || "#fff";
-        textSpan.style.fontSize = ov.fontSize || "26px";
+        textSpan.style.fontSize = (ov.sizeRatio * imgRect.width) + "px";
         textSpan.style.fontWeight = "bold";
         textSpan.textContent = ov.content;
         overlay.appendChild(textSpan);
     } else if (ov.type === "speech") {
         overlay.textContent = ov.content;
         overlay.style.background = ov.background || "rgba(255,255,255,0.95)";
-        overlay.style.padding = ov.padding || "12px 18px";
-        overlay.style.borderRadius = ov.borderRadius || "20px";
-        overlay.style.maxWidth = ov.maxWidth || "260px";
+        overlay.style.padding = "12px 18px";
+        overlay.style.borderRadius = "20px";
+        overlay.style.maxWidth = (ov.maxWidthRatio * imgRect.width) + "px";
         overlay.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)";
+        overlay.style.pointerEvents = "none";
     }
 
     document.querySelector(".lightbox-content").appendChild(overlay);
@@ -1194,62 +1189,44 @@ function createOverlayElement(ov, item) {
 
 function makeDraggable(el, item, ov) {
     let isDragging = false;
-    let startX, startY, startLeft, startTop;
+    let startX, startY, startXPx, startYPx;
 
     el.addEventListener("mousedown", (e) => {
         isDragging = true;
         startX = e.clientX;
         startY = e.clientY;
-        startLeft = el.offsetLeft;
-        startTop = el.offsetTop;
+        
+        const imgRect = lightboxImg.getBoundingClientRect();
+        startXPx = el.offsetLeft;
+        startYPx = el.offsetTop;
+        
         el.style.cursor = "grabbing";
         e.preventDefault();
     });
 
     document.addEventListener("mousemove", (e) => {
         if (!isDragging) return;
+        
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
-        el.style.left = (startLeft + dx) + "px";
-        el.style.top = (startTop + dy) + "px";
+        
+        const newLeft = startXPx + dx;
+        const newTop = startYPx + dy;
+        
+        el.style.left = newLeft + "px";
+        el.style.top = newTop + "px";
+        
+        const imgRect = lightboxImg.getBoundingClientRect();
+        ov.xRatio = newLeft / imgRect.width;
+        ov.yRatio = newTop / imgRect.height;
     });
 
     document.addEventListener("mouseup", () => {
         if (isDragging) {
             isDragging = false;
             el.style.cursor = "move";
+            saveOverlaysToDB(item);
         }
-    });
-}
-
-async function saveOverlaysToDB(item) {
-    const overlays = item.overlays || [];
-
-    const res = await fetch("/api/overlay/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-            public_id: item.public_id, 
-            gallery: currentGallery,
-            overlays 
-        })
-    });
-
-    const data = await res.json();
-    if (data.success) {
-        alert("✅ Overlays saved! They will show on gallery images.");
-    } else {
-        alert("Failed to save overlays");
-    }
-}
-
-function loadSavedOverlays(item) {
-    if (!item.overlays || !item.overlays.length) return;
-    
-    document.querySelectorAll(".lightbox-overlay").forEach(el => el.remove());
-    
-    item.overlays.forEach(ov => {
-        createOverlayElement(ov, item);
     });
 }
 
@@ -1257,17 +1234,14 @@ function addDraggableTextNoBox(item) {
     const txt = prompt("Tattoo text:", "text");
     if (!txt) return;
 
-    const lightboxContent = document.querySelector(".lightbox-content");
-    if (!lightboxContent) return;
-    
-    const rect = lightboxContent.getBoundingClientRect();
+    const imgRect = lightboxImg.getBoundingClientRect();
     
     const overlay = {
         type: "text",
         content: txt,
-        top: (rect.height / 2) + "px",
-        left: (rect.width / 2) + "px",
-        fontSize: "32px",
+        xRatio: 0.5,
+        yRatio: 0.5,
+        sizeRatio: 0.05,
         color: "#ff0000",
         opacity: "1"
     };
@@ -1283,20 +1257,16 @@ function addSnapchatText(item) {
     const txt = prompt("Snapchat text:", "text");
     if (!txt) return;
 
-    const lightboxContent = document.querySelector(".lightbox-content");
-    if (!lightboxContent) return;
-    
-    const rect = lightboxContent.getBoundingClientRect();
+    const imgRect = lightboxImg.getBoundingClientRect();
     
     const overlay = {
         type: "snapchat",
         content: txt,
-        top: (rect.height * 0.7) + "px",
-        left: (rect.width / 2) + "px",
-        fontSize: "26px",
+        xRatio: 0.5,
+        yRatio: 0.7,
+        sizeRatio: 0.04,
         color: "#fff",
         background: "rgba(0,0,0,0.45)",
-        padding: "12px 20px",
         opacity: "1"
     };
 
@@ -1311,22 +1281,17 @@ function addSpeechBubbleWithSlider(item) {
     const txt = prompt("What does she say?", "text");
     if (!txt) return;
 
-    const lightboxContent = document.querySelector(".lightbox-content");
-    if (!lightboxContent) return;
-    
-    const rect = lightboxContent.getBoundingClientRect();
+    const imgRect = lightboxImg.getBoundingClientRect();
     
     const overlay = {
         type: "speech",
         content: txt,
-        top: (rect.height * 0.3) + "px",
-        left: (rect.width / 2) + "px",
-        fontSize: "18px",
+        xRatio: 0.5,
+        yRatio: 0.3,
+        sizeRatio: 0.03,
         color: "#000",
         background: "rgba(255,255,255,0.95)",
-        padding: "12px 18px",
-        borderRadius: "20px",
-        maxWidth: "260px",
+        maxWidthRatio: 0.4,
         opacity: "1"
     };
 
@@ -1342,10 +1307,12 @@ function addSlidersToOverlay(overlay, item, overlayEl) {
     sliderPanel.id = "sliders-panel";
     sliderPanel.style = `position:absolute; top:20px; left:20px; width:200px; background:rgba(0,0,0,0.95); border-radius:12px; color:#fff; z-index:1004; padding:15px;`;
     
+    const fontSizePx = overlay.sizeRatio * lightboxImageWidth;
+    
     sliderPanel.innerHTML = `
         <div style="margin-bottom:10px;">
-            <label style="display:block; margin-bottom:5px;">Size: <span id="size-value">${overlay.fontSize || "32px"}</span></label>
-            <input type="range" id="size-slider" min="12" max="72" value="${parseInt(overlay.fontSize) || 32}" style="width:100%;">
+            <label style="display:block; margin-bottom:5px;">Size: <span id="size-value">${Math.round(fontSizePx)}px</span></label>
+            <input type="range" id="size-slider" min="12" max="72" value="${Math.round(fontSizePx) || 32}" style="width:100%;">
         </div>
         <div style="margin-bottom:10px;">
             <label style="display:block; margin-bottom:5px;">Transparency: <span id="opacity-value">${(parseFloat(overlay.opacity) || 1).toFixed(1)}</span></label>
@@ -1368,10 +1335,13 @@ function addSlidersToOverlay(overlay, item, overlayEl) {
     const opacityValue = sliderPanel.querySelector("#opacity-value");
     
     sizeSlider.addEventListener("input", () => {
-        const size = sizeSlider.value + "px";
-        overlay.fontSize = size;
-        sizeValue.textContent = size;
-        overlayEl.style.fontSize = size;
+        const sizePx = sizeSlider.value;
+        const imgRect = lightboxImg.getBoundingClientRect();
+        const newSizeRatio = sizePx / imgRect.width;
+        
+        overlay.sizeRatio = newSizeRatio;
+        sizeValue.textContent = sizePx + "px";
+        overlayEl.style.fontSize = sizePx + "px";
     });
     
     opacitySlider.addEventListener("input", () => {
@@ -1397,6 +1367,38 @@ function addSlidersToOverlay(overlay, item, overlayEl) {
     });
     
     sliderPanel.querySelector("#close-sliders-btn").addEventListener("click", () => sliderPanel.remove());
+}
+
+function loadSavedOverlays(item) {
+    if (!item.overlays || !item.overlays.length) return;
+    
+    document.querySelectorAll(".lightbox-overlay").forEach(el => el.remove());
+    
+    item.overlays.forEach(ov => {
+        createOverlayElement(ov, item);
+    });
+}
+
+function saveOverlaysToDB(item) {
+    const overlays = item.overlays || [];
+    
+    fetch("/api/overlay/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+            public_id: item.public_id, 
+            gallery: currentGallery,
+            overlays 
+        })
+    }).then(res => res.json()).then(data => {
+        if (data.success) {
+            console.log("✅ Overlays saved!");
+        } else {
+            console.error("Failed to save overlays:", data.error);
+        }
+    }).catch(err => {
+        console.error("Error saving overlays:", err);
+    });
 }
 
 function removeAllOverlays(item) {
@@ -1515,9 +1517,10 @@ function openTierListMaker(currentItem) {
             img.src = item.url;
             img.style = "width:50px; height:50px; object-fit:cover; border-radius:4px; cursor:grab;";
             img.draggable = true;
-            img.dataset.publicId = item.public_id;             
-                              img.addEventListener("dragstart", (dragE) => {
-                                       dragE.dataTransfer.setData("text/plain", JSON.stringify(item));
+            img.dataset.publicId = item.public_id;
+            
+            img.addEventListener("dragstart", (dragE) => {
+                dragE.dataTransfer.setData("text/plain", JSON.stringify(item));
             });
 
             img.addEventListener("click", () => {
@@ -1799,3 +1802,4 @@ async function openAlbumViewer(album) {
     modal.querySelector("#close-album-btn").addEventListener("click", () => modal.remove());
     document.body.appendChild(modal);
 }
+
