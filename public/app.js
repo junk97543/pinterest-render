@@ -777,8 +777,9 @@ async function buildPhoneFeed() {
   phoneFeed.innerHTML = "";
 
   if (!phoneVideos.length) {
-  phoneFeed.innerHTML = "<div class='phone-item'><div class='phone-overlay-ui'><div class='phone-caption'>No videos uploaded yet.</div></div></div>";
-}
+    phoneFeed.innerHTML = "<div class='phone-item'><div class='phone-overlay-ui'><div class='phone-caption'>No videos uploaded yet.</div></div></div>";
+    return;
+  }
 
   phoneVideos.forEach((item, idx) => {
     const el = document.createElement("section");
@@ -1064,7 +1065,6 @@ function addEmojiToImageWithMove(emoji, item) {
   item.overlays.push(overlay);
 
   createOverlayElement(overlay, item);
-  saveOverlaysToDB(item);
 }
 
 async function deleteSingleItem(public_id) {
@@ -1138,15 +1138,37 @@ function createOverlayElement(ov, item) {
   const overlay = document.createElement("div");
   overlay.className = "lightbox-overlay";
   overlay.style.position = "absolute";
-  overlay.style.top = ov.top;
-  overlay.style.left = ov.left;
-  overlay.style.fontSize = ov.fontSize || "16px";
-  overlay.style.color = ov.color || "#ff0000";
   overlay.style.zIndex = "1003";
   overlay.style.userSelect = "none";
   overlay.style.cursor = "move";
-  overlay.style.opacity = ov.opacity || "1";
   overlay.style.pointerEvents = "auto";
+  
+  const lightboxContent = document.querySelector(".lightbox-content");
+  if (lightboxContent) {
+    const rect = lightboxContent.getBoundingClientRect();
+    
+    let topPos = ov.top;
+    let leftPos = ov.left;
+    
+    if (typeof ov.top === "string" && ov.top.endsWith("%")) {
+      const percent = parseFloat(ov.top);
+      topPos = (percent / 100 * rect.height) + "px";
+    }
+    if (typeof ov.left === "string" && ov.left.endsWith("%")) {
+      const percent = parseFloat(ov.left);
+      leftPos = (percent / 100 * rect.width) + "px";
+    }
+    
+    overlay.style.top = topPos;
+    overlay.style.left = leftPos;
+  } else {
+    overlay.style.top = ov.top;
+    overlay.style.left = ov.left;
+  }
+  
+  overlay.style.fontSize = ov.fontSize || "16px";
+  overlay.style.color = ov.color || "#ff0000";
+  overlay.style.opacity = ov.opacity || "1";
 
   if (ov.type === "text") {
     overlay.textContent = ov.content;
@@ -1256,7 +1278,6 @@ function addDraggableTextNoBox(item) {
 
   const el = createOverlayElement(overlay, item);
   addSlidersToOverlay(overlay, item, el);
-  saveOverlaysToDB(item);
 }
 
 function addSnapchatText(item) {
@@ -1280,7 +1301,6 @@ function addSnapchatText(item) {
 
   const el = createOverlayElement(overlay, item);
   addSlidersToOverlay(overlay, item, el);
-  saveOverlaysToDB(item);
 }
 
 function addSpeechBubbleWithSlider(item) {
@@ -1306,7 +1326,6 @@ function addSpeechBubbleWithSlider(item) {
 
   const el = createOverlayElement(overlay, item);
   addSlidersToOverlay(overlay, item, el);
-  saveOverlaysToDB(item);
 }
 
 function addSlidersToOverlay(overlay, item, overlayEl) {
@@ -1327,7 +1346,8 @@ function addSlidersToOverlay(overlay, item, overlayEl) {
       <label style="display:block; margin-bottom:5px;">Color</label>
       <input type="color" id="color-picker" value="${overlay.color || '#ff0000'}" style="width:100%;">
     </div>
-    <button id="close-sliders-btn" style="width:100%; padding:8px; background:#666; border:none; color:white; border-radius:6px; margin-top:10px;">Close</button>
+    <button id="save-sliders-btn" style="width:100%; padding:8px; background:#e60023; border:none; color:white; border-radius:6px; margin-top:10px;">💾 Save Changes</button>
+    <button id="close-sliders-btn" style="width:100%; padding:8px; background:#666; border:none; color:white; border-radius:6px; margin-top:5px;">Close</button>
   `;
   
   document.querySelector(".lightbox-content").appendChild(sliderPanel);
@@ -1343,7 +1363,6 @@ function addSlidersToOverlay(overlay, item, overlayEl) {
     overlay.fontSize = size;
     sizeValue.textContent = size;
     overlayEl.style.fontSize = size;
-    saveOverlaysToDB(item);
   });
   
   opacitySlider.addEventListener("input", () => {
@@ -1351,7 +1370,6 @@ function addSlidersToOverlay(overlay, item, overlayEl) {
     overlay.opacity = opacity;
     opacityValue.textContent = opacity;
     overlayEl.style.opacity = opacity;
-    saveOverlaysToDB(item);
   });
   
   colorPicker.addEventListener("input", () => {
@@ -1362,7 +1380,11 @@ function addSlidersToOverlay(overlay, item, overlayEl) {
       const span = overlayEl.querySelector("span");
       if (span) span.style.color = color;
     }
+  });
+  
+  sliderPanel.querySelector("#save-sliders-btn").addEventListener("click", () => {
     saveOverlaysToDB(item);
+    alert("✅ Sliders saved!");
   });
   
   sliderPanel.querySelector("#close-sliders-btn").addEventListener("click", () => sliderPanel.remove());
@@ -1574,9 +1596,7 @@ async function openTierListViewer() {
       tierListDiv.innerHTML += `
         <div style="display:grid; grid-template-columns:80px 1fr; gap:10px; margin-bottom:8px;">
           <div style="background:${tierColors[tierName]}; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px;">${tierName}</div>
-          <div style="background:#333; min
-
--height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;">
+          <div style="background:#333; min-height:60px; border-radius:4px; padding:5px; display:flex; gap:5px; flex-wrap:wrap;">
             ${images.length > 0 ? images.map(img => `<img src="${img.url}" style="width:50px; height:50px; object-fit:cover; border-radius:4px;">`).join("") : '<span style="color:#666;">Empty</span>'}
           </div>
         </div>
@@ -1673,9 +1693,9 @@ async function showAlbums() {
     return;
   }
   
-  let msg = "Select an album to view:\n\n";
+  let msg = "Select an album:\n\n";
   albums.forEach((a, i) => msg += `${i + 1}. ${a.name} (${a.items ? a.items.length : 0} items)\n`);
-  msg += "\nType the number (or 'new' to create):";
+  msg += "\nEnter the NUMBER (1, 2, 3...) OR type the EXACT album name:\nOr type 'new' to create:";
   
   const choice = prompt(msg);
   if (!choice) return;
@@ -1700,12 +1720,18 @@ async function showAlbums() {
   }
   
   const idx = parseInt(choice) - 1;
-  if (isNaN(idx) || idx < 0 || idx >= albums.length) {
-    alert("Invalid selection");
+  if (!isNaN(idx) && idx >= 0 && idx < albums.length) {
+    openAlbumViewer(albums[idx]);
     return;
   }
   
-  openAlbumViewer(albums[idx]);
+  const album = albums.find(a => a.name.toLowerCase() === choice.toLowerCase());
+  if (album) {
+    openAlbumViewer(album);
+    return;
+  }
+  
+  alert("Invalid selection. Try the number or exact album name.");
 }
 
 async function openAlbumViewer(album) {
@@ -1754,6 +1780,6 @@ async function openAlbumViewer(album) {
     }
   }
 
-   modal.querySelector("#close-album-btn").addEventListener("click", () => modal.remove());
+  modal.querySelector("#close-album-btn").addEventListener("click", () => modal.remove());
   document.body.appendChild(modal);
 }
