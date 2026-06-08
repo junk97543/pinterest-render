@@ -1134,6 +1134,12 @@ function createToolbox(item) {
   panel.querySelector("#save-overlays-btn").addEventListener("click", () => saveOverlaysToDB(item));
 }
 
+
+
+
+
+
+
 function createOverlayElement(ov, item) {
   const overlay = document.createElement("div");
   overlay.className = "lightbox-overlay";
@@ -1147,26 +1153,49 @@ function createOverlayElement(ov, item) {
   if (lightboxContent) {
     const rect = lightboxContent.getBoundingClientRect();
     
-    let topPos = ov.top;
-    let leftPos = ov.left;
+    // Store original percentages for scaling
+    let topPercent = ov.topPercent;
+    let leftPercent = ov.leftPercent;
     
-    if (typeof ov.top === "string" && ov.top.endsWith("%")) {
-      const percent = parseFloat(ov.top);
-      topPos = (percent / 100 * rect.height) + "px";
-    }
-    if (typeof ov.left === "string" && ov.left.endsWith("%")) {
-      const percent = parseFloat(ov.left);
-      leftPos = (percent / 100 * rect.width) + "px";
+    // If we don't have percentages yet, convert from pixels
+    if (topPercent === undefined || topPercent === null) {
+      if (typeof ov.top === "string" && ov.top.endsWith("%")) {
+        topPercent = parseFloat(ov.top);
+      } else {
+        topPercent = (parseFloat(ov.top) / rect.height) * 100;
+      }
     }
     
-    overlay.style.top = topPos;
-    overlay.style.left = leftPos;
+    if (leftPercent === undefined || leftPercent === null) {
+      if (typeof ov.left === "string" && ov.left.endsWith("%")) {
+        leftPercent = parseFloat(ov.left);
+      } else {
+        leftPercent = (parseFloat(ov.left) / rect.width) * 100;
+      }
+    }
+    
+    // Use percentages for positioning
+    overlay.style.top = topPercent + "%";
+    overlay.style.left = leftPercent + "%";
+    overlay.style.transform = "translate(-50%, -50%)";
+    
+    // Store percentages back to overlay object
+    ov.topPercent = topPercent;
+    ov.leftPercent = leftPercent;
+    ov.top = topPercent + "%";
+    ov.left = leftPercent + "%";
+    
+    // Calculate font size as percentage of image width for proportional scaling
+    const fontSizePercent = ov.fontSizePercent || (parseInt(ov.fontSize || "32") / rect.width * 100);
+    overlay.style.fontSize = fontSizePercent + "%";
+    ov.fontSizePercent = fontSizePercent;
   } else {
     overlay.style.top = ov.top;
     overlay.style.left = ov.left;
+    overlay.style.transform = "translate(-50%, -50%)";
+    overlay.style.fontSize = ov.fontSize;
   }
-  
-  overlay.style.fontSize = ov.fontSize || "16px";
+
   overlay.style.color = ov.color || "#ff0000";
   overlay.style.opacity = ov.opacity || "1";
 
@@ -1178,49 +1207,68 @@ function createOverlayElement(ov, item) {
   } else if (ov.type === "snapchat") {
     overlay.style.width = "100%";
     overlay.style.background = ov.background || "rgba(0,0,0,0.45)";
-    overlay.style.padding = ov.padding || "12px 20px";
+    overlay.style.padding = "12px 20px";
     overlay.style.textAlign = "center";
+    overlay.style.transform = "translate(-50%, -50%) none";
 
     const textSpan = document.createElement("span");
     textSpan.style.color = ov.color || "#fff";
-    textSpan.style.fontSize = ov.fontSize || "26px";
+    textSpan.style.fontSize = "26px";
     textSpan.style.fontWeight = "bold";
     textSpan.textContent = ov.content;
     overlay.appendChild(textSpan);
   } else if (ov.type === "speech") {
     overlay.textContent = ov.content;
     overlay.style.background = ov.background || "rgba(255,255,255,0.95)";
-    overlay.style.padding = ov.padding || "12px 18px";
-    overlay.style.borderRadius = ov.borderRadius || "20px";
-    overlay.style.maxWidth = ov.maxWidth || "260px";
+    overlay.style.padding = "12px 18px";
+    overlay.style.borderRadius = "20px";
+    overlay.style.maxWidth = "260px";
     overlay.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)";
   }
 
   document.querySelector(".lightbox-content").appendChild(overlay);
-  makeDraggable(overlay, item);
+  makeDraggable(overlay, item, ov);
   return overlay;
 }
 
-function makeDraggable(el, item) {
+function makeDraggable(el, item, ov) {
   let isDragging = false;
-  let startX, startY, startLeft, startTop;
+  let startX, startY, startTopPercent, startLeftPercent;
 
   el.addEventListener("mousedown", (e) => {
     isDragging = true;
     startX = e.clientX;
     startY = e.clientY;
-    startLeft = el.offsetLeft;
-    startTop = el.offsetTop;
+    startTopPercent = ov.topPercent || parseFloat(el.style.top);
+    startLeftPercent = ov.leftPercent || parseFloat(el.style.left);
     el.style.cursor = "grabbing";
     e.preventDefault();
   });
 
   document.addEventListener("mousemove", (e) => {
     if (!isDragging) return;
+    
+    const lightboxContent = document.querySelector(".lightbox-content");
+    if (!lightboxContent) return;
+    
+    const rect = lightboxContent.getBoundingClientRect();
+    
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
-    el.style.left = (startLeft + dx) + "px";
-    el.style.top = (startTop + dy) + "px";
+    
+    const dxPercent = (dx / rect.width) * 100;
+    const dyPercent = (dy / rect.height) * 100;
+    
+    const newTopPercent = startTopPercent + dyPercent;
+    const newLeftPercent = startLeftPercent + dxPercent;
+    
+    el.style.top = newTopPercent + "%";
+    el.style.left = newLeftPercent + "%";
+    
+    ov.topPercent = newTopPercent;
+    ov.leftPercent = newLeftPercent;
+    ov.top = newTopPercent + "%";
+    ov.left = newLeftPercent + "%";
   });
 
   document.addEventListener("mouseup", () => {
@@ -1231,29 +1279,12 @@ function makeDraggable(el, item) {
   });
 }
 
-async function saveOverlaysToDB(item) {
-  const overlays = item.overlays || [];
-
-  const res = await fetch("/api/overlay/save", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ 
-      public_id: item.public_id, 
-      gallery: currentGallery,
-      overlays 
-    })
-  });
-
-  const data = await res.json();
-  if (data.success) {
-    alert("✅ Overlays saved! They will show on gallery images.");
-  } else {
-    alert("Failed to save overlays");
-  }
-}
-
 function loadSavedOverlays(item) {
   if (!item.overlays || !item.overlays.length) return;
+  
+  // Clear existing overlays first to prevent duplicates
+  document.querySelectorAll(".lightbox-overlay").forEach(el => el.remove());
+  
   item.overlays.forEach(ov => {
     createOverlayElement(ov, item);
   });
@@ -1263,12 +1294,18 @@ function addDraggableTextNoBox(item) {
   const txt = prompt("Tattoo text:", "text");
   if (!txt) return;
 
+  const lightboxContent = document.querySelector(".lightbox-content");
+  const rect = lightboxContent.getBoundingClientRect();
+  
   const overlay = {
     type: "text",
     content: txt,
-    top: "30%",
-    left: "40%",
+    top: "50%",
+    left: "50%",
+    topPercent: 50,
+    leftPercent: 50,
     fontSize: "32px",
+    fontSizePercent: (32 / rect.width) * 100,
     color: "#ff0000",
     opacity: "1"
   };
@@ -1284,12 +1321,18 @@ function addSnapchatText(item) {
   const txt = prompt("Snapchat text:", "text");
   if (!txt) return;
 
+  const lightboxContent = document.querySelector(".lightbox-content");
+  const rect = lightboxContent.getBoundingClientRect();
+  
   const overlay = {
     type: "snapchat",
     content: txt,
     top: "70%",
-    left: "0",
+    left: "50%",
+    topPercent: 70,
+    leftPercent: 50,
     fontSize: "26px",
+    fontSizePercent: (26 / rect.width) * 100,
     color: "#fff",
     background: "rgba(0,0,0,0.45)",
     padding: "12px 20px",
@@ -1307,12 +1350,18 @@ function addSpeechBubbleWithSlider(item) {
   const txt = prompt("What does she say?", "text");
   if (!txt) return;
 
+  const lightboxContent = document.querySelector(".lightbox-content");
+  const rect = lightboxContent.getBoundingClientRect();
+  
   const overlay = {
     type: "speech",
     content: txt,
     top: "30%",
-    left: "40%",
+    left: "50%",
+    topPercent: 30,
+    leftPercent: 50,
     fontSize: "18px",
+    fontSizePercent: (18 / rect.width) * 100,
     color: "#000",
     background: "rgba(255,255,255,0.95)",
     padding: "12px 18px",
@@ -1328,15 +1377,40 @@ function addSpeechBubbleWithSlider(item) {
   addSlidersToOverlay(overlay, item, el);
 }
 
+function addEmojiToImageWithMove(emoji, item) {
+  if (!item.overlays) item.overlays = [];
+  
+  const lightboxContent = document.querySelector(".lightbox-content");
+  const rect = lightboxContent.getBoundingClientRect();
+  
+  const overlay = {
+    type: "emoji",
+    content: emoji,
+    top: "50%",
+    left: "50%",
+    topPercent: 50,
+    leftPercent: 50,
+    fontSize: "42px",
+    fontSizePercent: (42 / rect.width) * 100,
+    opacity: "0.9"
+  };
+  
+  item.overlays.push(overlay);
+
+  const el = createOverlayElement(overlay, item);
+}
+
 function addSlidersToOverlay(overlay, item, overlayEl) {
   const sliderPanel = document.createElement("div");
   sliderPanel.id = "sliders-panel";
   sliderPanel.style = `position:absolute; top:20px; left:20px; width:200px; background:rgba(0,0,0,0.95); border-radius:12px; color:#fff; z-index:1004; padding:15px;`;
   
+  const fontSizeVal = overlay.fontSizePercent ? (overlay.fontSizePercent * (document.querySelector(".lightbox-content").getBoundingClientRect().width / 100)).toFixed(0) : "32";
+  
   sliderPanel.innerHTML = `
     <div style="margin-bottom:10px;">
-      <label style="display:block; margin-bottom:5px;">Size: <span id="size-value">${overlay.fontSize || "32px"}</span></label>
-      <input type="range" id="size-slider" min="12" max="72" value="${parseInt(overlay.fontSize) || 32}" style="width:100%;">
+      <label style="display:block; margin-bottom:5px;">Size: <span id="size-value">${fontSizeVal}px</span></label>
+      <input type="range" id="size-slider" min="12" max="72" value="${parseInt(fontSizeVal) || 32}" style="width:100%;">
     </div>
     <div style="margin-bottom:10px;">
       <label style="display:block; margin-bottom:5px;">Transparency: <span id="opacity-value">${(parseFloat(overlay.opacity) || 1).toFixed(1)}</span></label>
@@ -1359,10 +1433,15 @@ function addSlidersToOverlay(overlay, item, overlayEl) {
   const opacityValue = sliderPanel.querySelector("#opacity-value");
   
   sizeSlider.addEventListener("input", () => {
-    const size = sizeSlider.value + "px";
-    overlay.fontSize = size;
-    sizeValue.textContent = size;
-    overlayEl.style.fontSize = size;
+    const sizePx = sizeSlider.value;
+    const lightboxContent = document.querySelector(".lightbox-content");
+    const rect = lightboxContent.getBoundingClientRect();
+    const fontSizePercent = (sizePx / rect.width) * 100;
+    
+    overlay.fontSize = sizePx + "px";
+    overlay.fontSizePercent = fontSizePercent;
+    sizeValue.textContent = sizePx + "px";
+    overlayEl.style.fontSize = fontSizePercent + "%";
   });
   
   opacitySlider.addEventListener("input", () => {
@@ -1389,6 +1468,16 @@ function addSlidersToOverlay(overlay, item, overlayEl) {
   
   sliderPanel.querySelector("#close-sliders-btn").addEventListener("click", () => sliderPanel.remove());
 }
+
+
+
+
+
+
+
+
+
+
 
 function removeAllOverlays(item) {
   if (!item.overlays || !item.overlays.length) {
