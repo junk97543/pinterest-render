@@ -1,4 +1,4 @@
-const gateScreen = document.getElementById("gate-screen");
+          const gateScreen = document.getElementById("gate-screen");
 const familyCodeInput = document.getElementById("family-code-input");
 const familyCodeBtn = document.getElementById("family-code-btn");
 const gateMessage = document.getElementById("gate-message");
@@ -223,7 +223,7 @@ function initHandlers() {
     window.addEventListener("click", enableAudioOnFirstGesture, { once: true });
     
     lightboxImg.addEventListener("load", () => {
-        console.log("🖼️ Image loaded");
+        // Image loaded, overlays will be created
     });
 }
 
@@ -398,8 +398,6 @@ async function loadMedia() {
     const text = await res.text();
     if (!res.ok) return alert("Could not load media");
     items = JSON.parse(text);
-    console.log("📦 Loaded items:", items.length);
-    console.log("📦 First item overlays:", items[0] ? items[0].overlays : "none");
     gallery.className = currentLayout === "grid" ? "grid-gallery" : "masonry";
     render();
     renderTags();
@@ -448,7 +446,6 @@ function render() {
             imgContainer.appendChild(img);
 
             if (item.overlays && item.overlays.length) {
-                console.log("🎨 Rendering", item.overlays.length, "overlays for", item.public_id);
                 item.overlays.forEach(ov => {
                     const overlay = document.createElement("div");
                     overlay.className = "gallery-overlay";
@@ -668,15 +665,13 @@ function showLightboxItem(index) {
     const item = items[index];
     if (!item) return;
 
-    console.log("🖼️ Opening lightbox for item:", item.public_id);
-    console.log("🎨 Item has", item.overlays ? item.overlays.length : 0, "overlays");
-
     lightboxImg.style.display = "none";
     lightboxVideo.style.display = "none";
     lightboxCaption.classList.remove("show");
     lightboxCaption.textContent = item.caption || "";
     if (item.caption) lightboxCaption.classList.add("show");
 
+    // Remove all overlays and panels
     document.querySelectorAll("#rating-panel, #toolbox-panel, #sliders-panel, .lightbox-overlay, #emoji-picker, #tier-list-modal, #tier-viewer-modal, #album-viewer-modal").forEach(el => el.remove());
 
     if (isAdmin && currentGallery === "private") {
@@ -696,11 +691,12 @@ function showLightboxItem(index) {
         lightboxImg.style.display = "block";
         
         lightboxImg.onload = () => {
-            console.log("✅ Image loaded in lightbox");
+            // Remove old overlays after image loads
             document.querySelectorAll(".lightbox-overlay").forEach(el => {
                 if (el.parentNode === lightboxImg.parentNode) el.remove();
             });
             
+            // Re-create overlays with correct image dimensions
             if (item.overlays && item.overlays.length) {
                 item.overlays.forEach(ov => {
                     createOverlayElement(ov, item);
@@ -724,6 +720,7 @@ function closeLightbox() {
     lightboxCaption.classList.remove("show");
     lightboxCaption.textContent = "";
     document.querySelectorAll("#rating-panel, #toolbox-panel, #sliders-panel, #emoji-picker, #tier-list-modal, #tier-viewer-modal, #album-viewer-modal").forEach(el => el.remove());
+    // Remove overlays from image parent
     if (lightboxImg.parentNode) {
         lightboxImg.parentNode.querySelectorAll(".lightbox-overlay").forEach(el => el.remove());
     }
@@ -1140,10 +1137,12 @@ function createToolbox(item) {
     });
 }
 
+// FIXED: Appends to IMAGE element, not lightbox container
 function createOverlayElement(ov, item) {
     const overlay = document.createElement("div");
     overlay.className = "lightbox-overlay";
     
+    // Use IMAGE dimensions ONLY (not lightbox container)
     const imgRect = lightboxImg.getBoundingClientRect();
     
     overlay.style.position = "absolute";
@@ -1183,12 +1182,14 @@ function createOverlayElement(ov, item) {
         overlay.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)";
     }
 
+    // CRITICAL: Append to IMAGE element, not lightbox content
     lightboxImg.parentNode.appendChild(overlay);
     
     makeDraggable(overlay, item, ov);
     return overlay;
 }
 
+// FIXED: Dragging uses image dimensions only
 function makeDraggable(el, item, ov) {
     let isDragging = false;
     let startX, startY, startXPx, startYPx;
@@ -1215,6 +1216,7 @@ function makeDraggable(el, item, ov) {
         const newLeft = startXPx + dx;
         const newTop = startYPx + dy;
         
+        // Keep overlay within IMAGE bounds
         const imgRect = lightboxImg.getBoundingClientRect();
         const maxLeft = imgRect.width - el.offsetWidth;
         const maxTop = imgRect.height - el.offsetHeight;
@@ -1225,6 +1227,7 @@ function makeDraggable(el, item, ov) {
         el.style.left = newLeft + "px";
         el.style.top = newTop + "px";
         
+        // Calculate ratios based on IMAGE dimensions only
         ov.xRatio = newLeft / imgRect.width;
         ov.yRatio = newTop / imgRect.height;
     });
@@ -1233,6 +1236,7 @@ function makeDraggable(el, item, ov) {
         if (isDragging) {
             isDragging = false;
             el.style.cursor = "move";
+            // Auto-save when dragging stops
             saveOverlaysToDB(item);
         }
     });
@@ -1376,6 +1380,7 @@ function addSlidersToOverlay(overlay, item, overlayEl) {
 function loadSavedOverlays(item) {
     if (!item.overlays || !item.overlays.length) return;
     
+    // Remove overlays from image parent
     if (lightboxImg.parentNode) {
         lightboxImg.parentNode.querySelectorAll(".lightbox-overlay").forEach(el => el.remove());
     }
@@ -1388,8 +1393,6 @@ function loadSavedOverlays(item) {
 function saveOverlaysToDB(item) {
     const overlays = item.overlays || [];
     
-    console.log("📤 Saving overlays:", overlays);
-    
     fetch("/api/overlay/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1400,15 +1403,12 @@ function saveOverlaysToDB(item) {
         })
     }).then(res => res.json()).then(data => {
         if (data.success) {
-            console.log("✅ Overlays saved to database!");
-            alert("✅ Overlays saved! (" + overlays.length + " overlays)");
+            console.log("✅ Overlays saved!");
         } else {
-            console.error("❌ Failed:", data.error);
-            alert("❌ Failed: " + data.error);
+            console.error("Failed:", data.error);
         }
     }).catch(err => {
-        console.error("❌ Error:", err);
-        alert("❌ Error saving overlays");
+        console.error("Error:", err);
     });
 }
 
@@ -1524,7 +1524,7 @@ function openTierListMaker(currentItem) {
         zone.addEventListener("drop", (e) => {
             e.preventDefault();
             zone.style.background = "#333";
-            
+ 
             const item = JSON.parse(e.dataTransfer.getData("text/plain"));
             
             const img = document.createElement("img");
