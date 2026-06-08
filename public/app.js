@@ -58,8 +58,6 @@ let familyLogoTimer = null;
 let excludedTags = [];
 let currentTierListName = "My Tier List";
 let activeOverlay = null;
-let lightboxImageWidth = 0;
-let lightboxImageHeight = 0;
 
 initTheme();
 initHandlers();
@@ -225,8 +223,7 @@ function initHandlers() {
     window.addEventListener("click", enableAudioOnFirstGesture, { once: true });
     
     lightboxImg.addEventListener("load", () => {
-        lightboxImageWidth = lightboxImg.offsetWidth;
-        lightboxImageHeight = lightboxImg.offsetHeight;
+        // Image loaded, overlays will be created
     });
 }
 
@@ -455,7 +452,7 @@ function render() {
                     
                     const imgRect = img.getBoundingClientRect();
                     
-                   overlay.style.position = "absolute";
+                    overlay.style.position = "absolute";
                     overlay.style.top = (imgRect.height * ov.yRatio) + "px";
                     overlay.style.left = (imgRect.width * ov.xRatio) + "px";
                     overlay.style.fontSize = (ov.sizeRatio * imgRect.width) + "px";
@@ -674,6 +671,7 @@ function showLightboxItem(index) {
     lightboxCaption.textContent = item.caption || "";
     if (item.caption) lightboxCaption.classList.add("show");
 
+    // Remove all overlays and panels
     document.querySelectorAll("#rating-panel, #toolbox-panel, #sliders-panel, .lightbox-overlay, #emoji-picker, #tier-list-modal, #tier-viewer-modal, #album-viewer-modal").forEach(el => el.remove());
 
     if (isAdmin && currentGallery === "private") {
@@ -683,10 +681,6 @@ function showLightboxItem(index) {
     }
 
     if (item.overlays && item.overlays.length) {
-        const imgRect = lightboxImg.getBoundingClientRect();
-        lightboxImageWidth = imgRect.width;
-        lightboxImageHeight = imgRect.height;
-        
         item.overlays.forEach(ov => {
             createOverlayElement(ov, item);
         });
@@ -696,18 +690,19 @@ function showLightboxItem(index) {
         lightboxImg.src = item.url;
         lightboxImg.style.display = "block";
         
-        lightboxImg.addEventListener("load", () => {
-            const imgRect = lightboxImg.getBoundingClientRect();
-            lightboxImageWidth = imgRect.width;
-            lightboxImageHeight = imgRect.height;
+        lightboxImg.onload = () => {
+            // Remove old overlays after image loads
+            document.querySelectorAll(".lightbox-overlay").forEach(el => {
+                if (el.parentNode === lightboxImg.parentNode) el.remove();
+            });
             
-            document.querySelectorAll(".lightbox-overlay").forEach(el => el.remove());
+            // Re-create overlays with correct image dimensions
             if (item.overlays && item.overlays.length) {
                 item.overlays.forEach(ov => {
                     createOverlayElement(ov, item);
                 });
             }
-        });
+        };
     } else {
         lightboxVideo.src = item.url;
         lightboxVideo.style.display = "block";
@@ -725,9 +720,11 @@ function closeLightbox() {
     lightboxCaption.classList.remove("show");
     lightboxCaption.textContent = "";
     document.querySelectorAll("#rating-panel, #toolbox-panel, #sliders-panel, #emoji-picker, #tier-list-modal, #tier-viewer-modal, #album-viewer-modal").forEach(el => el.remove());
+    // Remove overlays from image parent
+    if (lightboxImg.parentNode) {
+        lightboxImg.parentNode.querySelectorAll(".lightbox-overlay").forEach(el => el.remove());
+    }
     activeOverlay = null;
-    lightboxImageWidth = 0;
-    lightboxImageHeight = 0;
 }
 
 function handleLightboxWheel(e) {
@@ -977,7 +974,7 @@ function createRatingPanel(item, index) {
         </div>
     `;
 
-    document.querySelector(".lightbox-content").appendChild(panel);
+    lightboxImg.parentNode.appendChild(panel);
 
     let isCollapsed = false;
     panel.querySelector("#collapse-rating-btn").addEventListener("click", () => {
@@ -1050,7 +1047,7 @@ function showEmojiPickerWithMove(item) {
     closeBtn.addEventListener("click", () => picker.remove());
     picker.appendChild(closeBtn);
 
-    document.querySelector(".lightbox-content").appendChild(picker);
+    lightboxImg.parentNode.appendChild(picker);
 }
 
 function addEmojiToImageWithMove(emoji, item) {
@@ -1111,7 +1108,7 @@ function createToolbox(item) {
         </div>
     `;
 
-    document.querySelector(".lightbox-content").appendChild(panel);
+    lightboxImg.parentNode.appendChild(panel);
 
     let isCollapsed = false;
     panel.querySelector("#collapse-toolbox-btn").addEventListener("click", () => {
@@ -1134,13 +1131,18 @@ function createToolbox(item) {
     panel.querySelector("#add-to-album-btn").addEventListener("click", () => addToAlbum(item));
     panel.querySelector("#auto-caption-btn").addEventListener("click", () => autoCaption(item));
     panel.querySelector("#remove-all-overlays-btn").addEventListener("click", () => removeAllOverlays(item));
-    panel.querySelector("#save-overlays-btn").addEventListener("click", () => saveOverlaysToDB(item));
+    panel.querySelector("#save-overlays-btn").addEventListener("click", () => {
+        saveOverlaysToDB(item);
+        alert("✅ Overlays saved!");
+    });
 }
 
+// FIXED: Appends to IMAGE element, not lightbox container
 function createOverlayElement(ov, item) {
     const overlay = document.createElement("div");
     overlay.className = "lightbox-overlay";
     
+    // Use IMAGE dimensions ONLY (not lightbox container)
     const imgRect = lightboxImg.getBoundingClientRect();
     
     overlay.style.position = "absolute";
@@ -1164,8 +1166,7 @@ function createOverlayElement(ov, item) {
         overlay.style.background = ov.background || "rgba(0,0,0,0.45)";
         overlay.style.padding = "12px 20px";
         overlay.style.textAlign = "center";
-        overlay.style.pointerEvents = "none";
-
+        
         const textSpan = document.createElement("span");
         textSpan.style.color = ov.color || "#fff";
         textSpan.style.fontSize = (ov.sizeRatio * imgRect.width) + "px";
@@ -1179,14 +1180,16 @@ function createOverlayElement(ov, item) {
         overlay.style.borderRadius = "20px";
         overlay.style.maxWidth = (ov.maxWidthRatio * imgRect.width) + "px";
         overlay.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)";
-        overlay.style.pointerEvents = "none";
     }
 
-    document.querySelector(".lightbox-content").appendChild(overlay);
+    // CRITICAL: Append to IMAGE element, not lightbox content
+    lightboxImg.parentNode.appendChild(overlay);
+    
     makeDraggable(overlay, item, ov);
     return overlay;
 }
 
+// FIXED: Dragging uses image dimensions only
 function makeDraggable(el, item, ov) {
     let isDragging = false;
     let startX, startY, startXPx, startYPx;
@@ -1213,10 +1216,18 @@ function makeDraggable(el, item, ov) {
         const newLeft = startXPx + dx;
         const newTop = startYPx + dy;
         
+        // Keep overlay within IMAGE bounds
+        const imgRect = lightboxImg.getBoundingClientRect();
+        const maxLeft = imgRect.width - el.offsetWidth;
+        const maxTop = imgRect.height - el.offsetHeight;
+        
+        newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+        newTop = Math.max(0, Math.min(newTop, maxTop));
+        
         el.style.left = newLeft + "px";
         el.style.top = newTop + "px";
         
-        const imgRect = lightboxImg.getBoundingClientRect();
+        // Calculate ratios based on IMAGE dimensions only
         ov.xRatio = newLeft / imgRect.width;
         ov.yRatio = newTop / imgRect.height;
     });
@@ -1225,6 +1236,7 @@ function makeDraggable(el, item, ov) {
         if (isDragging) {
             isDragging = false;
             el.style.cursor = "move";
+            // Auto-save when dragging stops
             saveOverlaysToDB(item);
         }
     });
@@ -1307,7 +1319,7 @@ function addSlidersToOverlay(overlay, item, overlayEl) {
     sliderPanel.id = "sliders-panel";
     sliderPanel.style = `position:absolute; top:20px; left:20px; width:200px; background:rgba(0,0,0,0.95); border-radius:12px; color:#fff; z-index:1004; padding:15px;`;
     
-    const fontSizePx = overlay.sizeRatio * lightboxImageWidth;
+    const fontSizePx = overlay.sizeRatio * lightboxImg.offsetWidth;
     
     sliderPanel.innerHTML = `
         <div style="margin-bottom:10px;">
@@ -1326,7 +1338,7 @@ function addSlidersToOverlay(overlay, item, overlayEl) {
         <button id="close-sliders-btn" style="width:100%; padding:8px; background:#666; border:none; color:white; border-radius:6px; margin-top:5px;">Close</button>
     `;
     
-    document.querySelector(".lightbox-content").appendChild(sliderPanel);
+    lightboxImg.parentNode.appendChild(sliderPanel);
     
     const sizeSlider = sliderPanel.querySelector("#size-slider");
     const opacitySlider = sliderPanel.querySelector("#opacity-slider");
@@ -1337,27 +1349,23 @@ function addSlidersToOverlay(overlay, item, overlayEl) {
     sizeSlider.addEventListener("input", () => {
         const sizePx = sizeSlider.value;
         const imgRect = lightboxImg.getBoundingClientRect();
-        const newSizeRatio = sizePx / imgRect.width;
-        
-        overlay.sizeRatio = newSizeRatio;
+        overlay.sizeRatio = sizePx / imgRect.width;
         sizeValue.textContent = sizePx + "px";
         overlayEl.style.fontSize = sizePx + "px";
     });
     
     opacitySlider.addEventListener("input", () => {
-        const opacity = opacitySlider.value;
-        overlay.opacity = opacity;
-        opacityValue.textContent = opacity;
-        overlayEl.style.opacity = opacity;
+        overlay.opacity = opacitySlider.value;
+        opacityValue.textContent = opacitySlider.value;
+        overlayEl.style.opacity = opacitySlider.value;
     });
     
     colorPicker.addEventListener("input", () => {
-        const color = colorPicker.value;
-        overlay.color = color;
-        overlayEl.style.color = color;
+        overlay.color = colorPicker.value;
+        overlayEl.style.color = colorPicker.value;
         if (overlay.type === "snapchat") {
             const span = overlayEl.querySelector("span");
-            if (span) span.style.color = color;
+            if (span) span.style.color = colorPicker.value;
         }
     });
     
@@ -1372,7 +1380,10 @@ function addSlidersToOverlay(overlay, item, overlayEl) {
 function loadSavedOverlays(item) {
     if (!item.overlays || !item.overlays.length) return;
     
-    document.querySelectorAll(".lightbox-overlay").forEach(el => el.remove());
+    // Remove overlays from image parent
+    if (lightboxImg.parentNode) {
+        lightboxImg.parentNode.querySelectorAll(".lightbox-overlay").forEach(el => el.remove());
+    }
     
     item.overlays.forEach(ov => {
         createOverlayElement(ov, item);
@@ -1394,10 +1405,10 @@ function saveOverlaysToDB(item) {
         if (data.success) {
             console.log("✅ Overlays saved!");
         } else {
-            console.error("Failed to save overlays:", data.error);
+            console.error("Failed:", data.error);
         }
     }).catch(err => {
-        console.error("Error saving overlays:", err);
+        console.error("Error:", err);
     });
 }
 
@@ -1410,7 +1421,9 @@ function removeAllOverlays(item) {
     if (!confirm("Remove ALL overlays from this image? This cannot be undone.")) return;
     
     item.overlays = [];
-    document.querySelectorAll(".lightbox-overlay").forEach(el => el.remove());
+    if (lightboxImg.parentNode) {
+        lightboxImg.parentNode.querySelectorAll(".lightbox-overlay").forEach(el => el.remove());
+    }
     document.querySelectorAll("#rating-panel, #toolbox-panel, #sliders-panel, #emoji-picker").forEach(el => el.remove());
     
     saveOverlaysToDB(item);
@@ -1802,4 +1815,3 @@ async function openAlbumViewer(album) {
     modal.querySelector("#close-album-btn").addEventListener("click", () => modal.remove());
     document.body.appendChild(modal);
 }
-
